@@ -1137,11 +1137,18 @@ app.get('/api/ventes', checkAuth, checkReadAccess, async (req, res) => {
                 return `${jour}-${mois}-${annee}`;
             };
             
-            // Fonction pour comparer des dates au format DD-MM-YYYY
+            // Fonction pour comparer des dates (gère les formats DD-MM-YYYY et YYYY-MM-DD)
             const isDateInRange = (dateToCheck, startDate, endDate) => {
                 // Convertir les dates au format comparable (YYYY-MM-DD)
                 const convertToComparable = (dateStr) => {
                     if (!dateStr) return '';
+                    
+                    // Si la date est déjà au format YYYY-MM-DD, la retourner telle quelle
+                    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        return dateStr;
+                    }
+                    
+                    // Sinon, supposer le format DD-MM-YYYY
                     const [day, month, year] = dateStr.split('-');
                     return `${year}-${month}-${day}`;
                 };
@@ -1212,6 +1219,17 @@ app.get('/api/ventes', checkAuth, checkReadAccess, async (req, res) => {
             const filteredVentes = allVentes.filter(vente => 
                 isDateInRange(vente.date, debutFormatted, finFormatted)
             );
+            
+            console.log(`Nombre total de ventes récupérées: ${allVentes.length}`);
+            console.log(`Nombre de ventes après filtrage par date: ${filteredVentes.length}`);
+            
+            // Log pour debug - afficher quelques exemples de dates trouvées
+            if (filteredVentes.length > 0) {
+                console.log('Exemples de ventes filtrées:');
+                filteredVentes.slice(0, 5).forEach((vente, index) => {
+                    console.log(`  ${index + 1}. Date: ${vente.date}, Point: ${vente.pointVente}, Montant: ${vente.montant}`);
+                });
+            }
             
             // Formater les données pour la réponse
             const formattedVentes = filteredVentes.map(vente => ({
