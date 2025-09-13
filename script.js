@@ -110,6 +110,41 @@ const MAPPING_PRODUITS = {
     'AGNEAU': 'Agneau'
 };
 
+// Fonction globale pour formater les dates d'affichage (DD/MM/YYYY)
+function formaterDateAffichage(dateInput) {
+    if (!dateInput) return '';
+    
+    // Si c'est un objet Date, utiliser la fonction existante
+    if (dateInput instanceof Date) {
+        return formatDateForStockAlerte(dateInput);
+    }
+    
+    // Si c'est une chaîne, la convertir d'abord
+    if (typeof dateInput === 'string') {
+        let jour, mois, annee;
+        
+        if (dateInput.includes('/')) {
+            [jour, mois, annee] = dateInput.split('/');
+            // S'assurer que l'année est sur 4 chiffres
+            if (annee.length === 2) {
+                annee = '20' + annee;
+            }
+            return `${jour}/${mois}/${annee}`;
+        } else if (dateInput.includes('-')) {
+            const parts = dateInput.split('-');
+            if (parts.length === 3) {
+                // Si c'est au format YYYY-MM-DD, réorganiser en DD/MM/YYYY
+                if (parts[0].length === 4) {
+                    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+                // Si c'est au format DD-MM-YYYY, convertir en DD/MM/YYYY
+                return `${parts[0]}/${parts[1]}/${parts[2]}`;
+            }
+        }
+    }
+    return dateInput;
+}
+
 // Fonction globale pour standardiser les dates
 function standardiserDate(dateStr) {
     if (!dateStr || typeof dateStr !== 'string') {
@@ -1952,15 +1987,8 @@ function afficherDernieresVentes(ventes) {
         // Distinction visuelle pour les ventes provenant de pré-commandes (en bleu)
         appliquerDistinctionVisuellePrecommande(row, vente);
         
-        // Formater la date pour l'affichage en DD-MM-YYYY
-        let displayDate = vente.Date;
-        const dateObj = standardiserDate(vente.Date); // Uses standardiserDate
-        if (dateObj) {
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const year = dateObj.getFullYear();
-            displayDate = `${day}-${month}-${year}`;
-        }
+        // Formater la date pour l'affichage en DD/MM/YYYY
+        const displayDate = formaterDateAffichage(vente.Date);
 
         row.insertCell().textContent = vente.Mois || "";
         row.insertCell().textContent = displayDate;
@@ -2297,31 +2325,10 @@ function creerGraphiqueVentesParMois(donnees) {
         console.log('Création d\'un nouveau graphique');
     }
 
-    // Fonction pour standardiser les dates au format DD-MM-YY
-    const standardiserDate = (dateStr) => {
-        if (!dateStr) return '';
-        
-        let jour, mois, annee;
-        if (dateStr.includes('/')) {
-            [jour, mois, annee] = dateStr.split('/');
-            // Convertir l'année à 2 chiffres si elle est à 4 chiffres
-            if (annee.length === 4) {
-                annee = annee.substring(2);
-            }
-            return `${jour}/${mois}/${annee}`;
-        } else if (dateStr.includes('-')) {
-            const parts = dateStr.split('-');
-            if (parts.length === 3) {
-                return `${parts[0]}/${parts[1]}/${parts[2].length === 4 ? parts[2].substring(2) : parts[2]}`;
-            }
-        }
-        return dateStr;
-    };
-
     // Regrouper les ventes par date
     const ventesParJour = {};
     donnees.forEach(vente => {
-        const dateStandard = standardiserDate(vente.Date || '');
+        const dateStandard = formaterDateAffichage(vente.Date || '');
         if (!dateStandard) return;
         
         if (!ventesParJour[dateStandard]) {
@@ -4100,23 +4107,7 @@ function formaterDonneesVentes(ventes) {
         return new Date(parseInt(annee), parseInt(mois) - 1, parseInt(jour));
     };
     
-    // Fonction pour standardiser les dates au format DD-MM-YY
-    const standardiserDate = (dateStr) => {
-        if (!dateStr) return '';
-        
-        let jour, mois, annee;
-        if (dateStr.includes('/')) {
-            [jour, mois, annee] = dateStr.split('/');
-            // Convertir l'année à 2 chiffres si elle est à 4 chiffres
-            if (annee.length === 4) {
-                annee = annee.substring(2);
-            }
-            return `${jour}-${mois}-${annee}`;
-        } else if (dateStr.includes('-')) {
-            return dateStr; // Déjà au format DD-MM-YY
-        }
-        return dateStr;
-    };
+    // Utiliser la fonction globale pour formater les dates d'affichage
 
     // Fonction pour obtenir le nom du mois en français à partir d'une date
     const getNomMois = (dateStr) => {
@@ -4135,7 +4126,7 @@ function formaterDonneesVentes(ventes) {
     const ventesNormalisees = ventes.map(v => {
         // Standardiser la date
         const dateStr = v.Date || v.date || '';
-        const dateStandardisee = standardiserDate(dateStr);
+        const dateStandardisee = formaterDateAffichage(dateStr);
         
         // Déterminer le nom du mois en français à partir de la date
         const nomMois = getNomMois(dateStr);
