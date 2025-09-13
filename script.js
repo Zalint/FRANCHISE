@@ -10982,6 +10982,84 @@ function calculerAnalyticsVentes(ventes) {
     };
 }
 
+// Fonction pour calculer la variation du stock soir selon la logique améliorée
+async function calculerStockSoirVariation(dateDebut, dateFin) {
+    try {
+        console.log(`🔍 Calcul stock soir variation: ${dateDebut} à ${dateFin}`);
+        
+        // Si même date, prendre le stock du jour précédent
+        if (dateDebut === dateFin) {
+            const datePrecedente = calculerDatePrecedente(dateDebut);
+            console.log(`📅 Même date détectée, utilisation du stock du jour précédent: ${datePrecedente}`);
+            const stockPrecedente = await calculerStockSoir(datePrecedente);
+            return {
+                montantTotal: stockPrecedente.montantTotal,
+                nombreItems: stockPrecedente.nombreItems,
+                type: 'jour_precedent',
+                dateUtilisee: datePrecedente,
+                stockPrecedente: stockPrecedente
+            };
+        }
+        
+        // Sinon, calculer la variation (Stock fin - Stock début)
+        console.log(`📅 Période différente, calcul de la variation`);
+        const stockDebut = await calculerStockSoir(dateDebut);
+        const stockFin = await calculerStockSoir(dateFin);
+        
+        const variation = {
+            montantTotal: stockFin.montantTotal - stockDebut.montantTotal,
+            nombreItems: stockFin.nombreItems - stockDebut.nombreItems,
+            type: 'variation',
+            dateDebut: dateDebut,
+            dateFin: dateFin,
+            stockDebut: stockDebut,
+            stockFin: stockFin
+        };
+        
+        console.log(`📊 Variation calculée: ${variation.montantTotal} FCFA (${variation.nombreItems} items)`);
+        console.log(`   Stock début: ${stockDebut.montantTotal} FCFA`);
+        console.log(`   Stock fin: ${stockFin.montantTotal} FCFA`);
+        
+        return variation;
+        
+    } catch (error) {
+        console.error('❌ Erreur lors du calcul de la variation stock soir:', error);
+        return { 
+            montantTotal: 0, 
+            nombreItems: 0,
+            type: 'erreur',
+            error: error.message
+        };
+    }
+}
+
+// Fonction pour calculer la date précédente (éviter les problèmes de timezone)
+function calculerDatePrecedente(dateStr) {
+    // Format DD/MM/YYYY -> DD/MM/YYYY précédent
+    const [jour, mois, annee] = dateStr.split('/');
+    const jourNum = parseInt(jour);
+    const moisNum = parseInt(mois);
+    const anneeNum = parseInt(annee);
+    
+    // Créer la date précédente
+    let jourPrecedent = jourNum - 1;
+    let moisPrecedent = moisNum;
+    let anneePrecedente = anneeNum;
+    
+    // Gérer le passage au mois précédent
+    if (jourPrecedent <= 0) {
+        moisPrecedent--;
+        if (moisPrecedent <= 0) {
+            moisPrecedent = 12;
+            anneePrecedente--;
+        }
+        // Dernier jour du mois précédent (approximation simple)
+        jourPrecedent = 31;
+    }
+    
+    return `${jourPrecedent.toString().padStart(2, '0')}/${moisPrecedent.toString().padStart(2, '0')}/${anneePrecedente}`;
+}
+
 // Fonction pour récupérer et calculer le stock soir
 async function calculerStockSoir(dateFin) {
     try {
@@ -11207,8 +11285,8 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
             return;
         }
 
-        // Récupérer le stock soir
-        const stockSoir = await calculerStockSoir(dateFin);
+        // Récupérer le stock soir selon la logique améliorée
+        const stockSoir = await calculerStockSoirVariation(dateDebut, dateFin);
         console.log(`📊 Stock soir récupéré: ${stockSoir.montantTotal} FCFA (${stockSoir.nombreItems} items)`);
 
         // Calculer les proxy marges
@@ -11290,9 +11368,21 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                     // Pas de coût d'achat pour cette catégorie
                     coutAchat = 0;
                     console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
-                    console.log(`   - Composition: Stock soir (date: ${dateFin})`);
-                    console.log(`   - Montant total: ${stockSoir.montantTotal.toFixed(0)} FCFA`);
-                    console.log(`   - Nombre d'items: ${stockSoir.nombreItems}`);
+                    
+                    // Afficher les détails selon le type de calcul
+                    if (stockSoir.type === 'jour_precedent') {
+                        console.log(`   - Type: Stock du jour précédent`);
+                        console.log(`   - Date utilisée: ${stockSoir.dateUtilisee}`);
+                        console.log(`   - Montant total: ${stockSoir.montantTotal.toFixed(0)} FCFA`);
+                        console.log(`   - Nombre d'items: ${stockSoir.nombreItems}`);
+                    } else if (stockSoir.type === 'variation') {
+                        console.log(`   - Type: Variation entre deux dates`);
+                        console.log(`   - Date début: ${stockSoir.dateDebut} (${stockSoir.stockDebut.montantTotal.toFixed(0)} FCFA)`);
+                        console.log(`   - Date fin: ${stockSoir.dateFin} (${stockSoir.stockFin.montantTotal.toFixed(0)} FCFA)`);
+                        console.log(`   - Variation: ${stockSoir.montantTotal.toFixed(0)} FCFA`);
+                        console.log(`   - Nombre d'items: ${stockSoir.nombreItems}`);
+                    }
+                    
                     console.log(`   - Pas de coût d'achat (stock)`);
                     break;
             }
@@ -11351,8 +11441,15 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                             ${categorie === 'Stock Soir' ? 
                                 `<small class="text-muted d-block">Montant total: ${marge.chiffreAffaires.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</small>
                                  <small class="text-muted d-block">Nombre d'items: ${stockSoir.nombreItems}</small>
-                                 <small class="text-info d-block">Pas de coût d'achat</small>
-                                 <button class="btn btn-sm btn-outline-info mt-1" onclick="afficherDetailStockSoir()" title="Voir le détail par point de vente et produit">
+                                 ${stockSoir.type === 'jour_precedent' ? 
+                                    `<small class="text-info d-block">Stock du jour précédent (${stockSoir.dateUtilisee})</small>` :
+                                    stockSoir.type === 'variation' ?
+                                    `<small class="text-info d-block">Variation: ${stockSoir.dateDebut} → ${stockSoir.dateFin}</small>
+                                     <small class="text-muted d-block">Début: ${stockSoir.stockDebut.montantTotal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</small>
+                                     <small class="text-muted d-block">Fin: ${stockSoir.stockFin.montantTotal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</small>` :
+                                    `<small class="text-info d-block">Pas de coût d'achat</small>`
+                                 }
+                                 <button class="btn btn-sm btn-outline-info mt-1" onclick="afficherDetailStockSoirVariation('${stockSoir.type}', '${stockSoir.dateUtilisee || stockSoir.dateDebut}', '${stockSoir.dateFin || ''}')" title="Voir le détail par point de vente et produit">
                                      <i class="fas fa-info-circle"></i> Détail
                                  </button>` :
                                 `<small class="text-muted d-block">Prix vente: ${analyticsRegroupees[categorie].prixMoyen.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' ? 'unité' : 'kg'}</small>
@@ -11394,6 +11491,268 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
     } catch (error) {
         console.error('Erreur lors du calcul des proxy marges:', error);
         proxyMargesContainer.innerHTML = '<div class="text-danger">Erreur lors du calcul des proxy marges</div>';
+    }
+}
+
+// Fonction pour afficher le détail du stock soir avec variation
+async function afficherDetailStockSoirVariation(type, date1, date2 = '') {
+    try {
+        console.log(`🔍 Affichage détail stock soir - Type: ${type}, Date1: ${date1}, Date2: ${date2}`);
+        
+        let modalContent = '';
+        let modalTitle = '';
+        
+        if (type === 'jour_precedent') {
+            modalTitle = `Détail du Stock Soir - ${date1}`;
+            modalContent = await genererDetailStockSoir(date1);
+        } else if (type === 'variation') {
+            modalTitle = `Détail Stock Soir - Variation ${date1} → ${date2}`;
+            modalContent = await genererDetailStockSoirVariation(date1, date2);
+        } else {
+            modalContent = '<div class="text-danger">Type de stock soir non reconnu</div>';
+        }
+        
+        // Créer et afficher la modal
+        const modalHtml = `
+            <div class="modal fade" id="modalDetailStockSoir" tabindex="-1">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">${modalTitle}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            ${modalContent}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Supprimer l'ancienne modal si elle existe
+        const existingModal = document.getElementById('modalDetailStockSoir');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Ajouter la nouvelle modal
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Afficher la modal
+        const modal = new bootstrap.Modal(document.getElementById('modalDetailStockSoir'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Erreur lors de l\'affichage du détail stock soir:', error);
+        alert('Erreur lors de l\'affichage du détail: ' + error.message);
+    }
+}
+
+// Fonction pour générer le détail d'une date
+async function genererDetailStockSoir(date) {
+    try {
+        const response = await fetch(`/api/external/stock/soir?date=${encodeURIComponent(date)}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+            }
+        });
+
+        if (!response.ok) {
+            return `<div class="text-danger">Erreur lors de la récupération des données pour ${date}</div>`;
+        }
+
+        const data = await response.json();
+        
+        if (!data || Object.keys(data).length === 0) {
+            return `<div class="text-muted">Aucune donnée de stock soir disponible pour ${date}</div>`;
+        }
+
+        // Organiser les données par point de vente
+        const stockParPointVente = {};
+        let totalGeneral = 0;
+        let nombreItemsTotal = 0;
+
+        Object.entries(data).forEach(([key, item]) => {
+            const [pointVente, produit] = key.split('-');
+            if (!stockParPointVente[pointVente]) {
+                stockParPointVente[pointVente] = [];
+            }
+            
+            const montant = parseFloat(item.Montant) || 0;
+            stockParPointVente[pointVente].push({
+                produit,
+                montant,
+                quantite: parseFloat(item.Quantite || item.Nombre) || 0,
+                prixUnitaire: parseFloat(item.PU || item.prixUnitaire) || 0
+            });
+            
+            totalGeneral += montant;
+            nombreItemsTotal++;
+        });
+
+        let html = `
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="card border-primary">
+                        <div class="card-body">
+                            <h6 class="card-title text-primary">Total Général</h6>
+                            <div class="h4 text-primary">${totalGeneral.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
+                            <small class="text-muted">${nombreItemsTotal} items</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-info">
+                        <div class="card-body">
+                            <h6 class="card-title text-info">Points de Vente</h6>
+                            <div class="h4 text-info">${Object.keys(stockParPointVente).length}</div>
+                            <small class="text-muted">avec stock</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Afficher le détail par point de vente
+        Object.keys(stockParPointVente).sort().forEach(pointVente => {
+            const items = stockParPointVente[pointVente];
+            const totalPointVente = items.reduce((sum, item) => sum + item.montant, 0);
+            const pourcentage = totalGeneral > 0 ? (totalPointVente / totalGeneral) * 100 : 0;
+
+            html += `
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">${pointVente}</h6>
+                        <span class="badge bg-primary">${totalPointVente.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA (${pourcentage.toFixed(1)}%)</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Produit</th>
+                                        <th class="text-end">Quantité</th>
+                                        <th class="text-end">Prix Unitaire</th>
+                                        <th class="text-end">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+
+            items.sort((a, b) => b.montant - a.montant).forEach(item => {
+                html += `
+                    <tr>
+                        <td>${item.produit}</td>
+                        <td class="text-end">${item.quantite.toFixed(2)}</td>
+                        <td class="text-end">${item.prixUnitaire.toFixed(0)} FCFA</td>
+                        <td class="text-end">${item.montant.toFixed(0)} FCFA</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end">
+                            <strong>Total ${pointVente}: ${totalPointVente.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</strong>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        return html;
+
+    } catch (error) {
+        console.error('Erreur lors de la génération du détail:', error);
+        return `<div class="text-danger">Erreur: ${error.message}</div>`;
+    }
+}
+
+// Fonction pour générer le détail de variation entre deux dates
+async function genererDetailStockSoirVariation(dateDebut, dateFin) {
+    try {
+        const [stockDebut, stockFin] = await Promise.all([
+            fetch(`/api/external/stock/soir?date=${encodeURIComponent(dateDebut)}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                }
+            }).then(res => res.ok ? res.json() : {}),
+            
+            fetch(`/api/external/stock/soir?date=${encodeURIComponent(dateFin)}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                }
+            }).then(res => res.ok ? res.json() : {})
+        ]);
+
+        let html = `
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="card border-info">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0">Stock Début (${dateDebut})</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="h5 text-info">${Object.values(stockDebut).reduce((sum, item) => sum + (parseFloat(item.Montant) || 0), 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
+                            <small class="text-muted">${Object.keys(stockDebut).length} items</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0">Stock Fin (${dateFin})</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="h5 text-success">${Object.values(stockFin).reduce((sum, item) => sum + (parseFloat(item.Montant) || 0), 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
+                            <small class="text-muted">${Object.keys(stockFin).length} items</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning text-dark">
+                            <h6 class="mb-0">Variation</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="h5 text-warning">${(Object.values(stockFin).reduce((sum, item) => sum + (parseFloat(item.Montant) || 0), 0) - Object.values(stockDebut).reduce((sum, item) => sum + (parseFloat(item.Montant) || 0), 0)).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
+                            <small class="text-muted">Différence</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Ajouter les détails des deux dates
+        html += `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Détail Stock Début (${dateDebut})</h6>
+                    ${await genererDetailStockSoir(dateDebut)}
+                </div>
+                <div class="col-md-6">
+                    <h6>Détail Stock Fin (${dateFin})</h6>
+                    ${await genererDetailStockSoir(dateFin)}
+                </div>
+            </div>
+        `;
+
+        return html;
+
+    } catch (error) {
+        console.error('Erreur lors de la génération du détail de variation:', error);
+        return `<div class="text-danger">Erreur: ${error.message}</div>`;
     }
 }
 
