@@ -5749,17 +5749,43 @@ app.get('/api/external/ventes-date', validateApiKey, async (req, res) => {
         
         const dateStandardisee = standardiserDateFormat(date);
         
-        // Préparer les conditions de filtrage
-        const whereConditions = { date: dateStandardisee };
+        // Utiliser la même logique que /api/ventes pour gérer les formats de date multiples
+        // Rechercher dans les deux formats possibles (YYYY-MM-DD et DD-MM-YYYY)
+        
+        // Convertir la date d'entrée en format DD-MM-YYYY si elle n'y est pas déjà
+        let dateDDMMYYYY = date;
+        if (date.includes('/')) {
+            dateDDMMYYYY = date.replace(/\//g, '-');
+        }
+        
+        const whereConditions = {
+            [Op.or]: [
+                { date: dateStandardisee },  // Format YYYY-MM-DD
+                { date: dateDDMMYYYY }       // Format DD-MM-YYYY
+            ]
+        };
         
         if (pointVente) {
             whereConditions.pointVente = pointVente;
         }
         
+        console.log('Conditions de recherche (avec OR):', whereConditions);
+        
         // Récupérer les ventes depuis la base de données
         const ventes = await Vente.findAll({
-            where: whereConditions
+            where: whereConditions,
+            order: [['createdAt', 'DESC']]
         });
+        
+        console.log(`Nombre de ventes trouvées: ${ventes.length}`);
+        
+        // Log pour debug - afficher quelques exemples de dates trouvées
+        if (ventes.length > 0) {
+            console.log('Exemples de ventes trouvées:');
+            ventes.slice(0, 5).forEach((vente, index) => {
+                console.log(`  ${index + 1}. Date: ${vente.date}, Point: ${vente.pointVente}, Montant: ${vente.montant}`);
+            });
+        }
         
         // Formater les données pour la réponse
         const formattedVentes = ventes.map(vente => {
@@ -5849,8 +5875,9 @@ app.get('/api/external/stock/:date/:type/:pointVente/:categorie', validateApiKey
             });
         }
 
-        // Obtenir le chemin du fichier
-        const filePath = path.join(__dirname, 'data', 'by-date', date, `stock-${type}.json`);
+        // Obtenir le chemin du fichier en utilisant getPathByDate pour gérer les formats de date
+        const baseFilePath = type === 'matin' ? STOCK_MATIN_PATH : STOCK_SOIR_PATH;
+        const filePath = getPathByDate(baseFilePath, date);
 
         // Vérifier si le fichier existe
         if (!fs.existsSync(filePath)) {
@@ -5955,11 +5982,20 @@ app.get('/api/external/stock/:date/transfert/:pointVente/:categorie', validateAp
 
         const dateStandardisee = standardiserDateFormat(date);
         
+        // Rechercher dans les deux formats possibles (YYYY-MM-DD et DD-MM-YYYY)
+        let dateDDMMYYYY = date;
+        if (date.includes('/')) {
+            dateDDMMYYYY = date.replace(/\//g, '-');
+        }
+        
         // Calculer les transferts pour la date et le point de vente donnés
         const transferts = await Transfert.findAll({
             where: {
-                date: dateStandardisee,
-                pointVente
+                [Op.or]: [
+                    { date: dateStandardisee },  // Format YYYY-MM-DD
+                    { date: dateDDMMYYYY }        // Format DD-MM-YYYY
+                ],
+                pointVente: pointVente
             }
         });
 
