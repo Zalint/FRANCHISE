@@ -11152,17 +11152,19 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
             
             // Filtrer les achats par période
             achatsPeriode = achats.filter(achat => {
-                // Convertir la date de l'achat au format YYYY-MM-DD
-                const achatDate = new Date(achat.date);
+                // Convertir la date de l'achat au format YYYY-MM-DD (éviter les problèmes de timezone)
+                const achatDateStr = achat.date;
                 
                 // Convertir les dates de début et fin au format YYYY-MM-DD
                 const [jourDebut, moisDebut, anneeDebut] = dateDebut.split('/');
                 const [jourFin, moisFin, anneeFin] = dateFin.split('/');
                 
-                const debut = new Date(parseInt(anneeDebut), parseInt(moisDebut) - 1, parseInt(jourDebut));
-                const fin = new Date(parseInt(anneeFin), parseInt(moisFin) - 1, parseInt(jourFin));
+                // Créer les dates au format YYYY-MM-DD (éviter new Date avec timezone)
+                const debutStr = `${anneeDebut}-${moisDebut.padStart(2, '0')}-${jourDebut.padStart(2, '0')}`;
+                const finStr = `${anneeFin}-${moisFin.padStart(2, '0')}-${jourFin.padStart(2, '0')}`;
                 
-                return achatDate >= debut && achatDate <= fin;
+                // Comparaison de chaînes (évite les problèmes de timezone)
+                return achatDateStr >= debutStr && achatDateStr <= finStr;
             });
             
             // Séparer par type d'animal
