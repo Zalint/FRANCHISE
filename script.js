@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('Initialisation de l\'application avec ReconciliationManager');
     
+    // Initialiser les contrôles Proxy Marges
+    initialiserControlesProxyMarges();
+    
     // Surcharger la fonction afficherReconciliation pour utiliser ReconciliationManager
     window.afficherReconciliation = function(reconciliation, debugInfo) {
         console.log('Délégation à ReconciliationManager.afficherReconciliation');
@@ -807,7 +810,7 @@ async function checkAuth() {
             
             // Gérer le clic sur le bouton analytics
             if (btnAnalyticsPopup) {
-                btnAnalyticsPopup.addEventListener('click', function() {
+                btnAnalyticsPopup.addEventListener('click', async function() {
                     if (analyticsContent) {
                         if (analyticsContent.style.display === 'none') {
                             analyticsContent.style.display = 'block';
@@ -817,7 +820,7 @@ async function checkAuth() {
                             
                             // Charger les analytics quand on les affiche
                             // Récupérer les ventes actuelles depuis la variable globale
-                            afficherAnalyticsVentes(allVentes || []);
+                            await afficherAnalyticsVentes(allVentes || []);
                         } else {
                             analyticsContent.style.display = 'none';
                             btnAnalyticsPopup.innerHTML = '<i class="fas fa-chart-line me-2"></i>Voir les Analytics';
@@ -10983,7 +10986,7 @@ function calculerAnalyticsVentes(ventes) {
 }
 
 // Fonction pour calculer la variation du stock soir selon la logique améliorée
-async function calculerStockSoirVariation(dateDebut, dateFin) {
+async function calculerStockSoirVariation(dateDebut, dateFin, pointVente = null) {
     try {
         console.log(`🔍 Calcul stock soir variation: ${dateDebut} à ${dateFin}`);
         
@@ -10991,7 +10994,7 @@ async function calculerStockSoirVariation(dateDebut, dateFin) {
         if (dateDebut === dateFin) {
             const datePrecedente = calculerDatePrecedente(dateDebut);
             console.log(`📅 Même date détectée, utilisation du stock du jour précédent: ${datePrecedente}`);
-            const stockPrecedente = await calculerStockSoir(datePrecedente);
+            const stockPrecedente = await calculerStockSoir(datePrecedente, pointVente);
             return {
                 montantTotal: stockPrecedente.montantTotal,
                 nombreItems: stockPrecedente.nombreItems,
@@ -11003,8 +11006,8 @@ async function calculerStockSoirVariation(dateDebut, dateFin) {
         
         // Sinon, calculer la variation (Stock fin - Stock début)
         console.log(`📅 Période différente, calcul de la variation`);
-        const stockDebut = await calculerStockSoir(dateDebut);
-        const stockFin = await calculerStockSoir(dateFin);
+        const stockDebut = await calculerStockSoir(dateDebut, pointVente);
+        const stockFin = await calculerStockSoir(dateFin, pointVente);
         
         const variation = {
             montantTotal: stockFin.montantTotal - stockDebut.montantTotal,
@@ -11060,8 +11063,320 @@ function calculerDatePrecedente(dateStr) {
     return `${jourPrecedent.toString().padStart(2, '0')}/${moisPrecedent.toString().padStart(2, '0')}/${anneePrecedente}`;
 }
 
+// Variables globales pour les contrôles Proxy Marges
+let proxyMargesControls = {
+    calculAutoActif: false,
+    ratioPerteBoeuf: 8.0,
+    ratioPerteVeau: 8.0,
+    coutManuelPacks: 0,
+    coutManuelAutre: 0,
+    pointVenteActuel: 'Sélectionner un point de vente'
+};
+
+// Fonction pour initialiser les contrôles Proxy Marges
+function initialiserControlesProxyMarges() {
+    console.log('🎛️ Initialisation des contrôles Proxy Marges');
+    
+    // Écouter les changements sur le point de vente existant
+    const pointVenteSelect = document.getElementById('point-vente-select');
+    if (pointVenteSelect) {
+        pointVenteSelect.addEventListener('change', function() {
+            const pointVente = this.value;
+            console.log(`📍 Point de vente changé: ${pointVente}`);
+            proxyMargesControls.pointVenteActuel = pointVente;
+            updateProxyMargesControls(pointVente);
+        });
+    }
+    
+    // Écouter les changements sur la checkbox de calcul automatique
+    const calculAutoCheckbox = document.getElementById('calcul-auto-abattage');
+    if (calculAutoCheckbox) {
+        calculAutoCheckbox.addEventListener('change', function() {
+            proxyMargesControls.calculAutoActif = this.checked;
+            console.log(`🔄 Calcul automatique: ${proxyMargesControls.calculAutoActif ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`);
+            updateProxyMargesControls(proxyMargesControls.pointVenteActuel);
+        });
+    }
+    
+    // Écouter les changements sur les ratios
+    const ratioBoeufInput = document.getElementById('ratio-perte-boeuf');
+    const ratioVeauInput = document.getElementById('ratio-perte-veau');
+    
+    if (ratioBoeufInput) {
+        ratioBoeufInput.addEventListener('input', function() {
+            proxyMargesControls.ratioPerteBoeuf = parseFloat(this.value) || 8.0;
+            console.log(`🐄 Ratio Boeuf mis à jour: ${proxyMargesControls.ratioPerteBoeuf}%`);
+        });
+    }
+    
+    if (ratioVeauInput) {
+        ratioVeauInput.addEventListener('input', function() {
+            proxyMargesControls.ratioPerteVeau = parseFloat(this.value) || 8.0;
+            console.log(`🐄 Ratio Veau mis à jour: ${proxyMargesControls.ratioPerteVeau}%`);
+        });
+    }
+    
+    // Écouter les changements sur les coûts manuels
+    const coutPacksInput = document.getElementById('cout-manuel-packs');
+    const coutAutreInput = document.getElementById('cout-manuel-autre');
+    
+    if (coutPacksInput) {
+        coutPacksInput.addEventListener('input', function() {
+            proxyMargesControls.coutManuelPacks = parseFloat(this.value) || 0;
+            console.log(`📦 Coût Packs mis à jour: ${proxyMargesControls.coutManuelPacks} FCFA`);
+        });
+    }
+    
+    if (coutAutreInput) {
+        coutAutreInput.addEventListener('input', function() {
+            proxyMargesControls.coutManuelAutre = parseFloat(this.value) || 0;
+            console.log(`🍖 Coût Autre mis à jour: ${proxyMargesControls.coutManuelAutre} FCFA`);
+        });
+    }
+    
+    // Écouter le bouton de recalcul
+    const recalculerBtn = document.getElementById('recalculer-proxy-marges');
+    if (recalculerBtn) {
+        recalculerBtn.addEventListener('click', function() {
+            console.log('🔄 Recalcul des Proxy Marges demandé');
+            // Déclencher le recalcul des proxy marges
+            if (typeof calculerEtAfficherProxyMarges === 'function') {
+                calculerEtAfficherProxyMarges();
+            }
+        });
+    }
+}
+
+// Fonction pour mettre à jour l'état des contrôles selon le point de vente
+function updateProxyMargesControls(pointVente) {
+    const calculAutoCheckbox = document.getElementById('calcul-auto-abattage');
+    const recalculerBtn = document.getElementById('recalculer-proxy-marges');
+    const autoStatus = document.querySelector('#calcul-auto-abattage').nextElementSibling;
+    const recalculerStatus = document.querySelector('#recalculer-proxy-marges').nextElementSibling;
+    const nomPointVente = document.getElementById('nom-point-vente');
+    
+    // Mettre à jour l'affichage du nom du point de vente
+    if (nomPointVente) {
+        if (pointVente === 'Sélectionner un point de vente' || pointVente === '') {
+            nomPointVente.textContent = 'Tous les points de vente';
+            nomPointVente.className = 'text-muted';
+        } else {
+            nomPointVente.textContent = pointVente;
+            nomPointVente.className = 'text-primary fw-bold';
+        }
+    }
+    
+    if (pointVente === 'Sélectionner un point de vente' || pointVente === '') {
+        // Tous les points de vente - mode désactivé par défaut
+        if (calculAutoCheckbox) {
+            calculAutoCheckbox.checked = false;
+            calculAutoCheckbox.disabled = false; // Mais utilisateur peut l'activer manuellement
+        }
+        if (autoStatus) autoStatus.textContent = '(Auto: OFF)';
+        if (recalculerStatus) recalculerStatus.textContent = '(Inactif)';
+        if (recalculerBtn) recalculerBtn.disabled = true;
+        
+        console.log('⚠️ Mode automatique désactivé (tous les points de vente)');
+    } else {
+        // Point de vente spécifique - mode activé par défaut
+        if (calculAutoCheckbox) {
+            calculAutoCheckbox.checked = true;
+            calculAutoCheckbox.disabled = false; // Mais utilisateur peut le désactiver manuellement
+        }
+        if (autoStatus) autoStatus.textContent = '(Auto: ON)';
+        if (recalculerStatus) recalculerStatus.textContent = '(Actif)';
+        if (recalculerBtn) recalculerBtn.disabled = false;
+        
+        console.log(`✅ Mode automatique activé pour: ${pointVente}`);
+    }
+    
+    // Mettre à jour l'état global
+    proxyMargesControls.calculAutoActif = calculAutoCheckbox ? calculAutoCheckbox.checked : false;
+}
+
+// Fonction pour filtrer les analytics par point de vente
+async function filtrerAnalyticsParPointVente(analyticsRegroupees, pointVente, dateDebut, dateFin) {
+    try {
+        console.log(`🔍 Filtrage des analytics pour ${pointVente} du ${dateDebut} au ${dateFin}`);
+        
+        // Générer toutes les dates entre dateDebut et dateFin
+        const dates = [];
+        const [jourDebut, moisDebut, anneeDebut] = dateDebut.split('/');
+        const [jourFin, moisFin, anneeFin] = dateFin.split('/');
+        
+        const start = new Date(anneeDebut, moisDebut - 1, jourDebut);
+        const end = new Date(anneeFin, moisFin - 1, jourFin);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const jour = String(d.getDate()).padStart(2, '0');
+            const mois = String(d.getMonth() + 1).padStart(2, '0');
+            const annee = d.getFullYear();
+            dates.push(`${jour}/${mois}/${annee}`); // Format DD/MM/YYYY pour l'API
+        }
+        
+        console.log(`📅 Récupération des ventes pour ${dates.length} dates`);
+        
+        // Récupérer les ventes pour chaque date
+        let toutesVentesFiltrees = [];
+        
+        for (const date of dates) {
+            try {
+                const response = await fetch(`/api/ventes-date?date=${date}&pointVente=${encodeURIComponent(pointVente)}`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.ventes && Array.isArray(data.ventes)) {
+                        toutesVentesFiltrees = toutesVentesFiltrees.concat(data.ventes);
+                    }
+                }
+            } catch (error) {
+                console.warn(`⚠️ Erreur pour la date ${date}:`, error);
+            }
+        }
+        
+        console.log(`📊 Total ventes filtrées pour ${pointVente}: ${toutesVentesFiltrees.length} ventes`);
+        
+        if (toutesVentesFiltrees.length === 0) {
+            console.log(`⚠️ Aucune vente trouvée pour ${pointVente} sur la période`);
+            return {}; // Retourner un objet vide si aucune vente
+        }
+        
+        // Recalculer les analytics avec toutes les ventes du point de vente sélectionné
+        const analyticsFiltrees = calculerAnalyticsVentes(toutesVentesFiltrees);
+        
+        console.log(`✅ Analytics filtrées pour ${pointVente}:`, analyticsFiltrees);
+        return analyticsFiltrees.regroupees;
+        
+    } catch (error) {
+        console.error(`❌ Erreur filtrage analytics pour ${pointVente}:`, error);
+        return analyticsRegroupees; // Retourner les données non filtrées en cas d'erreur
+    }
+}
+
+// Fonction pour générer les dates entre deux dates
+function genererDatesEntre(dateDebut, dateFin) {
+    const dates = [];
+    const start = new Date(dateDebut);
+    const end = new Date(dateFin);
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // Convertir au format DD/MM/YYYY
+        const jour = String(d.getDate()).padStart(2, '0');
+        const mois = String(d.getMonth() + 1).padStart(2, '0');
+        const annee = d.getFullYear();
+        dates.push(`${jour}/${mois}/${annee}`);
+    }
+    
+    return dates;
+}
+
+// Fonction pour calculer le ratio de perte dynamique
+async function calculerRatioPerteDynamique(dateDebut, dateFin, pointVente, categorie) {
+    try {
+        console.log(`🔍 Calcul ratio perte dynamique: ${categorie} pour ${pointVente} du ${dateDebut} au ${dateFin}`);
+        
+        // Générer toutes les dates entre dateDebut et dateFin au format DD-MM-YYYY
+        const dates = [];
+        // Les dates arrivent au format DD/MM/YYYY, on les parse correctement
+        const [jourDebut, moisDebut, anneeDebut] = dateDebut.split('/');
+        const [jourFin, moisFin, anneeFin] = dateFin.split('/');
+        
+        const start = new Date(anneeDebut, moisDebut - 1, jourDebut);
+        const end = new Date(anneeFin, moisFin - 1, jourFin);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const jour = String(d.getDate()).padStart(2, '0');
+            const mois = String(d.getMonth() + 1).padStart(2, '0');
+            const annee = d.getFullYear();
+            dates.push(`${jour}-${mois}-${annee}`); // Format DD-MM-YYYY
+        }
+        
+        console.log(`📅 Dates à traiter: ${dates.length} dates`);
+        
+        let sommeVentesNombre = 0;
+        let sommeVentesTheoriquesNombre = 0;
+        let datesAvecDonnees = 0;
+        
+        // Appeler l'API pour chaque date et accumuler les sommes
+        for (const date of dates) {
+            try {
+                const response = await fetch(`/api/external/reconciliation?date=${encodeURIComponent(date)}&key=b326e72b67a9b508c88270b9954c5ca1`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                    }
+                });
+                
+                if (!response.ok) {
+                    console.log(`⚠️ Erreur API reconciliation pour ${date}: ${response.status}`);
+                    continue;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.data && data.data.details && data.data.details[pointVente] && data.data.details[pointVente][categorie]) {
+                    const details = data.data.details[pointVente][categorie];
+                    const ventesNombre = parseFloat(details.ventesNombre) || 0;
+                    const ventesTheoriquesNombre = parseFloat(details.ventesTheoriquesNombre) || 0;
+                    
+                    console.log(`🔍 DEBUG ${date} - ${categorie} (${pointVente}):`);
+                    console.log(`   - ventesNombre: ${ventesNombre}`);
+                    console.log(`   - ventesTheoriquesNombre: ${ventesTheoriquesNombre}`);
+                    
+                    // Accumuler les sommes
+                    sommeVentesNombre += ventesNombre;
+                    sommeVentesTheoriquesNombre += ventesTheoriquesNombre;
+                    datesAvecDonnees++;
+                    
+                    console.log(`   ✅ Données ajoutées aux sommes (${datesAvecDonnees} dates)`);
+                } else {
+                    console.log(`⚠️ ${date}: Données manquantes pour ${categorie} - ${pointVente}`);
+                }
+            } catch (error) {
+                console.log(`⚠️ Erreur pour la date ${date}:`, error);
+            }
+        }
+        
+        if (datesAvecDonnees === 0) {
+            console.log(`⚠️ Aucune donnée trouvée pour ${categorie} - ${pointVente}`);
+            console.log(`   - Utilisation du ratio par défaut: 8%`);
+            return 0.08; // Retourner le ratio par défaut (8%)
+        }
+        
+        // Calculer le ratio global sur la somme SANS Math.abs
+        console.log(`📊 CALCUL RATIO GLOBAL pour ${categorie} - ${pointVente}:`);
+        console.log(`   - Dates avec données: ${datesAvecDonnees}`);
+        console.log(`   - Somme ventesNombre: ${sommeVentesNombre.toFixed(2)}`);
+        console.log(`   - Somme ventesTheoriquesNombre: ${sommeVentesTheoriquesNombre.toFixed(2)}`);
+        
+        if (sommeVentesTheoriquesNombre > 0) {
+            const ratioGlobal = (sommeVentesNombre / sommeVentesTheoriquesNombre) - 1;
+            const ratioPourcentage = ratioGlobal * 100;
+            
+            console.log(`   - Calcul: (${sommeVentesNombre.toFixed(2)} / ${sommeVentesTheoriquesNombre.toFixed(2)}) - 1`);
+            console.log(`   - = ${(sommeVentesNombre / sommeVentesTheoriquesNombre).toFixed(4)} - 1`);
+            console.log(`   - = ${(sommeVentesNombre / sommeVentesTheoriquesNombre - 1).toFixed(4)}`);
+            console.log(`   - = ${ratioGlobal.toFixed(4)}`);
+            console.log(`   - Ratio global: ${ratioPourcentage.toFixed(2)}%`);
+            
+            return ratioGlobal;
+        } else {
+            console.log(`   ⚠️ Somme ventesTheoriquesNombre = 0, utilisation du ratio par défaut`);
+            return 0.08; // 8% par défaut
+        }
+        
+    } catch (error) {
+        console.error(`❌ Erreur calcul ratio perte dynamique:`, error);
+        return 0.08; // Retourner le ratio par défaut (8%)
+    }
+}
+
 // Fonction pour récupérer et calculer le stock soir
-async function calculerStockSoir(dateFin) {
+async function calculerStockSoir(dateFin, pointVente = null) {
     try {
         console.log(`🔍 Récupération du stock soir pour la date: ${dateFin}`);
         
@@ -11086,15 +11401,22 @@ async function calculerStockSoir(dateFin) {
         }
 
         // Les données sont déjà filtrées par date par l'API
-        // Calculer le montant total de tous les items
+        // Filtrer par point de vente si spécifié
         let montantTotal = 0;
         let nombreItems = 0;
         
         Object.entries(data).forEach(([key, item]) => {
+            // Si un point de vente est spécifié, filtrer par ce point de vente
+            if (pointVente && pointVente !== 'Sélectionner un point de vente') {
+                if (item['Point de Vente'] !== pointVente) {
+                    return; // Ignorer cet item s'il ne correspond pas au point de vente
+                }
+            }
+            
             const montant = parseFloat(item.Montant) || 0;
             montantTotal += montant;
             nombreItems++;
-            console.log(`  - ${item.Produit || key}: ${montant} FCFA`);
+            console.log(`  - ${item.Produit || key} (${item['Point de Vente']}): ${montant} FCFA`);
         });
 
         console.log(`💰 Montant total stock soir: ${montantTotal} FCFA`);
@@ -11115,9 +11437,28 @@ async function afficherAnalyticsVentes(ventes) {
     const container = document.getElementById('analytics-container');
     if (!container) return;
 
+    // Afficher un loader pendant le calcul
+    const loaderHtml = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Chargement...</span>
+            </div>
+            <div class="mt-3">
+                <h5>Calcul des analytics en cours...</h5>
+                <p class="text-muted">Calcul des ratios dynamiques et des proxy marges</p>
+            </div>
+        </div>
+    `;
+    container.innerHTML = loaderHtml;
+
+    // TEMPORAIRE: Forcer l'attente de 15 secondes pour tester le spinner
+    console.log('🕐 TEMPORAIRE: Début de l\'attente de 15 secondes pour tester le spinner');
+    await new Promise(resolve => setTimeout(resolve, 15000));
+    console.log('🕐 TEMPORAIRE: Fin de l\'attente de 15 secondes');
+
     const analytics = calculerAnalyticsVentes(ventes);
     
-    // Calculer les proxy marges
+    // Calculer les proxy marges (avec ratios dynamiques si nécessaire)
     await calculerEtAfficherProxyMarges(analytics.regroupees);
     
     // Créer le HTML pour afficher les analytics
@@ -11285,15 +11626,77 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
             return;
         }
 
-        // Récupérer le stock soir selon la logique améliorée
-        const stockSoir = await calculerStockSoirVariation(dateDebut, dateFin);
+        // Récupérer le stock soir selon la logique améliorée (filtré par point de vente si spécifique)
+        const stockSoir = await calculerStockSoirVariation(dateDebut, dateFin, proxyMargesControls.pointVenteActuel);
         console.log(`📊 Stock soir récupéré: ${stockSoir.montantTotal} FCFA (${stockSoir.nombreItems} items)`);
+
+        // Filtrer les données analytics par point de vente si spécifique
+        let analyticsRegroupeesFiltrees = analyticsRegroupees;
+        if (proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
+            console.log(`🔍 Filtrage des données pour le point de vente: ${proxyMargesControls.pointVenteActuel}`);
+            analyticsRegroupeesFiltrees = await filtrerAnalyticsParPointVente(analyticsRegroupees, proxyMargesControls.pointVenteActuel, dateDebut, dateFin);
+        }
+
+        // Calculer les ratios dynamiques si le calcul automatique est activé
+        let ratioBoeufDynamique = proxyMargesControls.ratioPerteBoeuf / 100;
+        let ratioVeauDynamique = proxyMargesControls.ratioPerteVeau / 100;
+        
+        if (proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
+            // Afficher un loader dans la section Proxy Marges
+            const proxyMargesSection = document.getElementById('proxy-marges-section');
+            if (proxyMargesSection) {
+                const existingLoader = document.getElementById('ratio-calcul-spinner');
+                if (existingLoader) existingLoader.remove();
+                
+                const spinnerElement = document.createElement('div');
+                spinnerElement.id = 'ratio-calcul-spinner';
+                spinnerElement.className = 'alert alert-info text-center mb-3';
+                spinnerElement.innerHTML = `
+                    <i class="fas fa-spinner fa-spin me-2"></i>
+                    <strong>Calcul des ratios dynamiques en cours...</strong>
+                    <div class="small text-muted mt-1">Point de vente: ${proxyMargesControls.pointVenteActuel}</div>
+                `;
+                
+                // Insérer le spinner au début de la section Proxy Marges
+                const firstChild = proxyMargesSection.firstChild;
+                if (firstChild) {
+                    proxyMargesSection.insertBefore(spinnerElement, firstChild);
+                } else {
+                    proxyMargesSection.appendChild(spinnerElement);
+                }
+            }
+            
+            try {
+                console.log(`🔄 Calcul des ratios dynamiques pour ${proxyMargesControls.pointVenteActuel}`);
+                ratioBoeufDynamique = await calculerRatioPerteDynamique(dateDebut, dateFin, proxyMargesControls.pointVenteActuel, 'Boeuf');
+                ratioVeauDynamique = await calculerRatioPerteDynamique(dateDebut, dateFin, proxyMargesControls.pointVenteActuel, 'Veau');
+                
+                console.log(`📊 Ratios dynamiques calculés:`);
+                console.log(`   - Boeuf: ${(ratioBoeufDynamique * 100).toFixed(2)}%`);
+                console.log(`   - Veau: ${(ratioVeauDynamique * 100).toFixed(2)}%`);
+                
+                // Mettre à jour les champs de ratio
+                const ratioBoeufInput = document.getElementById('ratio-perte-boeuf');
+                const ratioVeauInput = document.getElementById('ratio-perte-veau');
+                if (ratioBoeufInput) ratioBoeufInput.value = (ratioBoeufDynamique * 100).toFixed(1);
+                if (ratioVeauInput) ratioVeauInput.value = (ratioVeauDynamique * 100).toFixed(1);
+                
+            } catch (error) {
+                console.error('❌ Erreur calcul ratios dynamiques:', error);
+            } finally {
+                // Supprimer le spinner
+                const spinnerElement = document.getElementById('ratio-calcul-spinner');
+                if (spinnerElement) {
+                    spinnerElement.remove();
+                }
+            }
+        }
 
         // Calculer les proxy marges
         const proxyMarges = {};
         
-        Object.keys(analyticsRegroupees).forEach(categorie => {
-            const data = analyticsRegroupees[categorie];
+        Object.keys(analyticsRegroupeesFiltrees).forEach(categorie => {
+            const data = analyticsRegroupeesFiltrees[categorie];
             let chiffreAffaires;
             let coutAchat = 0;
             
@@ -11306,24 +11709,48 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
             
             switch (categorie) {
                 case 'Boeuf':
-                    coutAchat = prixAchatBoeuf * poidsTotalBoeuf;
+                    // Calculer la quantité abattue selon le mode
+                    let quantiteAbattueBoeuf;
+                    if (proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
+                        // Mode auto : Qté abattue = Qté vendue / (1 + ratio)
+                        quantiteAbattueBoeuf = data.quantiteTotal / (1 + ratioBoeufDynamique);
+                        coutAchat = prixAchatBoeuf * quantiteAbattueBoeuf;
+                    } else {
+                        // Mode manuel : utiliser les données globales
+                        quantiteAbattueBoeuf = poidsTotalBoeuf;
+                        coutAchat = prixAchatBoeuf * poidsTotalBoeuf;
+                    }
                     console.log(`💰 CALCUL PROXY MARGE BOEUF:`);
                     console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
-                    console.log(`   - Quantité totale: ${data.quantiteTotal} kg`);
+                    console.log(`   - Quantité vendue: ${data.quantiteTotal} kg`);
+                    console.log(`   - Quantité abattue: ${quantiteAbattueBoeuf.toFixed(2)} kg`);
                     console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
                     console.log(`   - Prix moyen achat: ${prixAchatBoeuf.toFixed(2)} FCFA/kg`);
-                    console.log(`   - Poids total achat: ${poidsTotalBoeuf} kg`);
                     console.log(`   - Coût d'achat: ${coutAchat.toFixed(0)} FCFA`);
+                    console.log(`   - Ratio dynamique: ${(ratioBoeufDynamique * 100).toFixed(2)}%`);
+                    console.log(`   - Mode auto: ${proxyMargesControls.calculAutoActif ? 'ACTIF' : 'INACTIF'}`);
                     break;
                 case 'Veau':
-                    coutAchat = prixAchatVeau * poidsTotalVeau;
+                    // Calculer la quantité abattue selon le mode
+                    let quantiteAbattueVeau;
+                    if (proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
+                        // Mode auto : Qté abattue = Qté vendue / (1 + ratio)
+                        quantiteAbattueVeau = data.quantiteTotal / (1 + ratioVeauDynamique);
+                        coutAchat = prixAchatVeau * quantiteAbattueVeau;
+                    } else {
+                        // Mode manuel : utiliser les données globales
+                        quantiteAbattueVeau = poidsTotalVeau;
+                        coutAchat = prixAchatVeau * poidsTotalVeau;
+                    }
                     console.log(`💰 CALCUL PROXY MARGE VEAU:`);
                     console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
-                    console.log(`   - Quantité totale: ${data.quantiteTotal} kg`);
+                    console.log(`   - Quantité vendue: ${data.quantiteTotal} kg`);
+                    console.log(`   - Quantité abattue: ${quantiteAbattueVeau.toFixed(2)} kg`);
                     console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
                     console.log(`   - Prix moyen achat: ${prixAchatVeau.toFixed(2)} FCFA/kg`);
-                    console.log(`   - Poids total achat: ${poidsTotalVeau} kg`);
                     console.log(`   - Coût d'achat: ${coutAchat.toFixed(0)} FCFA`);
+                    console.log(`   - Ratio dynamique: ${(ratioVeauDynamique * 100).toFixed(2)}%`);
+                    console.log(`   - Mode auto: ${proxyMargesControls.calculAutoActif ? 'ACTIF' : 'INACTIF'}`);
                     break;
                 case 'Poulet':
                     coutAchat = prixAchatPoulet * data.quantiteTotal;
@@ -11335,14 +11762,26 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                     coutAchat = prixAchatOeuf * data.quantiteTotal;
                     break;
                 case 'Packs':
-                    // Pas de coût d'achat pour cette catégorie
-                    coutAchat = 0;
-                    console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
-                    console.log(`   - Composition: Tous les produits avec catégorie "Pack"`);
-                    console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
-                    console.log(`   - Quantité totale: ${data.quantiteTotal} kg`);
-                    console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
-                    console.log(`   - Pas de coût d'achat (produits dérivés)`);
+                    // Si mode Auto OFF, forcer le coût à zéro, sinon coût manuel ou par défaut = CA
+                    if (!proxyMargesControls.calculAutoActif) {
+                        coutAchat = 0;
+                        console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
+                        console.log(`   - Composition: Tous les produits avec catégorie "Pack"`);
+                        console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
+                        console.log(`   - Quantité totale: ${data.quantiteTotal} kg`);
+                        console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
+                        console.log(`   - Mode Auto: OFF - Coût forcé à 0 FCFA`);
+                        console.log(`   - Coût final: ${coutAchat.toFixed(0)} FCFA`);
+                    } else {
+                        coutAchat = proxyMargesControls.coutManuelPacks || chiffreAffaires;
+                        console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
+                        console.log(`   - Composition: Tous les produits avec catégorie "Pack"`);
+                        console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
+                        console.log(`   - Quantité totale: ${data.quantiteTotal} kg`);
+                        console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
+                        console.log(`   - Coût manuel: ${proxyMargesControls.coutManuelPacks} FCFA`);
+                        console.log(`   - Coût final: ${coutAchat.toFixed(0)} FCFA`);
+                    }
                     break;
                 case 'Divers':
                     // Pas de coût d'achat pour cette catégorie
@@ -11355,14 +11794,26 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                     console.log(`   - Pas de coût d'achat (produits dérivés)`);
                     break;
                 case 'Autre':
-                    // Pas de coût d'achat pour cette catégorie
-                    coutAchat = 0;
-                    console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
-                    console.log(`   - Composition: Autre viande`);
-                    console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
-                    console.log(`   - Quantité totale: ${data.quantiteTotal} kg`);
-                    console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
-                    console.log(`   - Pas de coût d'achat (produits dérivés)`);
+                    // Si mode Auto OFF, forcer le coût à zéro, sinon coût manuel ou par défaut = CA
+                    if (!proxyMargesControls.calculAutoActif) {
+                        coutAchat = 0;
+                        console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
+                        console.log(`   - Composition: Autre viande`);
+                        console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
+                        console.log(`   - Quantité totale: ${data.quantiteTotal} kg`);
+                        console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
+                        console.log(`   - Mode Auto: OFF - Coût forcé à 0 FCFA`);
+                        console.log(`   - Coût final: ${coutAchat.toFixed(0)} FCFA`);
+                    } else {
+                        coutAchat = proxyMargesControls.coutManuelAutre || chiffreAffaires;
+                        console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
+                        console.log(`   - Composition: Autre viande`);
+                        console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
+                        console.log(`   - Quantité totale: ${data.quantiteTotal} kg`);
+                        console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
+                        console.log(`   - Coût manuel: ${proxyMargesControls.coutManuelAutre} FCFA`);
+                        console.log(`   - Coût final: ${coutAchat.toFixed(0)} FCFA`);
+                    }
                     break;
                 case 'Stock Soir':
                     // Pas de coût d'achat pour cette catégorie
@@ -11416,13 +11867,52 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                 icone = 'fa-ellipsis-h';
             }
             
-            // Récupérer la quantité depuis les analytics
-            const quantiteVendue = analyticsRegroupees[categorie] ? analyticsRegroupees[categorie].quantiteTotal : 0;
-            const quantiteAbattue = categorie === 'Boeuf' ? poidsTotalBoeuf : categorie === 'Veau' ? poidsTotalVeau : quantiteVendue;
+            // Récupérer la quantité depuis les analytics filtrées
+            const quantiteVendue = analyticsRegroupeesFiltrees[categorie] ? analyticsRegroupeesFiltrees[categorie].quantiteTotal : 0;
             
-            // Calculer le ratio de perte (valeur absolue)
-            const ratioPerte = quantiteAbattue > 0 ? Math.abs(((quantiteVendue / quantiteAbattue) - 1) * 100) : 0;
-            const couleurRatio = 'warning'; // Toujours en orange car c'est une perte
+            // Calculer la quantité abattue selon le mode (dynamique ou statique)
+            let quantiteAbattue = quantiteVendue;
+            if (categorie === 'Boeuf' && proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
+                // Utiliser le ratio dynamique pour Boeuf
+                quantiteAbattue = quantiteVendue / (1 + ratioBoeufDynamique);
+                console.log(`🐄 Boeuf - Qté vendue: ${quantiteVendue} kg, Ratio dynamique: ${(ratioBoeufDynamique * 100).toFixed(2)}%, Qté abattue: ${quantiteAbattue.toFixed(2)} kg`);
+            } else if (categorie === 'Veau' && proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
+                // Utiliser le ratio dynamique pour Veau
+                quantiteAbattue = quantiteVendue / (1 + ratioVeauDynamique);
+                console.log(`🐄 Veau - Qté vendue: ${quantiteVendue} kg, Ratio dynamique: ${(ratioVeauDynamique * 100).toFixed(2)}%, Qté abattue: ${quantiteAbattue.toFixed(2)} kg`);
+            } else if (categorie === 'Boeuf') {
+                // Mode statique pour Boeuf
+                quantiteAbattue = poidsTotalBoeuf;
+            } else if (categorie === 'Veau') {
+                // Mode statique pour Veau
+                quantiteAbattue = poidsTotalVeau;
+            }
+            
+            // Calculer le ratio de perte
+            let ratioPerte = 0;
+            let couleurRatio = 'warning';
+            
+            if (quantiteAbattue > 0) {
+                if (categorie === 'Boeuf' && proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
+                    // Pour le mode dynamique, utiliser directement le ratio dynamique
+                    ratioPerte = ratioBoeufDynamique * 100;
+                } else if (categorie === 'Veau' && proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
+                    // Pour le mode dynamique, utiliser directement le ratio dynamique
+                    ratioPerte = ratioVeauDynamique * 100;
+                } else {
+                    // Pour le mode statique, calculer le ratio à partir des quantités
+                    ratioPerte = Math.abs(((quantiteVendue / quantiteAbattue) - 1) * 100);
+                }
+                
+                // Déterminer la couleur selon le signe du ratio
+                if (ratioPerte < 0) {
+                    couleurRatio = 'success'; // Vert pour survente
+                } else if (ratioPerte > 0) {
+                    couleurRatio = 'warning'; // Orange pour perte
+                } else {
+                    couleurRatio = 'info'; // Bleu pour équilibre
+                }
+            }
             
             html += `
                 <div class="mb-3">
@@ -11452,11 +11942,11 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                                  <button class="btn btn-sm btn-outline-info mt-1" onclick="afficherDetailStockSoirVariation('${stockSoir.type}', '${stockSoir.dateUtilisee || stockSoir.dateDebut}', '${stockSoir.dateFin || ''}')" title="Voir le détail par point de vente et produit">
                                      <i class="fas fa-info-circle"></i> Détail
                                  </button>` :
-                                `<small class="text-muted d-block">Prix vente: ${analyticsRegroupees[categorie].prixMoyen.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' ? 'unité' : 'kg'}</small>
-                                 ${marge.prixAchat > 0 ? `<small class="text-muted d-block">Prix achat: ${marge.prixAchat.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' ? 'unité' : 'kg'}</small>` : '<small class="text-info d-block">Pas de coût d\'achat</small>'}
-                                 <small class="text-muted d-block">Qté vendue: ${quantiteVendue.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ${categorie === 'Poulet' || categorie === 'Oeuf' ? 'unité' : 'kg'}</small>
+                                `<small class="text-muted d-block">Prix vente: ${analyticsRegroupeesFiltrees[categorie].prixMoyen.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>
+                                 ${marge.prixAchat > 0 ? `<small class="text-muted d-block">Prix achat: ${marge.prixAchat.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>` : '<small class="text-info d-block">Pas de coût d\'achat</small>'}
+                                 <small class="text-muted d-block">Qté vendue: ${quantiteVendue.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>
                                  ${categorie !== 'Packs' && categorie !== 'Divers' && categorie !== 'Autre' && categorie !== 'Stock Soir' && categorie !== 'Poulet' && categorie !== 'Oeuf' ? `<small class="text-muted d-block">Qté abattue: ${quantiteAbattue.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} kg</small>` : ''}
-                                 ${categorie !== 'Packs' && categorie !== 'Divers' && categorie !== 'Autre' && categorie !== 'Stock Soir' && categorie !== 'Poulet' && categorie !== 'Oeuf' ? `<small class="text-${couleurRatio} d-block">Ratio perte: ${ratioPerte.toFixed(1)}%</small>` : ''}`
+                                 ${categorie !== 'Packs' && categorie !== 'Divers' && categorie !== 'Autre' && categorie !== 'Stock Soir' && categorie !== 'Poulet' && categorie !== 'Oeuf' ? `<small class="text-${couleurRatio} d-block">Ratio perte: ${ratioPerte >= 0 ? '+' : ''}${ratioPerte.toFixed(1)}%</small>` : ''}`
                             }
                         </div>
                         <div class="col-6">

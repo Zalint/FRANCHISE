@@ -2267,12 +2267,26 @@ app.get('/api/ventes-date', checkAuth, async (req, res) => {
         const dateStandardisee = standardiserDateFormat(date);
         console.log('Date standardisée:', dateStandardisee);
         
-        // Préparer les conditions de filtrage
-        const whereConditions = { date: dateStandardisee };
+        // Utiliser la même logique que l'API externe pour gérer les formats de date multiples
+        // Convertir la date d'entrée en format DD-MM-YYYY si elle n'y est pas déjà
+        let dateDDMMYYYY = date;
+        if (date.includes('/')) {
+            dateDDMMYYYY = date.replace(/\//g, '-');
+        }
+        
+        // Préparer les conditions de filtrage avec OR pour gérer les deux formats
+        const whereConditions = {
+            [Op.or]: [
+                { date: dateStandardisee },  // Format YYYY-MM-DD
+                { date: dateDDMMYYYY }       // Format DD-MM-YYYY
+            ]
+        };
         
         if (pointVente) {
             whereConditions.pointVente = pointVente;
         }
+        
+        console.log('Conditions de recherche (avec OR):', whereConditions);
         
         // Récupérer les ventes depuis la base de données
         const ventes = await Vente.findAll({
