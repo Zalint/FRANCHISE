@@ -5850,6 +5850,174 @@ app.get('/api/external/ventes-date', validateApiKey, async (req, res) => {
     }
 });
 
+// External API version for ventes with date range support (OPTIMIZED)
+app.get('/api/external/ventes', validateApiKey, async (req, res) => {
+    try {
+        const { dateDebut, dateFin, pointVente } = req.query;
+        
+        // Validate input - at least one date parameter is required
+        if (!dateDebut && !dateFin) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Au moins un paramètre de date (dateDebut ou dateFin) est requis (format: yyyy-mm-dd)' 
+            });
+        }
+        
+        console.log('==== EXTERNAL API - VENTES WITH DATE RANGE ====');
+        console.log('Paramètres reçus:', { dateDebut, dateFin, pointVente });
+        
+        // Fonction pour convertir une date ISO (YYYY-MM-DD) en format DD-MM-YYYY
+        const convertISOToAppFormat = (isoDate) => {
+            const date = new Date(isoDate);
+            const jour = date.getDate().toString().padStart(2, '0');
+            const mois = (date.getMonth() + 1).toString().padStart(2, '0');
+            const annee = date.getFullYear();
+            return `${jour}-${mois}-${annee}`;
+        };
+        
+        // Fonction pour comparer des dates (gère les formats DD-MM-YYYY et YYYY-MM-DD)
+        const isDateInRange = (dateToCheck, startDate, endDate) => {
+            // Convertir les dates au format comparable (YYYY-MM-DD)
+            const convertToComparable = (dateStr) => {
+                if (!dateStr) return '';
+                
+                // Si la date est déjà au format YYYY-MM-DD, la retourner telle quelle
+                if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    return dateStr;
+                }
+                
+                // Sinon, supposer le format DD-MM-YYYY
+                const [day, month, year] = dateStr.split('-');
+                return `${year}-${month}-${day}`;
+            };
+            
+            const comparableDate = convertToComparable(dateToCheck);
+            const comparableStart = startDate ? convertToComparable(startDate) : '';
+            const comparableEnd = endDate ? convertToComparable(endDate) : '';
+            
+            let isInRange = true;
+            
+            if (comparableStart && comparableDate) {
+                isInRange = isInRange && (comparableDate >= comparableStart);
+            }
+            
+            if (comparableEnd && comparableDate) {
+                isInRange = isInRange && (comparableDate <= comparableEnd);
+            }
+            
+            return isInRange;
+        };
+        
+        // Préparer les conditions de filtrage pour Sequelize
+        const whereConditions = {};
+        
+        if (pointVente && pointVente !== 'tous') {
+            whereConditions.pointVente = pointVente;
+        }
+        
+        console.log('Conditions Sequelize:', whereConditions);
+        
+        // Si on a des critères de date, on fait une recherche complète et on filtre après
+        let debutFormatted = null;
+        let finFormatted = null;
+        
+        if (dateDebut) {
+            debutFormatted = convertISOToAppFormat(dateDebut);
+            console.log(`Date début convertie: ${dateDebut} → ${debutFormatted}`);
+        }
+        
+        if (dateFin) {
+            finFormatted = convertISOToAppFormat(dateFin);
+            console.log(`Date fin convertie: ${dateFin} → ${finFormatted}`);
+        }
+        
+        // Récupérer toutes les ventes qui correspondent aux autres critères
+        const allVentes = await Vente.findAll({
+            where: whereConditions,
+            order: [['createdAt', 'DESC']]
+        });
+        
+        // Filtrer les ventes selon la date
+        const filteredVentes = allVentes.filter(vente => 
+            isDateInRange(vente.date, debutFormatted, finFormatted)
+        );
+        
+        console.log(`Nombre total de ventes récupérées: ${allVentes.length}`);
+        console.log(`Nombre de ventes après filtrage par date: ${filteredVentes.length}`);
+        
+        // Log pour debug - afficher quelques exemples de dates trouvées
+        if (filteredVentes.length > 0) {
+            console.log('Exemples de ventes filtrées:');
+            filteredVentes.slice(0, 3).forEach((vente, index) => {
+                console.log(`  ${index + 1}. Date: ${vente.date}, Point: ${vente.pointVente}, Produit: ${vente.produit}, Montant: ${vente.montant}`);
+            });
+        }
+        
+        // Formater les données pour la réponse (même format que l'API interne)
+        const formattedVentes = filteredVentes.map(vente => ({
+            Mois: vente.mois,
+            Date: vente.date,
+            Semaine: vente.semaine,
+            'Point de Vente': vente.pointVente,
+            Preparation: vente.preparation,
+            Catégorie: vente.categorie,
+            Produit: vente.produit,
+            PU: vente.prixUnit,
+            Nombre: vente.nombre,
+            Montant: vente.montant,
+            nomClient: vente.nomClient,
+            numeroClient: vente.numeroClient,
+            adresseClient: vente.adresseClient,
+            creance: vente.creance
+        }));
+        
+        // Calculer les totaux par point de vente (pour compatibilité avec l'API interne)
+        const totauxParPointVente = {};
+        filteredVentes.forEach(vente => {
+            const point = vente.pointVente;
+            const produit = vente.produit;
+            
+            if (!totauxParPointVente[point]) {
+                totauxParPointVente[point] = {};
+            }
+            
+            if (!totauxParPointVente[point][produit]) {
+                totauxParPointVente[point][produit] = {
+                    quantite: 0,
+                    montant: 0
+                };
+            }
+            
+            totauxParPointVente[point][produit].quantite += parseFloat(vente.nombre || 0);
+            totauxParPointVente[point][produit].montant += parseFloat(vente.montant || 0);
+        });
+        
+        console.log('Nombre de ventes external API:', formattedVentes.length);
+        console.log('==== END EXTERNAL API - VENTES WITH DATE RANGE ====');
+        
+        res.json({ 
+            success: true, 
+            ventes: formattedVentes,
+            totaux: totauxParPointVente,
+            metadata: {
+                totalVentes: formattedVentes.length,
+                dateDebut: dateDebut,
+                dateFin: dateFin,
+                pointVente: pointVente || 'tous',
+                optimized: true // Indique que c'est la version optimisée
+            }
+        });
+        
+    } catch (error) {
+        console.error('Erreur lors de la recherche des ventes avec intervalle (API externe):', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Erreur lors de la recherche des ventes avec intervalle',
+            error: error.message
+        });
+    }
+});
+
 // External API version for stock information
 app.get('/api/external/stock/:type', validateApiKey, async (req, res) => {
     try {
@@ -6869,6 +7037,201 @@ app.get('/api/external/reconciliation', validateApiKey, async (req, res) => {
     }
 });
 
+// External API for aggregated reconciliation data over a date range
+app.get('/api/external/reconciliation/aggregated', validateApiKey, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        
+        // Validate input
+        if (!startDate || !endDate) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Both startDate and endDate parameters are required (format: dd-mm-yyyy or dd/mm/yyyy)' 
+            });
+        }
+        
+        console.log('==== EXTERNAL API - AGGREGATED RECONCILIATION ====');
+        console.log('Start date:', startDate);
+        console.log('End date:', endDate);
+        
+        // Convert date formats to DD/MM/YYYY
+        const convertDate = (date) => {
+            if (date.includes('-')) {
+                return date.replace(/-/g, '/');
+            }
+            return date;
+        };
+        
+        const dbStartDate = convertDate(startDate);
+        const dbEndDate = convertDate(endDate);
+        
+        console.log('Database start date format:', dbStartDate);
+        console.log('Database end date format:', dbEndDate);
+        
+        // Generate array of dates between start and end dates
+        const generateDateRange = (start, end) => {
+            const dates = [];
+            const startParts = start.split('/');
+            const endParts = end.split('/');
+            
+            const startDateObj = new Date(parseInt(startParts[2]), parseInt(startParts[1]) - 1, parseInt(startParts[0]));
+            const endDateObj = new Date(parseInt(endParts[2]), parseInt(endParts[1]) - 1, parseInt(endParts[0]));
+            
+            let currentDate = new Date(startDateObj);
+            
+            while (currentDate <= endDateObj) {
+                const day = String(currentDate.getDate()).padStart(2, '0');
+                const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+                const year = currentDate.getFullYear();
+                dates.push(`${day}/${month}/${year}`);
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            return dates;
+        };
+        
+        const dateRange = generateDateRange(dbStartDate, dbEndDate);
+        console.log(`Generated ${dateRange.length} dates for period`);
+        
+        // Use axios instance for making requests
+        const axiosInstance = require('axios').create({
+            baseURL: `http://localhost:${PORT}`,
+            headers: {
+                'X-API-Key': req.headers['x-api-key']
+            }
+        });
+        
+        // Function to fetch reconciliation data for a specific date
+        const fetchReconciliationForDate = async (date) => {
+            try {
+                const formattedDate = date.replace(/\//g, '-');
+                const response = await axiosInstance.get('/api/external/reconciliation', {
+                    params: { date: formattedDate }
+                });
+                return response.data;
+            } catch (error) {
+                console.warn(`Failed to fetch reconciliation for date ${date}:`, error.message);
+                return null;
+            }
+        };
+        
+        // Fetch reconciliation data for all dates in parallel (limited batches to avoid overwhelming)
+        const batchSize = 10;
+        const allReconciliationData = [];
+        
+        for (let i = 0; i < dateRange.length; i += batchSize) {
+            const batch = dateRange.slice(i, i + batchSize);
+            console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(dateRange.length/batchSize)} (${batch.length} dates)`);
+            
+            const batchPromises = batch.map(date => fetchReconciliationForDate(date));
+            const batchResults = await Promise.all(batchPromises);
+            
+            // Filter out null results and extract successful data
+            const validResults = batchResults.filter(result => result && result.success && result.data);
+            allReconciliationData.push(...validResults.map(result => result.data));
+        }
+        
+        console.log(`Successfully fetched ${allReconciliationData.length} reconciliation records`);
+        
+        // Aggregate the data by point de vente and product
+        const aggregatedData = {};
+        
+        allReconciliationData.forEach(dayData => {
+            if (dayData.details) {
+                Object.entries(dayData.details).forEach(([pointVente, pointData]) => {
+                    if (!aggregatedData[pointVente]) {
+                        aggregatedData[pointVente] = {};
+                    }
+                    
+                    Object.entries(pointData).forEach(([product, productData]) => {
+                        if (!aggregatedData[pointVente][product]) {
+                            aggregatedData[pointVente][product] = {
+                                ventesNombre: 0,
+                                ventesTheoriquesNombre: 0,
+                                ventesValeur: 0,
+                                ventesTheoriquesValeur: 0,
+                                ecartNombre: 0,
+                                ecartValeur: 0,
+                                stockInitial: 0,
+                                stockFinal: 0,
+                                stockMatinNombre: 0,
+                                stockSoirNombre: 0
+                            };
+                        }
+                        
+                        // Aggregate numerical values
+                        const currentProduct = aggregatedData[pointVente][product];
+                        currentProduct.ventesNombre += parseFloat(productData.ventesNombre || 0);
+                        currentProduct.ventesTheoriquesNombre += parseFloat(productData.ventesTheoriquesNombre || 0);
+                        currentProduct.ventesValeur += parseFloat(productData.ventesValeur || 0);
+                        currentProduct.ventesTheoriquesValeur += parseFloat(productData.ventesTheoriquesValeur || 0);
+                        currentProduct.ecartNombre += parseFloat(productData.ecartNombre || 0);
+                        currentProduct.ecartValeur += parseFloat(productData.ecartValeur || 0);
+                        currentProduct.stockInitial += parseFloat(productData.stockInitial || 0);
+                        currentProduct.stockFinal += parseFloat(productData.stockFinal || 0);
+                        currentProduct.stockMatinNombre += parseFloat(productData.stockMatinNombre || 0);
+                        currentProduct.stockSoirNombre += parseFloat(productData.stockSoirNombre || 0);
+                    });
+                });
+            }
+        });
+        
+        // Generate resume section (summary by point de vente)
+        const resumeData = [];
+        Object.entries(aggregatedData).forEach(([pointVente, pointData]) => {
+            let totalVentesValeur = 0;
+            let totalVentesTheoriquesValeur = 0;
+            let totalEcartValeur = 0;
+            
+            Object.values(pointData).forEach(productData => {
+                totalVentesValeur += productData.ventesValeur;
+                totalVentesTheoriquesValeur += productData.ventesTheoriquesValeur;
+                totalEcartValeur += productData.ecartValeur;
+            });
+            
+            resumeData.push({
+                pointVente,
+                totalVentesValeur: totalVentesValeur.toFixed(2),
+                totalVentesTheoriquesValeur: totalVentesTheoriquesValeur.toFixed(2),
+                totalEcartValeur: totalEcartValeur.toFixed(2),
+                pourcentageEcart: totalVentesTheoriquesValeur > 0 ? 
+                    ((totalEcartValeur / totalVentesTheoriquesValeur) * 100).toFixed(2) : '0.00'
+            });
+        });
+        
+        const response = {
+            success: true,
+            data: {
+                period: {
+                    startDate: dbStartDate,
+                    endDate: dbEndDate,
+                    totalDays: dateRange.length
+                },
+                details: aggregatedData,
+                resume: resumeData,
+                metadata: {
+                    recordsProcessed: allReconciliationData.length,
+                    pointsDeVente: Object.keys(aggregatedData).length
+                }
+            }
+        };
+        
+        console.log(`Completed aggregated reconciliation for period ${dbStartDate} to ${dbEndDate}`);
+        console.log(`Processed ${allReconciliationData.length} records across ${Object.keys(aggregatedData).length} points de vente`);
+        console.log('==== END EXTERNAL API - AGGREGATED RECONCILIATION ====');
+        
+        res.json(response);
+        
+    } catch (error) {
+        console.error('Error computing aggregated reconciliation:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Error computing aggregated reconciliation data',
+            error: error.message
+        });
+    }
+});
+
 // External API for estimation analysis
 // External API endpoint for estimations (no session auth required)
 app.get('/api/external/estimations', validateApiKey, async (req, res) => {
@@ -7461,7 +7824,707 @@ app.get('/api/external/gestionStock', validateApiKey, async (req, res) => {
     }
 });
 
+// Helper function to get stock soir data internally
+async function getStockSoirData(date) {
+    try {
+        console.log(`🔍 Fetching stock soir data for date: ${date}`);
+        
+        // Use the existing stock API logic
+        const type = 'soir';
+        const baseFilePath = STOCK_SOIR_PATH;
+        const filePath = getPathByDate(baseFilePath, date);
+        
+        if (!fs.existsSync(filePath)) {
+            return {
+                success: false,
+                message: `Fichier stock non trouvé pour la date ${date}`,
+                data: {}
+            };
+        }
+        
+        const content = await fsPromises.readFile(filePath, 'utf8');
+        const stockData = JSON.parse(content);
+        
+        return {
+            success: true,
+            data: stockData,
+            message: `Stock soir récupéré pour ${date}`
+        };
+    } catch (error) {
+        console.error(`Erreur lors de la récupération du stock soir pour ${date}:`, error);
+        return {
+            success: false,
+            message: error.message,
+            data: {}
+        };
+    }
+}
+
+// Helper function to fetch proxy margin prices using SQL queries (like frontend)
+async function fetchProxyMarginPrices(startDate, endDate, pointVente) {
+    try {
+        console.log(`🔍 Fetching proxy margin prices from ${startDate} to ${endDate} for ${pointVente}`);
+        
+        // Convert dates from DD/MM/YYYY to DD-MM-YYYY format for database
+        const convertDateFormat = (dateStr) => {
+            return dateStr.replace(/\//g, '-');
+        };
+        
+        const startDateFormatted = convertDateFormat(startDate);
+        const endDateFormatted = convertDateFormat(endDate);
+        
+        // Build point of sale filter - if "Sélectionner un point de vente", don't filter
+        const pointVenteFilter = pointVente === 'Sélectionner un point de vente' ? '' : 
+            `AND (point_vente = '${pointVente}')`;
+        
+        console.log(`🔍 Date range: ${startDateFormatted} to ${endDateFormatted}`);
+        console.log(`🔍 Point vente filter: ${pointVenteFilter || 'All points'}`);
+        
+        // SQL query for Boeuf (PostgreSQL with CORRECT database column names)
+        const boeufQuery = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_boeuf,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                ${pointVenteFilter}
+                AND (
+                    LOWER(produit) LIKE '%boeuf en gros%' 
+                    OR LOWER(produit) LIKE '%boeuf en détail%'
+                )
+        `;
+        
+        // SQL query for Veau
+        const veauQuery = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_veau,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                ${pointVenteFilter}
+                AND (LOWER(produit) LIKE '%veau en gros%' 
+                    OR LOWER(produit) LIKE '%veau en détail%')
+        `;
+        
+        // SQL query for Poulet
+        const pouletQuery = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_poulet,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                ${pointVenteFilter}
+                AND LOWER(produit) LIKE '%poulet%'
+        `;
+        
+        // SQL query for Agneau
+        const agneauQuery = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_agneau,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                ${pointVenteFilter}
+                AND LOWER(produit) LIKE '%agneau%'
+        `;
+        
+        // SQL query for Oeuf/Tablette
+        const oeufQuery = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_oeuf,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                ${pointVenteFilter}
+                AND (LOWER(produit) = 'oeuf' OR LOWER(produit) = 'tablette')
+        `;
+        
+        // Execute all queries in parallel
+        console.log('🔍 Executing SQL queries...');
+        console.log('Sample Boeuf query:', boeufQuery.substring(0, 200) + '...');
+        console.log('🔍 FULL VEAU QUERY:');
+        console.log(veauQuery);
+        
+        const [boeufResult, veauResult, pouletResult, agneauResult, oeufResult] = await Promise.all([
+            sequelize.query(boeufQuery, { type: sequelize.QueryTypes.SELECT }),
+            sequelize.query(veauQuery, { type: sequelize.QueryTypes.SELECT }),
+            sequelize.query(pouletQuery, { type: sequelize.QueryTypes.SELECT }),
+            sequelize.query(agneauQuery, { type: sequelize.QueryTypes.SELECT }),
+            sequelize.query(oeufQuery, { type: sequelize.QueryTypes.SELECT })
+        ]);
+        
+        console.log('🔍 Query results received:', {
+            boeuf: boeufResult.length,
+            veau: veauResult.length,
+            poulet: pouletResult.length,
+            agneau: agneauResult.length,
+            oeuf: oeufResult.length
+        });
+        
+        // Extract results
+        const prixMoyenBoeuf = boeufResult[0]?.prix_moyen_boeuf || null;
+        const prixMoyenVeau = veauResult[0]?.prix_moyen_veau || null;
+        const prixMoyenPoulet = pouletResult[0]?.prix_moyen_poulet || null;
+        const prixMoyenAgneau = agneauResult[0]?.prix_moyen_agneau || null;
+        const prixMoyenOeuf = oeufResult[0]?.prix_moyen_oeuf || null;
+        
+        console.log(`🐄 Boeuf: ${prixMoyenBoeuf} FCFA/kg (${boeufResult[0]?.nombre_ventes || 0} ventes)`);
+        console.log(`🐂 Veau: ${prixMoyenVeau} FCFA/kg (${veauResult[0]?.nombre_ventes || 0} ventes)`);
+        console.log(`🐔 Poulet: ${prixMoyenPoulet} FCFA/unité (${pouletResult[0]?.nombre_ventes || 0} ventes)`);
+        console.log(`🐑 Agneau: ${prixMoyenAgneau} FCFA/kg (${agneauResult[0]?.nombre_ventes || 0} ventes)`);
+        console.log(`🥚 Oeuf/Tablette: ${prixMoyenOeuf} FCFA/unité (${oeufResult[0]?.nombre_ventes || 0} ventes)`);
+        
+        return {
+            prixMoyenBoeuf,
+            prixMoyenVeau,
+            prixMoyenPoulet,
+            prixMoyenAgneau,
+            prixMoyenOeuf
+        };
+        
+    } catch (error) {
+        console.error('❌ Error fetching proxy margin prices:', error);
+        console.error('❌ Stack trace:', error.stack);
+        return {
+            prixMoyenBoeuf: null,
+            prixMoyenVeau: null,
+            prixMoyenPoulet: null,
+            prixMoyenAgneau: null,
+            prixMoyenOeuf: null,
+            error: error.message // Add error info to returned object
+        };
+    }
+}
+
+// Helper function to calculate proxy margins average prices (server-side version)
+async function calculerPrixMoyensProxyMarges(dateDebut, dateFin) {
+    try {
+        console.log(`🔍 Calculating proxy margins prices for ${dateDebut} to ${dateFin}`);
+        
+        // Convert dates to the format expected by database (standardize format)
+        const convertDateFormat = (dateStr) => {
+            // Input: DD/MM/YYYY, convert to DD-MM-YYYY for database
+            if (dateStr.includes('/')) {
+                return dateStr.replace(/\//g, '-');
+            }
+            return dateStr;
+        };
+        
+        const startDate = convertDateFormat(dateDebut);
+        const endDate = convertDateFormat(dateFin);
+        
+        // Get weighted average prices using proper SQL queries
+        console.log(`🔍 Fetching weighted averages for period: ${startDate} to ${endDate}`);
+        const weightedAverages = await getSalesDataForPeriod(startDate, endDate);
+        
+        if (!weightedAverages) {
+            console.log('⚠️ No weighted averages data found');
+            return {};
+        }
+        
+        // Build prix moyens from weighted averages
+        const prixMoyens = {};
+        
+        if (weightedAverages.boeuf && weightedAverages.boeuf.prix_moyen_boeuf > 0) {
+            prixMoyens.prixMoyenBoeuf = weightedAverages.boeuf.prix_moyen_boeuf;
+        }
+        if (weightedAverages.veau && weightedAverages.veau.prix_moyen_veau > 0) {
+            prixMoyens.prixMoyenVeau = weightedAverages.veau.prix_moyen_veau;
+        }
+        if (weightedAverages.poulet && weightedAverages.poulet.prix_moyen_poulet > 0) {
+            prixMoyens.prixMoyenPoulet = weightedAverages.poulet.prix_moyen_poulet;
+        }
+        if (weightedAverages.agneau && weightedAverages.agneau.prix_moyen_agneau > 0) {
+            prixMoyens.prixMoyenAgneau = weightedAverages.agneau.prix_moyen_agneau;
+        }
+        if (weightedAverages.oeuf && weightedAverages.oeuf.prix_moyen_oeuf > 0) {
+            prixMoyens.prixMoyenOeuf = weightedAverages.oeuf.prix_moyen_oeuf;
+        }
+        
+        console.log(`✅ Prix moyens calculés (weighted average):`, prixMoyens);
+        console.log(`📊 Raw weighted averages:`, weightedAverages);
+        return prixMoyens;
+        
+    } catch (error) {
+        console.error('Error calculating proxy margins prices:', error);
+        return {};
+    }
+}
+
+// Helper function to get sales data for a period (using same logic as frontend APIs)
+async function getSalesDataForPeriod(startDate, endDate) {
+    try {
+        console.log(`🔍 getSalesDataForPeriod called with: ${startDate} to ${endDate}`);
+        
+        // Use the same database connection as other endpoints
+        const { sequelize } = require('./db');
+        const { QueryTypes } = require('sequelize');
+        
+        // Use weighted average SQL query for proxy margins calculation
+        const queryBoeuf = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_boeuf,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE(:startDate, 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE(:endDate, 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                AND (
+                   LOWER(produit) LIKE '%boeuf en gros%' 
+                    OR LOWER(produit) LIKE '%boeuf en détail%'
+                )
+        `;
+        
+        const queryVeau = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_veau,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE(:startDate, 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE(:endDate, 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                AND LOWER(produit) LIKE '%veau%'
+        `;
+        
+        const queryPoulet = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_poulet,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE(:startDate, 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE(:endDate, 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                AND LOWER(produit) LIKE '%poulet%'
+        `;
+        
+        const queryAgneau = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_agneau,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE(:startDate, 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE(:endDate, 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                AND LOWER(produit) LIKE '%agneau%'
+        `;
+        
+        const queryOeuf = `
+            SELECT 
+                ROUND(
+                    COALESCE(
+                        SUM(prix_unit * nombre) / NULLIF(SUM(nombre), 0),
+                        0
+                    )
+                ) as prix_moyen_oeuf,
+                SUM(nombre) as quantite_totale,
+                COUNT(*) as nombre_ventes
+            FROM ventes 
+            WHERE 
+                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE(:startDate, 'DD-MM-YYYY')
+                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE(:endDate, 'DD-MM-YYYY')
+                AND point_vente != 'Abattage'
+                AND (LOWER(produit) = 'oeuf' OR LOWER(produit) LIKE '%tablette%')
+        `;
+        
+        // Execute all weighted average queries in parallel
+        const [boeufResult, veauResult, pouletResult, agneauResult, oeufResult] = await Promise.all([
+            sequelize.query(queryBoeuf, { replacements: { startDate, endDate }, type: QueryTypes.SELECT }),
+            sequelize.query(queryVeau, { replacements: { startDate, endDate }, type: QueryTypes.SELECT }),
+            sequelize.query(queryPoulet, { replacements: { startDate, endDate }, type: QueryTypes.SELECT }),
+            sequelize.query(queryAgneau, { replacements: { startDate, endDate }, type: QueryTypes.SELECT }),
+            sequelize.query(queryOeuf, { replacements: { startDate, endDate }, type: QueryTypes.SELECT })
+        ]);
+        
+        console.log(`📊 Weighted average queries executed`);
+        console.log(`📊 Boeuf result:`, boeufResult[0]);
+        console.log(`📊 Veau result:`, veauResult[0]);
+        console.log(`📊 Poulet result:`, pouletResult[0]);
+        console.log(`📊 Agneau result:`, agneauResult[0]);
+        console.log(`📊 Oeuf result:`, oeufResult[0]);
+        
+        // Return weighted averages as price data
+        return {
+            boeuf: boeufResult[0] || { prix_moyen_boeuf: 0 },
+            veau: veauResult[0] || { prix_moyen_veau: 0 },
+            poulet: pouletResult[0] || { prix_moyen_poulet: 0 },
+            agneau: agneauResult[0] || { prix_moyen_agneau: 0 },
+            oeuf: oeufResult[0] || { prix_moyen_oeuf: 0 }
+        };
+        
+    } catch (error) {
+        console.error('Error fetching sales data:', error);
+        console.error('Error details:', error.message);
+        return [];
+    }
+}
+
+// Helper function to calculate Stock Soir margin (server-side version of genererCalculsMargeStockSoir)
+async function calculateStockSoirMarge(stockDebut, stockFin, dateDebut, dateFin, pointVente, dynamicPrices = {}) {
+    try {
+        console.log(`🔍 Calculating Stock Soir margin for ${pointVente} from ${dateDebut} to ${dateFin}`);
+        console.log(`🎯 Dynamic prices received:`, dynamicPrices);
+        
+        // Calculate variation for each product (SAME logic as frontend)
+        const variationsParProduit = {};
+        const allProduits = new Set([...Object.keys(stockDebut || {}), ...Object.keys(stockFin || {})]);
+        
+        allProduits.forEach(key => {
+            const [pointVenteKey, produit] = key.split('-');
+            if (pointVente === 'Sélectionner un point de vente' || pointVenteKey === pointVente || !pointVente) {
+                const debut = stockDebut[key] || { Montant: 0, Nombre: 0, PU: 0 };
+                const fin = stockFin[key] || { Montant: 0, Nombre: 0, PU: 0 };
+                
+                const montantVariation = (parseFloat(fin.Montant) || 0) - (parseFloat(debut.Montant) || 0);
+                const quantiteVariation = (parseFloat(fin.Nombre) || 0) - (parseFloat(debut.Nombre) || 0);
+                
+                if (Math.abs(montantVariation) > 0.01 || Math.abs(quantiteVariation) > 0.01) {
+                    variationsParProduit[produit] = {
+                        Montant: montantVariation,
+                        Quantite: quantiteVariation,
+                        PU: parseFloat(fin.PU) || parseFloat(debut.PU) || 0,
+                        PointVente: pointVenteKey
+                    };
+                }
+            }
+        });
+
+        // Use the dynamicPrices already fetched by fetchProxyMarginPrices (no need to recalculate)
+        const prixMoyensProxyMarges = dynamicPrices;
+        
+        console.log(`🎯 Using fetched dynamic prices:`, prixMoyensProxyMarges);
+        
+        // Get price configuration (CORRECTED - separate purchase prices from selling prices)
+        const priceConfig = {
+            // Purchase prices (for cost calculation)
+            prixAchatBoeuf: 3808, // Fixed purchase price
+            prixAchatVeau: 3884,  // Fixed purchase price
+            prixAchatPoulet: 2600, // Fixed purchase price
+            prixAchatAgneau: 4000, // Fixed purchase price
+            prixAchatOeuf: 2200,   // Fixed purchase price
+            // Ratios (use dynamic or defaults)
+            ratioBoeuf: parseFloat(dynamicPrices.ratioBoeuf) || -0.0215, // -2.15%
+            ratioVeau: parseFloat(dynamicPrices.ratioVeau) || -0.1038   // -10.38%
+        };
+        
+        // Selling prices (PRIORITY: dynamic prices first, then proxy margins) - with explicit debugging
+        console.log(`🔍 DEBUG - Dynamic prices received:`, dynamicPrices);
+        
+        const prixVenteConfig = {
+            prixVenteBoeuf: dynamicPrices.prixMoyenBoeuf !== undefined ? parseFloat(dynamicPrices.prixMoyenBoeuf) : (prixMoyensProxyMarges.prixMoyenBoeuf || null),
+            prixVenteVeau: dynamicPrices.prixMoyenVeau !== undefined ? parseFloat(dynamicPrices.prixMoyenVeau) : (prixMoyensProxyMarges.prixMoyenVeau || null),
+            prixVentePoulet: dynamicPrices.prixMoyenPoulet !== undefined ? parseFloat(dynamicPrices.prixMoyenPoulet) : (prixMoyensProxyMarges.prixMoyenPoulet || null),
+            prixVenteAgneau: dynamicPrices.prixMoyenAgneau !== undefined ? parseFloat(dynamicPrices.prixMoyenAgneau) : (prixMoyensProxyMarges.prixMoyenAgneau || null),
+            prixVenteOeuf: dynamicPrices.prixMoyenOeuf !== undefined ? parseFloat(dynamicPrices.prixMoyenOeuf) : (prixMoyensProxyMarges.prixMoyenOeuf || null)
+        };
+        
+        console.log(`🔍 DEBUG - Prix vente Boeuf: ${dynamicPrices.prixMoyenBoeuf} -> ${prixVenteConfig.prixVenteBoeuf}`);
+        console.log(`🔍 DEBUG - Prix vente Poulet: ${dynamicPrices.prixMoyenPoulet} -> ${prixVenteConfig.prixVentePoulet}`);
+        
+        console.log(`🎯 Prix de configuration finaux:`, priceConfig);
+        console.log(`🎯 Prix de vente configurés:`, prixVenteConfig);
+
+        // Calculate margins for each product
+        let totalCA = 0;
+        let totalCout = 0;
+        let calculsByProduit = [];
+
+        Object.entries(variationsParProduit).forEach(([produit, data]) => {
+            const quantiteVendue = parseFloat(data.Quantite) || 0;
+            
+            // Same filtering logic as frontend
+            if (Math.abs(quantiteVendue) < 0.01) {
+                console.log(`⚠️ Product ${produit} ignored (quantity too small: ${quantiteVendue})`);
+                return;
+            }
+
+            let prixAchatProduit, prixVenteProduit, quantiteAbattue;
+
+            // EXACT same logic as frontend with proper price calculation
+            // Calculate selling price from stock variation data (like frontend does)
+            const prixVenteCalcule = parseFloat(data.Montant) / quantiteVendue;
+            if (!isFinite(prixVenteCalcule) || prixVenteCalcule <= 0) {
+                console.log(`⚠️ IGNORED: ${produit} - invalid selling price (${prixVenteCalcule})`);
+                return;
+            }
+
+            // Same product logic as frontend (with CORRECTED proxy margins usage)
+            if (produit.toLowerCase() === 'boeuf') {
+                prixAchatProduit = priceConfig.prixAchatBoeuf;
+                // Use selling price from prixVenteConfig if available, otherwise use calculated price
+                console.log(`🔍 DEBUG BOEUF - prixVenteConfig.prixVenteBoeuf:`, prixVenteConfig.prixVenteBoeuf, typeof prixVenteConfig.prixVenteBoeuf);
+                console.log(`🔍 DEBUG BOEUF - prixVenteCalcule:`, prixVenteCalcule);
+                prixVenteProduit = prixVenteConfig.prixVenteBoeuf || prixVenteCalcule;
+                console.log(`🔍 DEBUG BOEUF - final prixVenteProduit:`, prixVenteProduit);
+                quantiteAbattue = quantiteVendue / (1 + priceConfig.ratioBoeuf);
+                console.log(`🎯 Boeuf - Prix vente: ${prixVenteConfig.prixVenteBoeuf ? 'Proxy Marges' : 'Calculé'} = ${parseFloat(prixVenteProduit).toFixed(0)} FCFA/kg`);
+            } else if (produit.toLowerCase() === 'veau') {
+                prixAchatProduit = priceConfig.prixAchatVeau;
+                prixVenteProduit = prixVenteConfig.prixVenteVeau || prixVenteCalcule;
+                quantiteAbattue = quantiteVendue / (1 + priceConfig.ratioVeau);
+                console.log(`🎯 Veau - Prix vente: ${prixVenteConfig.prixVenteVeau ? 'Proxy Marges' : 'Calculé'} = ${parseFloat(prixVenteProduit).toFixed(0)} FCFA/kg`);
+            } else if (produit.toLowerCase() === 'poulet') {
+                prixAchatProduit = priceConfig.prixAchatPoulet;
+                prixVenteProduit = prixVenteConfig.prixVentePoulet || prixVenteCalcule;
+                quantiteAbattue = quantiteVendue;
+                console.log(`🎯 Poulet - Prix vente: ${prixVenteConfig.prixVentePoulet ? 'Proxy Marges' : 'Calculé'} = ${parseFloat(prixVenteProduit).toFixed(0)} FCFA/unité`);
+            } else if (produit.toLowerCase() === 'agneau') {
+                prixAchatProduit = priceConfig.prixAchatAgneau;
+                prixVenteProduit = prixVenteConfig.prixVenteAgneau || prixVenteCalcule;
+                quantiteAbattue = quantiteVendue;
+                console.log(`🎯 Agneau - Prix vente: ${prixVenteConfig.prixVenteAgneau ? 'Proxy Marges' : 'Calculé'} = ${parseFloat(prixVenteProduit).toFixed(0)} FCFA/kg`);
+            } else if (produit.toLowerCase() === 'oeuf' || produit.toLowerCase() === 'tablette') {
+                prixAchatProduit = priceConfig.prixAchatOeuf;
+                prixVenteProduit = prixVenteConfig.prixVenteOeuf || prixVenteCalcule;
+                quantiteAbattue = quantiteVendue;
+                console.log(`🎯 ${produit} - Prix vente: ${prixVenteConfig.prixVenteOeuf ? 'Proxy Marges' : 'Calculé'} = ${parseFloat(prixVenteProduit).toFixed(0)} FCFA/unité`);
+            } else {
+                // Derived products (exact same logic as frontend)
+                if (produit.toLowerCase().includes('viande hach')) {
+                    prixAchatProduit = priceConfig.prixAchatBoeuf;
+                    prixVenteProduit = parseFloat(data.PU) || (Math.abs(data.Montant) / Math.abs(quantiteVendue)) || 5000; // Same fallback as frontend
+                    console.log(`🎯 Viande hachée - Prix achat: Boeuf = ${parseFloat(prixAchatProduit).toFixed(0)} FCFA/kg`);
+                } else {
+                    // Other by-products - no purchase cost
+                    prixAchatProduit = 0;
+                    prixVenteProduit = parseFloat(data.PU) || (Math.abs(data.Montant) / Math.abs(quantiteVendue)) || 0;
+                }
+                quantiteAbattue = quantiteVendue;
+            }
+
+            // Verify values are valid (not NaN) - same as frontend
+            if (isNaN(prixVenteProduit) || isNaN(quantiteVendue) || isNaN(prixAchatProduit) || isNaN(quantiteAbattue)) {
+                console.warn(`⚠️ Invalid values for ${produit}:`, {
+                    prixVenteProduit, quantiteVendue, prixAchatProduit, quantiteAbattue, data
+                });
+                return; // Skip this product
+            }
+
+            // Calculate margin (can be negative if stock decrease)
+            const caProduit = quantiteVendue * prixVenteProduit;
+            const coutProduit = quantiteAbattue * prixAchatProduit;
+            const margeProduit = caProduit - coutProduit;
+
+            console.log(`📊 ${produit}: qté=${quantiteVendue}, prixVente=${prixVenteProduit}, CA=${caProduit}, coût=${coutProduit}, marge=${margeProduit}`);
+
+            totalCA += caProduit;
+            totalCout += coutProduit;
+
+            calculsByProduit.push({
+                produit,
+                quantiteVendue,
+                quantiteAbattue,
+                prixVenteProduit,
+                prixAchatProduit,
+                caProduit,
+                coutProduit,
+                margeProduit,
+                pointVente: data.PointVente
+            });
+        });
+
+        const margeTotal = totalCA - totalCout;
+
+        console.log(`✅ Stock Soir margin calculated: CA=${totalCA.toFixed(0)} FCFA, Cost=${totalCout.toFixed(0)} FCFA, Margin=${margeTotal.toFixed(0)} FCFA`);
+
+        return {
+            totalCA: Math.round(totalCA),
+            totalCout: Math.round(totalCout),
+            marge: Math.round(margeTotal),
+            detailParProduit: calculsByProduit,
+            nombreProduits: calculsByProduit.length
+        };
+
+    } catch (error) {
+        console.error('Error calculating Stock Soir margin:', error);
+        throw error;
+    }
+}
+
 // External API version for beef purchases
+// API endpoint for Stock Soir margin calculation
+app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
+    try {
+        const { startDate, endDate, pointVente, prixMoyenBoeuf, prixMoyenVeau, prixMoyenPoulet, prixMoyenAgneau, prixMoyenOeuf } = req.query;
+        
+        console.log('==== EXTERNAL API - STOCK SOIR MARGE ====');
+        console.log('Request params:', { startDate, endDate, pointVente, prixMoyenBoeuf, prixMoyenVeau, prixMoyenPoulet, prixMoyenAgneau, prixMoyenOeuf });
+        console.log('🔍 PRIX DEBUG - Boeuf reçu:', prixMoyenBoeuf, typeof prixMoyenBoeuf);
+        console.log('🔍 PRIX DEBUG - Poulet reçu:', prixMoyenPoulet, typeof prixMoyenPoulet);
+        
+        // Validate required parameters
+        if (!startDate || !endDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'startDate et endDate sont requis (format: DD/MM/YYYY ou DD-MM-YYYY)'
+            });
+        }
+        
+        // Default point de vente if not specified
+        const pointVenteFilter = pointVente || 'Sélectionner un point de vente';
+        
+        // Convert dates to the format expected by stock API (DD/MM/YYYY)
+        const formatDate = (dateStr) => {
+            if (dateStr.includes('-')) {
+                const parts = dateStr.split('-');
+                if (parts[0].length === 4) {
+                    // YYYY-MM-DD to DD/MM/YYYY
+                    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                } else {
+                    // DD-MM-YYYY to DD/MM/YYYY
+                    return dateStr.replace(/-/g, '/');
+                }
+            }
+            return dateStr; // Already in DD/MM/YYYY format
+        };
+        
+        const formattedStartDate = formatDate(startDate);
+        const formattedEndDate = formatDate(endDate);
+        
+        console.log('Formatted dates:', { formattedStartDate, formattedEndDate });
+        
+        // Fetch stock data for both dates using internal API calls
+        const stockDebut = await getStockSoirData(formattedStartDate);
+        const stockFin = await getStockSoirData(formattedEndDate);
+        
+        if (!stockDebut.success || !stockFin.success) {
+            return res.status(500).json({
+                success: false,
+                message: 'Erreur lors de la récupération des données de stock',
+                details: {
+                    stockDebut: stockDebut.success,
+                    stockFin: stockFin.success
+                }
+            });
+        }
+        
+        // Fetch proxy margin prices directly from database using SQL queries
+        console.log('🔍 About to fetch proxy margin prices...');
+        let dynamicPrices;
+        try {
+            dynamicPrices = await fetchProxyMarginPrices(formattedStartDate, formattedEndDate, pointVenteFilter);
+            console.log('🔍 FETCHED DYNAMIC PRICES:', dynamicPrices);
+        } catch (error) {
+            console.error('❌ Critical error in fetchProxyMarginPrices:', error);
+            dynamicPrices = {
+                prixMoyenBoeuf: null,
+                prixMoyenVeau: null,
+                prixMoyenPoulet: null,
+                prixMoyenAgneau: null,
+                prixMoyenOeuf: null,
+                error: 'Function call failed'
+            };
+        }
+        
+        if (!dynamicPrices) {
+            console.error('❌ fetchProxyMarginPrices returned null/undefined!');
+            dynamicPrices = { error: 'Function returned null/undefined' };
+        }
+        
+        // Calculate margin using the same logic as genererCalculsMargeStockSoir
+        const margeResult = await calculateStockSoirMarge(
+            stockDebut.data,
+            stockFin.data,
+            formattedStartDate,
+            formattedEndDate,
+            pointVenteFilter,
+            dynamicPrices
+        );
+        
+        res.json({
+            success: true,
+            data: margeResult,
+            metadata: {
+                startDate: formattedStartDate,
+                endDate: formattedEndDate,
+                pointVente: pointVenteFilter,
+                timestamp: new Date().toISOString(),
+                fetchedPrices: dynamicPrices // Add this to see what was fetched
+            }
+        });
+        
+    } catch (error) {
+        console.error('Erreur API Stock Soir Marge:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur',
+            error: error.message
+        });
+    }
+});
+
 app.get('/api/external/achats-boeuf', validateApiKey, async (req, res) => {
     try {
         const { startDate, endDate, date } = req.query;
