@@ -7064,6 +7064,14 @@ app.get('/api/external/reconciliation', validateApiKey, async (req, res) => {
                 const transfertsNombre = data.transfertsNombre || 0;
                 data.ventesTheoriquesNombre = stockMatinNombre + transfertsNombre - stockSoirNombre;
                 
+                // Calculate missing values for aggregated API
+                data.ventesValeur = data.ventesSaisies || 0;  // Actual sales value
+                data.ventesTheoriquesValeur = data.ventesTheoriques || 0;  // Theoretical sales value
+                data.ecartNombre = data.ventesTheoriquesNombre - (data.ventesNombre || 0);  // Quantity gap
+                data.ecartValeur = data.ventesTheoriquesValeur - data.ventesValeur;  // Value gap
+                data.stockInitial = data.stockMatin || 0;  // Initial stock (will be used for period aggregation)
+                data.stockFinal = data.stockSoir || 0;  // Final stock (will be used for period aggregation)
+                
                 // Store quantity and price information for tooltips
                 data.stockMatinNombre = stockMatinNombre;
                 data.stockSoirNombre = stockSoirNombre;
@@ -7255,7 +7263,17 @@ app.get('/api/external/reconciliation/aggregated', validateApiKey, async (req, r
         // Aggregate the data by point de vente and product
         const aggregatedData = {};
         
-        allReconciliationData.forEach(dayData => {
+        // Sort reconciliation data by date to ensure proper first/last day logic
+        allReconciliationData.sort((a, b) => {
+            const dateA = new Date(a.date.split('/').reverse().join('-'));
+            const dateB = new Date(b.date.split('/').reverse().join('-'));
+            return dateA - dateB;
+        });
+        
+        allReconciliationData.forEach((dayData, dayIndex) => {
+            const isFirstDay = dayIndex === 0;
+            const isLastDay = dayIndex === allReconciliationData.length - 1;
+            
             if (dayData.details) {
                 Object.entries(dayData.details).forEach(([pointVente, pointData]) => {
                     if (!aggregatedData[pointVente]) {
@@ -7286,8 +7304,17 @@ app.get('/api/external/reconciliation/aggregated', validateApiKey, async (req, r
                         currentProduct.ventesTheoriquesValeur += parseFloat(productData.ventesTheoriquesValeur || 0);
                         currentProduct.ecartNombre += parseFloat(productData.ecartNombre || 0);
                         currentProduct.ecartValeur += parseFloat(productData.ecartValeur || 0);
-                        currentProduct.stockInitial += parseFloat(productData.stockInitial || 0);
-                        currentProduct.stockFinal += parseFloat(productData.stockFinal || 0);
+                        
+                        // For stockInitial, use the first day's stock matin
+                        if (isFirstDay) {
+                            currentProduct.stockInitial = parseFloat(productData.stockInitial || 0);
+                        }
+                        
+                        // For stockFinal, use the last day's stock soir
+                        if (isLastDay) {
+                            currentProduct.stockFinal = parseFloat(productData.stockFinal || 0);
+                        }
+                        
                         currentProduct.stockMatinNombre += parseFloat(productData.stockMatinNombre || 0);
                         currentProduct.stockSoirNombre += parseFloat(productData.stockSoirNombre || 0);
                     });
