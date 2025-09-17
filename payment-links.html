@@ -270,6 +270,35 @@
                     </div>
                 </div>
 
+                <!-- Nouvelles fonctionnalités de vérification -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-search"></i> Vérification de Paiement</h5>
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <label for="payment-url-input" class="form-label">Lien de Paiement à Vérifier</label>
+                                <input type="url" class="form-control" id="payment-url-input" 
+                                       placeholder="Coller ici le lien de paiement (ex: https://api.bictorys.com/paymentlink-management/v1/pay/...)">
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button class="btn btn-success me-2" id="verify-payment-btn">
+                                    <i class="bi bi-search"></i> Vérifier Statut
+                                </button>
+                                <button class="btn btn-info" id="update-all-payments-btn">
+                                    <i class="bi bi-arrow-clockwise"></i> Actualiser Paiement Jour
+                                </button>
+                            </div>
+                        </div>
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> 
+                            Vous pouvez coller un lien de paiement pour vérifier son statut, ou utiliser "Actualiser Paiement Jour" 
+                            pour vérifier automatiquement tous les paiements ouverts des 2 derniers jours.
+                        </small>
+                    </div>
+                </div>
+                    </div>
+                </div>
+
                 <!-- Tableau des liens -->
                 <div class="card">
                     <div class="card-body">

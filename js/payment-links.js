@@ -137,6 +137,29 @@ function initEventListeners() {
     if (viewArchivesButton) {
         viewArchivesButton.addEventListener('click', handleViewArchives);
     }
+    
+    // Bouton vérifier paiement par URL
+    const verifyPaymentBtn = document.getElementById('verify-payment-btn');
+    if (verifyPaymentBtn) {
+        verifyPaymentBtn.addEventListener('click', verifyPaymentByUrl);
+    }
+    
+    // Bouton actualiser tous les paiements ouverts
+    const updateAllPaymentsBtn = document.getElementById('update-all-payments-btn');
+    if (updateAllPaymentsBtn) {
+        updateAllPaymentsBtn.addEventListener('click', updateAllOpenPayments);
+    }
+    
+    // Permettre la vérification en appuyant sur Entrée dans le champ URL
+    const paymentUrlInput = document.getElementById('payment-url-input');
+    if (paymentUrlInput) {
+        paymentUrlInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                verifyPaymentByUrl();
+            }
+        });
+    }
 }
 
 /**
@@ -780,6 +803,243 @@ function showError(message) {
             alert.parentNode.removeChild(alert);
         }
     }, 7000);
+}
+
+/**
+ * Afficher un popup détaillé avec le statut du paiement
+ */
+function showPaymentStatusPopup(paymentData) {
+    // Supprimer tout modal existant
+    const existingModal = document.getElementById('payment-status-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Préparer les informations à afficher
+    const statusText = getStatusText(paymentData.status);
+    const statusClass = getStatusClass(paymentData.status);
+    const statusIcon = getStatusIcon(paymentData.status);
+    
+    // Formater la date si disponible
+    let createdDate = 'Non disponible';
+    if (paymentData.createdAt) {
+        const date = new Date(paymentData.createdAt);
+        createdDate = date.toLocaleDateString('fr-FR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+    
+    // Créer le modal HTML
+    const modalHTML = `
+        <div class="modal fade" id="payment-status-modal" tabindex="-1" aria-labelledby="paymentStatusModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title" id="paymentStatusModalLabel">
+                            <i class="bi bi-search-heart"></i> Statut du Paiement
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-12 text-center mb-4">
+                                <div class="status-display">
+                                    <i class="${statusIcon} fs-1 ${statusClass === 'status-completed' ? 'text-success' : statusClass === 'status-failed' ? 'text-danger' : 'text-warning'}"></i>
+                                    <h3 class="mt-2 ${statusClass === 'status-completed' ? 'text-success' : statusClass === 'status-failed' ? 'text-danger' : 'text-warning'}">${statusText}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">ID de Paiement</label>
+                                <div class="form-control-plaintext bg-light p-2 rounded">${paymentData.paymentLinkId || 'N/A'}</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Point de Vente</label>
+                                <div class="form-control-plaintext bg-light p-2 rounded">${paymentData.pointVente || 'N/A'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Client</label>
+                                <div class="form-control-plaintext bg-light p-2 rounded">${paymentData.clientName || 'N/A'}</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Téléphone</label>
+                                <div class="form-control-plaintext bg-light p-2 rounded">${paymentData.phoneNumber || 'N/A'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Montant</label>
+                                <div class="form-control-plaintext bg-light p-2 rounded text-success fs-5 fw-bold">
+                                    ${formatCurrency(paymentData.amount)} ${paymentData.currency || 'XOF'}
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Date de Création</label>
+                                <div class="form-control-plaintext bg-light p-2 rounded">${createdDate}</div>
+                            </div>
+                        </div>
+                        
+                        ${paymentData.payerName ? `
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label class="form-label fw-bold">Payeur</label>
+                                <div class="form-control-plaintext bg-success text-white p-2 rounded fw-bold">
+                                    <i class="bi bi-person-check"></i> ${paymentData.payerName}
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        ${paymentData.address ? `
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label class="form-label fw-bold">Adresse</label>
+                                <div class="form-control-plaintext bg-light p-2 rounded">${paymentData.address}</div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="row">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Référence</label>
+                                <div class="form-control-plaintext bg-light p-2 rounded font-monospace">${paymentData.reference || 'N/A'}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-primary" onclick="copyPaymentLink('${paymentData.paymentUrl || ''}')">
+                            <i class="bi bi-copy"></i> Copier Lien
+                        </button>
+                        <a href="${paymentData.paymentUrl || '#'}" target="_blank" class="btn btn-success">
+                            <i class="bi bi-box-arrow-up-right"></i> Ouvrir Paiement
+                        </a>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Ajouter le modal au DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Afficher le modal
+    const modal = new bootstrap.Modal(document.getElementById('payment-status-modal'));
+    modal.show();
+    
+    // Supprimer le modal du DOM quand il est fermé
+    document.getElementById('payment-status-modal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+
+/**
+ * Obtenir l'icône appropriée pour le statut
+ */
+function getStatusIcon(status) {
+    const statusIcons = {
+        'opened': 'bi-clock-history',
+        'paid': 'bi-check-circle-fill',
+        'expired': 'bi-x-circle-fill',
+        'cancelled': 'bi-x-circle'
+    };
+    return statusIcons[status] || 'bi-question-circle';
+}
+
+/**
+ * Afficher un popup de résumé après l'actualisation de tous les paiements
+ */
+function showUpdateSummaryPopup(totalChecked, updated) {
+    // Supprimer tout modal existant
+    const existingModal = document.getElementById('update-summary-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Déterminer l'icône et la couleur en fonction des résultats
+    const hasUpdates = updated > 0;
+    const summaryIcon = hasUpdates ? 'bi-check-circle-fill text-success' : 'bi-info-circle-fill text-info';
+    const headerClass = hasUpdates ? 'bg-success' : 'bg-info';
+    
+    // Créer le modal HTML
+    const modalHTML = `
+        <div class="modal fade" id="update-summary-modal" tabindex="-1" aria-labelledby="updateSummaryModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header ${headerClass} text-white">
+                        <h5 class="modal-title" id="updateSummaryModalLabel">
+                            <i class="bi bi-arrow-clockwise"></i> Actualisation Terminée
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <div class="mb-4">
+                            <i class="${summaryIcon} fs-1"></i>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h4 class="card-title text-primary">${totalChecked}</h4>
+                                        <p class="card-text">Paiement(s) vérifiés</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card ${hasUpdates ? 'bg-success text-white' : 'bg-light'}">
+                                    <div class="card-body">
+                                        <h4 class="card-title">${updated}</h4>
+                                        <p class="card-text">Mis à jour</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <p class="mb-0">
+                                ${hasUpdates ? 
+                                    `<strong class="text-success">✅ ${updated} paiement(s) ont été mis à jour avec leur nouveau statut.</strong>` :
+                                    `<span class="text-muted">ℹ️ Tous les paiements vérifiés sont déjà à jour.</span>`
+                                }
+                            </p>
+                        </div>
+                        
+                        <small class="text-muted">
+                            <i class="bi bi-clock"></i> Vérification des paiements ouverts des 2 derniers jours terminée
+                        </small>
+                    </div>
+                    <div class="modal-footer justify-content-center">
+                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                            <i class="bi bi-check"></i> Parfait !
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Ajouter le modal au DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Afficher le modal
+    const modal = new bootstrap.Modal(document.getElementById('update-summary-modal'));
+    modal.show();
+    
+    // Supprimer le modal du DOM quand il est fermé
+    document.getElementById('update-summary-modal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
 }
 
 /**
@@ -1518,5 +1778,162 @@ async function deletePaymentLink(paymentLinkId) {
     } catch (error) {
         console.error('Erreur lors de la suppression:', error);
         showError('Erreur lors de la suppression du lien');
+    }
+}
+
+/**
+ * Extraire l'ID de paiement d'une URL de paiement Bictorys
+ */
+function extractPaymentIdFromUrl(url) {
+    try {
+        // Pattern pour extraire l'ID du lien de paiement
+        // Ex: https://api.bictorys.com/paymentlink-management/v1/pay/b365cb6b-fd74-4555-b39c-8e5a9f332e4d?token=...
+        const regex = /\/pay\/([a-f0-9-]{36})/i;
+        const match = url.match(regex);
+        
+        if (match && match[1]) {
+            return match[1];
+        }
+        
+        console.error('Format d\'URL invalide:', url);
+        return null;
+    } catch (error) {
+        console.error('Erreur lors de l\'extraction de l\'ID:', error);
+        return null;
+    }
+}
+
+/**
+ * Vérifier le statut d'un paiement en utilisant son URL complète
+ */
+async function verifyPaymentByUrl() {
+    const urlInput = document.getElementById('payment-url-input');
+    const verifyBtn = document.getElementById('verify-payment-btn');
+    
+    if (!urlInput || !verifyBtn) {
+        console.error('Éléments DOM introuvables');
+        return;
+    }
+    
+    const paymentUrl = urlInput.value.trim();
+    
+    if (!paymentUrl) {
+        showError('Veuillez coller un lien de paiement');
+        return;
+    }
+    
+    // Extraire l'ID du paiement de l'URL
+    const paymentId = extractPaymentIdFromUrl(paymentUrl);
+    
+    if (!paymentId) {
+        showError('URL de paiement invalide. Vérifiez le format du lien.');
+        return;
+    }
+    
+    // Désactiver le bouton et afficher le chargement
+    const originalText = verifyBtn.innerHTML;
+    verifyBtn.disabled = true;
+    verifyBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Vérification...';
+    
+    try {
+        console.log('Vérification du statut pour le paiement:', paymentId);
+        
+        const response = await fetch(`/api/payment-links/status/${paymentId}`, {
+            method: 'GET',
+            credentials: 'include'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            // Afficher un popup détaillé avec toutes les informations du paiement
+            showPaymentStatusPopup(result.data)
+            
+            // Mettre à jour l'affichage si le paiement est dans la liste actuelle
+            const linkIndex = generatedPaymentLinks.findIndex(link => link.paymentLinkId === paymentId);
+            if (linkIndex !== -1) {
+                generatedPaymentLinks[linkIndex] = { ...generatedPaymentLinks[linkIndex], ...result.data };
+                updatePaymentLinksDisplay();
+            } else {
+                // Recharger la liste pour inclure le paiement vérifié s'il n'était pas visible
+                loadPaymentLinks();
+            }
+            
+            // Vider le champ
+            urlInput.value = '';
+            
+        } else {
+            showError(result.message || 'Erreur lors de la vérification du statut');
+        }
+        
+    } catch (error) {
+        console.error('Erreur lors de la vérification:', error);
+        showError('Erreur lors de la vérification du statut');
+    } finally {
+        // Réactiver le bouton
+        verifyBtn.disabled = false;
+        verifyBtn.innerHTML = originalText;
+    }
+}
+
+/**
+ * Actualiser tous les paiements ouverts des 2 derniers jours
+ */
+async function updateAllOpenPayments() {
+    const updateBtn = document.getElementById('update-all-payments-btn');
+    
+    if (!updateBtn) {
+        console.error('Bouton d\'actualisation introuvable');
+        return;
+    }
+    
+    // Demander confirmation
+    const confirmUpdate = confirm(
+        'Voulez-vous vraiment vérifier le statut de tous les paiements ouverts des 2 derniers jours ? ' +
+        'Cette opération peut prendre quelques instants.'
+    );
+    
+    if (!confirmUpdate) {
+        return;
+    }
+    
+    // Désactiver le bouton et afficher le chargement
+    const originalText = updateBtn.innerHTML;
+    updateBtn.disabled = true;
+    updateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Actualisation...';
+    
+    try {
+        console.log('Début de l\'actualisation des paiements ouverts des 2 derniers jours');
+        
+        const response = await fetch('/api/payment-links/update-open-payments', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            const { totalChecked, updated } = result.data;
+            
+            // Afficher un popup de résumé de l'actualisation
+            showUpdateSummaryPopup(totalChecked, updated);
+            
+            // Recharger la liste des paiements pour afficher les mises à jour
+            loadPaymentLinks();
+            
+        } else {
+            showError(result.message || 'Erreur lors de l\'actualisation des paiements');
+        }
+        
+    } catch (error) {
+        console.error('Erreur lors de l\'actualisation:', error);
+        showError('Erreur lors de l\'actualisation des paiements');
+    } finally {
+        // Réactiver le bouton
+        updateBtn.disabled = false;
+        updateBtn.innerHTML = originalText;
     }
 }

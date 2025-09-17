@@ -5723,6 +5723,110 @@ app.get('/api/payment-links/archives/:weekStart', checkAuth, async (req, res) =>
     }
 });
 
+// Route pour actualiser tous les paiements ouverts des 2 derniers jours
+app.post('/api/payment-links/update-open-payments', checkAuth, async (req, res) => {
+    try {
+        const user = req.user;
+        
+        console.log('🔄 Actualisation des paiements ouverts demandée par:', user.username);
+        
+        // Calculer la date d'il y a 2 jours
+        const twoDaysAgo = new Date();
+        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        twoDaysAgo.setHours(0, 0, 0, 0); // Début de la journée
+        
+        console.log('📅 Récupération des paiements créés depuis:', twoDaysAgo.toISOString());
+        
+        // Récupérer tous les paiements avec statut "opened" des 2 derniers jours
+        const openPayments = await PaymentLink.findAll({
+            where: {
+                status: 'opened',
+                created_at: {
+                    [Op.gte]: twoDaysAgo
+                },
+                archived: 0
+            }
+        });
+        
+        console.log(`📊 ${openPayments.length} paiement(s) ouverts trouvés à vérifier`);
+        
+        let totalChecked = 0;
+        let updated = 0;
+        
+        // Vérifier chaque paiement individuellement
+        for (const payment of openPayments) {
+            try {
+                console.log(`🔍 Vérification du paiement: ${payment.payment_link_id}`);
+                
+                // Appel à l'API Bictorys pour obtenir le statut actuel
+                const response = await axios.get(
+                    `${BICTORYS_BASE_URL}/paymentlink-management/v1/paymentlinks/${payment.payment_link_id}`,
+                    {
+                        headers: {
+                            'X-API-Key': BICTORYS_API_KEY,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 10000 // 10 secondes de timeout
+                    }
+                );
+                
+                totalChecked++;
+                
+                if (response.data && response.data.id) {
+                    const currentStatus = response.data.status;
+                    
+                    // Vérifier si le statut a changé
+                    if (currentStatus !== payment.status) {
+                        console.log(`📝 Mise à jour du statut: ${payment.payment_link_id} ${payment.status} -> ${currentStatus}`);
+                        
+                        // Mettre à jour le statut en base
+                        await PaymentLink.update(
+                            { 
+                                status: currentStatus,
+                                updated_at: new Date()
+                            },
+                            { 
+                                where: { payment_link_id: payment.payment_link_id } 
+                            }
+                        );
+                        
+                        updated++;
+                    } else {
+                        console.log(`✅ Statut inchangé pour: ${payment.payment_link_id} (${currentStatus})`);
+                    }
+                } else {
+                    console.log(`⚠️ Réponse invalide de l'API pour: ${payment.payment_link_id}`);
+                }
+                
+                // Petite pause entre les requêtes pour éviter la surcharge de l'API
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+            } catch (error) {
+                console.error(`❌ Erreur lors de la vérification de ${payment.payment_link_id}:`, error.message);
+                totalChecked++; // Compter même en cas d'erreur
+            }
+        }
+        
+        console.log(`✅ Actualisation terminée. ${totalChecked} paiements vérifiés, ${updated} mis à jour`);
+        
+        res.json({
+            success: true,
+            data: {
+                totalChecked,
+                updated,
+                message: `${totalChecked} paiement(s) vérifiés, ${updated} mis à jour`
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erreur lors de l\'actualisation des paiements ouverts:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur lors de l\'actualisation'
+        });
+    }
+});
+
 // Démarrage du serveur
 app.listen(PORT, () => {
     console.log(`Serveur démarré sur le port ${PORT}`);
@@ -5736,6 +5840,7 @@ app.listen(PORT, () => {
     console.log('- POST /api/payment-links/archive-individual');
     console.log('- GET /api/payment-links/archives');
     console.log('- GET /api/payment-links/archives/:weekStart');
+    console.log('- POST /api/payment-links/update-open-payments');
 });
 
 // API endpoint for showing estimation section
