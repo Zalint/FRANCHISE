@@ -8026,7 +8026,11 @@ async function fetchProxyMarginPrices(startDate, endDate, pointVente) {
         console.log(`🔍 Date range: ${startDateFormatted} to ${endDateFormatted}`);
         console.log(`🔍 Point vente filter: ${pointVenteFilter || 'All points'}`);
         
-        // SQL query for Boeuf (PostgreSQL with CORRECT database column names)
+        // Convert DD-MM-YYYY input to YYYY-MM-DD for database comparison
+        const startYMD = startDateFormatted.split('-').reverse().join('-'); // '01-09-2025' -> '2025-09-01'
+        const endYMD = endDateFormatted.split('-').reverse().join('-');     // '17-09-2025' -> '2025-09-17'
+        
+        // SQL query for Boeuf (simple VARCHAR date comparison)
         const boeufQuery = `
             SELECT 
                 ROUND(
@@ -8039,8 +8043,7 @@ async function fetchProxyMarginPrices(startDate, endDate, pointVente) {
                 COUNT(*) as nombre_ventes
             FROM ventes 
             WHERE 
-                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
-                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                date >= '${startYMD}' AND date <= '${endYMD}'
                 AND point_vente != 'Abattage'
                 ${pointVenteFilter}
                 AND (
@@ -8062,8 +8065,7 @@ async function fetchProxyMarginPrices(startDate, endDate, pointVente) {
                 COUNT(*) as nombre_ventes
             FROM ventes 
             WHERE 
-                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
-                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                date >= '${startYMD}' AND date <= '${endYMD}'
                 AND point_vente != 'Abattage'
                 ${pointVenteFilter}
                 AND (LOWER(produit) LIKE '%veau en gros%' 
@@ -8083,8 +8085,7 @@ async function fetchProxyMarginPrices(startDate, endDate, pointVente) {
                 COUNT(*) as nombre_ventes
             FROM ventes 
             WHERE 
-                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
-                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                date >= '${startYMD}' AND date <= '${endYMD}'
                 AND point_vente != 'Abattage'
                 ${pointVenteFilter}
                 AND LOWER(produit) LIKE '%poulet%'
@@ -8103,8 +8104,7 @@ async function fetchProxyMarginPrices(startDate, endDate, pointVente) {
                 COUNT(*) as nombre_ventes
             FROM ventes 
             WHERE 
-                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
-                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                date >= '${startYMD}' AND date <= '${endYMD}'
                 AND point_vente != 'Abattage'
                 ${pointVenteFilter}
                 AND LOWER(produit) LIKE '%agneau%'
@@ -8123,8 +8123,7 @@ async function fetchProxyMarginPrices(startDate, endDate, pointVente) {
                 COUNT(*) as nombre_ventes
             FROM ventes 
             WHERE 
-                TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDateFormatted}', 'DD-MM-YYYY')
-                AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDateFormatted}', 'DD-MM-YYYY')
+                date >= '${startYMD}' AND date <= '${endYMD}'
                 AND point_vente != 'Abattage'
                 ${pointVenteFilter}
                 AND (LOWER(produit) = 'oeuf' OR LOWER(produit) = 'tablette')
