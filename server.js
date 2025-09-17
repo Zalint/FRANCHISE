@@ -7074,8 +7074,22 @@ app.get('/api/external/reconciliation/aggregated', validateApiKey, async (req, r
             const startParts = start.split('/');
             const endParts = end.split('/');
             
-            const startDateObj = new Date(parseInt(startParts[2]), parseInt(startParts[1]) - 1, parseInt(startParts[0]));
-            const endDateObj = new Date(parseInt(endParts[2]), parseInt(endParts[1]) - 1, parseInt(endParts[0]));
+            // 🔧 FIX pour éviter les années 1907-1909 - Assurer que l'année est >= 2000
+            let startYear = parseInt(startParts[2]);
+            let endYear = parseInt(endParts[2]);
+            
+            // Si l'année est < 100, ajouter 2000 (ex: 25 -> 2025)
+            if (startYear < 100) startYear += 2000;
+            if (endYear < 100) endYear += 2000;
+            
+            // Si l'année est < 1900, probablement une erreur de parsing, utiliser année actuelle
+            if (startYear < 1900) startYear = new Date().getFullYear();
+            if (endYear < 1900) endYear = new Date().getFullYear();
+            
+            console.log(`🔍 DEBUG: Années corrigées - Start: ${startParts[2]} -> ${startYear}, End: ${endParts[2]} -> ${endYear}`);
+            
+            const startDateObj = new Date(startYear, parseInt(startParts[1]) - 1, parseInt(startParts[0]));
+            const endDateObj = new Date(endYear, parseInt(endParts[1]) - 1, parseInt(endParts[0]));
             
             let currentDate = new Date(startDateObj);
             
@@ -8266,18 +8280,26 @@ async function calculateStockSoirMarge(stockDebut, stockFin, dateDebut, dateFin,
         
         console.log(`🎯 Using fetched dynamic prices:`, prixMoyensProxyMarges);
         
-        // Get price configuration (CORRECTED - separate purchase prices from selling prices)
+        // Get price configuration (ENHANCED - use weighted averages when available)
         const priceConfig = {
-            // Purchase prices (for cost calculation)
-            prixAchatBoeuf: 3808, // Fixed purchase price
-            prixAchatVeau: 3884,  // Fixed purchase price
-            prixAchatPoulet: 2600, // Fixed purchase price
-            prixAchatAgneau: 4000, // Fixed purchase price
-            prixAchatOeuf: 2200,   // Fixed purchase price
+            // Purchase prices (prioritize weighted averages, fallback to fixed)
+            prixAchatBoeuf: parseFloat(dynamicPrices.prixAchatBoeufPondere) || 3500, // Weighted or fixed
+            prixAchatVeau: parseFloat(dynamicPrices.prixAchatVeauPondere) || 3400,   // Weighted or fixed  
+            prixAchatPoulet: 2600, // Fixed purchase price (no weighted data yet)
+            prixAchatAgneau: 4000, // Fixed purchase price (no weighted data yet)
+            prixAchatOeuf: 2200,   // Fixed purchase price (no weighted data yet)
             // Ratios (use dynamic or defaults)
-            ratioBoeuf: parseFloat(dynamicPrices.ratioBoeuf) || -0.0215, // -2.15%
-            ratioVeau: parseFloat(dynamicPrices.ratioVeau) || -0.1038   // -10.38%
+            ratioBoeuf: parseFloat(dynamicPrices.ratioBoeuf) || -0.08, // -2.15%
+            ratioVeau: parseFloat(dynamicPrices.ratioVeau) || -0.08   // -10.38%
         };
+        
+        // Log the price source for transparency
+        console.log(`🎯 Prix d'achat utilisés:`);
+        console.log(`  Boeuf: ${priceConfig.prixAchatBoeuf} FCFA/kg ${dynamicPrices.prixAchatBoeufPondere ? '(moyenne pondérée)' : '(prix fixe)'}`);
+        console.log(`  Veau: ${priceConfig.prixAchatVeau} FCFA/kg ${dynamicPrices.prixAchatVeauPondere ? '(moyenne pondérée)' : '(prix fixe)'}`);
+        console.log(`  Poulet: ${priceConfig.prixAchatPoulet} FCFA/unité (prix fixe)`);
+        console.log(`  Agneau: ${priceConfig.prixAchatAgneau} FCFA/kg (prix fixe)`);
+        console.log(`  Oeuf: ${priceConfig.prixAchatOeuf} FCFA/unité (prix fixe)`);
         
         // Selling prices (PRIORITY: dynamic prices first, then proxy margins) - with explicit debugging
         console.log(`🔍 DEBUG - Dynamic prices received:`, dynamicPrices);
@@ -8413,6 +8435,132 @@ async function calculateStockSoirMarge(stockDebut, stockFin, dateDebut, dateFin,
     }
 }
 
+// Function to fetch weighted average purchase prices
+async function fetchWeightedPurchasePrices(startDate, endDate) {
+    try {
+        console.log(`🔍 Fetching weighted purchase prices from ${startDate} to ${endDate}`);
+        
+        // Convert dates to proper format for database (YYYY-MM-DD) using standardized function
+        const formattedStartDate = standardiserDateFormat(startDate);
+        const formattedEndDate = standardiserDateFormat(endDate);
+        
+        // Query achats-boeuf data directly using the same logic as the external API
+        const whereConditions = {
+            date: {
+                [Op.between]: [formattedStartDate, formattedEndDate]
+            }
+        };
+        
+        const achats = await AchatBoeuf.findAll({
+            where: whereConditions,
+            order: [['date', 'DESC']],
+        });
+        
+        // Calculate totals using the shared function
+        const totals = calculateAchatTotals(achats);
+        
+        if (totals) {
+            const weightedPrices = {
+                prixAchatBoeufPondere: totals.avgWeightedPrixKgBoeuf || 3400, // Fallback to fixed
+                prixAchatVeauPondere: totals.avgWeightedPrixKgVeau || 3500   // Fallback to fixed
+            };
+            
+            console.log(`🎯 Weighted purchase prices:`, weightedPrices);
+            return weightedPrices;
+        } else {
+            console.log(`⚠️ No achats data found, using fixed prices`);
+            return {
+                prixAchatBoeufPondere: 3400,
+                prixAchatVeauPondere: 3500
+            };
+        }
+    } catch (error) {
+        console.error(`❌ Error fetching weighted prices:`, error.message);
+        return {
+            prixAchatBoeufPondere: 3400,
+            prixAchatVeauPondere: 3500
+        };
+    }
+}
+
+// Helper function to calculate totals for achats data
+function calculateAchatTotals(achatsArray) {
+    // Séparer les achats par type d'animal
+    const boeufAchats = achatsArray.filter(achat => achat.bete && achat.bete.toLowerCase() === 'boeuf');
+    const veauAchats = achatsArray.filter(achat => achat.bete && achat.bete.toLowerCase() === 'veau');
+    
+    const totals = {
+        // Nombres d'animaux
+        nbrBoeuf: boeufAchats.length,
+        nbrVeau: veauAchats.length,
+        
+        // Totaux Bœuf
+        totalPrixBoeuf: boeufAchats.reduce((sum, achat) => sum + (achat.prix_achat_kg * achat.nbr_kg), 0),
+        totalAbatsBoeuf: boeufAchats.reduce((sum, achat) => sum + achat.abats, 0),
+        totalFraisAbattageBoeuf: boeufAchats.reduce((sum, achat) => sum + achat.frais_abattage, 0),
+        totalKgBoeuf: boeufAchats.reduce((sum, achat) => sum + achat.nbr_kg, 0),
+        
+        // Totaux Veau
+        totalPrixVeau: veauAchats.reduce((sum, achat) => sum + (achat.prix_achat_kg * achat.nbr_kg), 0),
+        totalAbatsVeau: veauAchats.reduce((sum, achat) => sum + achat.abats, 0),
+        totalFraisAbattageVeau: veauAchats.reduce((sum, achat) => sum + achat.frais_abattage, 0),
+        totalKgVeau: veauAchats.reduce((sum, achat) => sum + achat.nbr_kg, 0),
+        
+        // Totaux généraux (pour compatibilité)
+        totalPrix: achatsArray.reduce((sum, achat) => sum + achat.prix, 0),
+        totalAbats: achatsArray.reduce((sum, achat) => sum + achat.abats, 0),
+        totalFraisAbattage: achatsArray.reduce((sum, achat) => sum + achat.frais_abattage, 0),
+        totalKg: achatsArray.reduce((sum, achat) => sum + achat.nbr_kg, 0),
+    };
+    
+    // Calculs moyennes Bœuf
+    if (boeufAchats.length > 0) {
+        totals.avgPrixKgBoeuf = boeufAchats.reduce((sum, achat) => sum + achat.prix_achat_kg, 0) / boeufAchats.length;
+        totals.avgPrixKgSansAbatsBoeuf = totals.avgPrixKgBoeuf;
+    } else {
+        totals.avgPrixKgBoeuf = 0;
+        totals.avgPrixKgSansAbatsBoeuf = 0;
+    }
+    
+    // Calculs moyennes Veau
+    if (veauAchats.length > 0) {
+        totals.avgPrixKgVeau = veauAchats.reduce((sum, achat) => sum + achat.prix_achat_kg, 0) / veauAchats.length;
+        totals.avgPrixKgSansAbatsVeau = totals.avgPrixKgVeau;
+    } else {
+        totals.avgPrixKgVeau = 0;
+        totals.avgPrixKgSansAbatsVeau = 0;
+    }
+    
+    // 🚀 NOUVEAU: Calculs moyennes pondérées (plus cohérentes)
+    // avgWeightedPrixKgBoeuf = Σ(prix_achat_kg × nbr_kg) / Σ(nbr_kg)
+    if (totals.totalKgBoeuf > 0) {
+        // Utiliser le totalPrixBoeuf déjà calculé (qui est la somme des prix_achat_kg * nbr_kg)
+        totals.avgWeightedPrixKgBoeuf = totals.totalPrixBoeuf / totals.totalKgBoeuf;
+        console.log(`🥩 Boeuf - Moyenne pondérée: ${totals.avgWeightedPrixKgBoeuf.toFixed(2)} FCFA/kg (vs simple: ${totals.avgPrixKgBoeuf.toFixed(2)})`);
+    } else {
+        totals.avgWeightedPrixKgBoeuf = 0;
+    }
+    
+    if (totals.totalKgVeau > 0) {
+        // Utiliser le totalPrixVeau déjà calculé (qui est la somme des prix_achat_kg * nbr_kg)
+        totals.avgWeightedPrixKgVeau = totals.totalPrixVeau / totals.totalKgVeau;
+        console.log(`🐄 Veau - Moyenne pondérée: ${totals.avgWeightedPrixKgVeau.toFixed(2)} FCFA/kg (vs simple: ${totals.avgPrixKgVeau.toFixed(2)})`);
+    } else {
+        totals.avgWeightedPrixKgVeau = 0;
+    }
+    
+    // Calculs moyennes générales (pour compatibilité)
+    if (totals.totalKg > 0) {
+        totals.avgPrixKg = totals.totalPrix / totals.totalKg;
+        totals.avgPrixKgSansAbats = totals.totalPrix / totals.totalKg;
+    } else {
+        totals.avgPrixKg = 0;
+        totals.avgPrixKgSansAbats = 0;
+    }
+    
+    return totals;
+}
+
 // External API version for beef purchases
 // API endpoint for Stock Soir margin calculation
 app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
@@ -8459,15 +8607,24 @@ app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
         const stockDebut = await getStockSoirData(formattedStartDate);
         const stockFin = await getStockSoirData(formattedEndDate);
         
-        if (!stockDebut.success || !stockFin.success) {
+        // Only require stockDebut to be successful - stockFin can be missing (future dates)
+        if (!stockDebut.success) {
             return res.status(500).json({
                 success: false,
-                message: 'Erreur lors de la récupération des données de stock',
+                message: 'Erreur lors de la récupération des données de stock de début',
                 details: {
                     stockDebut: stockDebut.success,
-                    stockFin: stockFin.success
+                    stockFin: stockFin.success,
+                    stockDebutMessage: stockDebut.message,
+                    stockFinMessage: stockFin.message
                 }
             });
+        }
+        
+        // Log status for debugging
+        console.log(`📊 Stock data status: Début=${stockDebut.success ? 'OK' : 'FAIL'}, Fin=${stockFin.success ? 'OK' : 'MISSING'}`);
+        if (!stockFin.success) {
+            console.log(`⚠️ Stock fin data missing for ${formattedEndDate}, using empty data`);
         }
         
         // Fetch proxy margin prices directly from database using SQL queries
@@ -8493,14 +8650,27 @@ app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
             dynamicPrices = { error: 'Function returned null/undefined' };
         }
         
+        // Fetch weighted purchase prices for more accurate cost calculations
+        console.log('🔍 About to fetch weighted purchase prices...');
+        const weightedPrices = await fetchWeightedPurchasePrices(formattedStartDate, formattedEndDate);
+        
+        // Merge dynamic prices with weighted purchase prices
+        const enhancedDynamicPrices = {
+            ...dynamicPrices,
+            ...weightedPrices
+        };
+        
+        console.log('🔍 Enhanced dynamic prices (with weighted purchase prices):', enhancedDynamicPrices);
+        
         // Calculate margin using the same logic as genererCalculsMargeStockSoir
+        // Use stockFin.data if available, otherwise use empty object for missing data
         const margeResult = await calculateStockSoirMarge(
             stockDebut.data,
-            stockFin.data,
+            stockFin.success ? stockFin.data : {},
             formattedStartDate,
             formattedEndDate,
             pointVenteFilter,
-            dynamicPrices
+            enhancedDynamicPrices
         );
         
         res.json({
@@ -8511,7 +8681,12 @@ app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
                 endDate: formattedEndDate,
                 pointVente: pointVenteFilter,
                 timestamp: new Date().toISOString(),
-                fetchedPrices: dynamicPrices // Add this to see what was fetched
+                fetchedPrices: dynamicPrices, // Add this to see what was fetched
+                weightedPrices: weightedPrices, // Add weighted prices to metadata
+                stockDataAvailable: {
+                    stockDebut: stockDebut.success,
+                    stockFin: stockFin.success
+                }
             }
         });
         
@@ -8631,6 +8806,24 @@ app.get('/api/external/achats-boeuf', validateApiKey, async (req, res) => {
             } else {
                 totals.avgPrixKgVeau = 0;
                 totals.avgPrixKgSansAbatsVeau = 0;
+            }
+            
+            // 🚀 NOUVEAU: Calculs moyennes pondérées (plus cohérentes)
+            // avgWeightedPrixKgBoeuf = Σ(prix_achat_kg × nbr_kg) / Σ(nbr_kg)
+            if (totals.totalKgBoeuf > 0) {
+                // Utiliser le totalPrixBoeuf déjà calculé (qui est la somme des prix_achat_kg * nbr_kg)
+                totals.avgWeightedPrixKgBoeuf = totals.totalPrixBoeuf / totals.totalKgBoeuf;
+                console.log(`🥩 Boeuf - Moyenne pondérée: ${totals.avgWeightedPrixKgBoeuf.toFixed(2)} FCFA/kg (vs simple: ${totals.avgPrixKgBoeuf.toFixed(2)})`);
+            } else {
+                totals.avgWeightedPrixKgBoeuf = 0;
+            }
+            
+            if (totals.totalKgVeau > 0) {
+                // Utiliser le totalPrixVeau déjà calculé (qui est la somme des prix_achat_kg * nbr_kg)
+                totals.avgWeightedPrixKgVeau = totals.totalPrixVeau / totals.totalKgVeau;
+                console.log(`🐄 Veau - Moyenne pondérée: ${totals.avgWeightedPrixKgVeau.toFixed(2)} FCFA/kg (vs simple: ${totals.avgPrixKgVeau.toFixed(2)})`);
+            } else {
+                totals.avgWeightedPrixKgVeau = 0;
             }
             
             // Calculs moyennes générales (pour compatibilité)

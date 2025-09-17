@@ -11117,37 +11117,37 @@ async function calculerStockSoirVariation(dateDebut, dateFin, pointVente = null)
         } else {
             // Calculer la variation traditionnelle (Stock fin - Stock début)
             console.log(`📅 Période différente, calcul de la variation traditionnelle`);
-            const stockDebut = await calculerStockSoir(dateDebut, pointVente);
-            const stockFin = await calculerStockSoir(dateFin, pointVente);
+        const stockDebut = await calculerStockSoir(dateDebut, pointVente);
+        const stockFin = await calculerStockSoir(dateFin, pointVente);
+        
+        // Calculer la variation des détails par produit
+        const detailsVariation = {};
+        const allProduits = new Set([...Object.keys(stockDebut.details || {}), ...Object.keys(stockFin.details || {})]);
+        
+        allProduits.forEach(produit => {
+            const montantDebut = (stockDebut.details && stockDebut.details[produit]) ? stockDebut.details[produit].Montant : 0;
+            const montantFin = (stockFin.details && stockFin.details[produit]) ? stockFin.details[produit].Montant : 0;
+            const quantiteDebut = (stockDebut.details && stockDebut.details[produit]) ? stockDebut.details[produit].Quantite : 0;
+            const quantiteFin = (stockFin.details && stockFin.details[produit]) ? stockFin.details[produit].Quantite : 0;
             
-            // Calculer la variation des détails par produit
-            const detailsVariation = {};
-            const allProduits = new Set([...Object.keys(stockDebut.details || {}), ...Object.keys(stockFin.details || {})]);
-            
-            allProduits.forEach(produit => {
-                const montantDebut = (stockDebut.details && stockDebut.details[produit]) ? stockDebut.details[produit].Montant : 0;
-                const montantFin = (stockFin.details && stockFin.details[produit]) ? stockFin.details[produit].Montant : 0;
-                const quantiteDebut = (stockDebut.details && stockDebut.details[produit]) ? stockDebut.details[produit].Quantite : 0;
-                const quantiteFin = (stockFin.details && stockFin.details[produit]) ? stockFin.details[produit].Quantite : 0;
-                
-                detailsVariation[produit] = {
-                    Montant: montantFin - montantDebut,
-                    Quantite: quantiteFin - quantiteDebut,
-                    PointVente: (stockFin.details && stockFin.details[produit]) ? stockFin.details[produit].PointVente : 
-                              (stockDebut.details && stockDebut.details[produit]) ? stockDebut.details[produit].PointVente : pointVente
-                };
-            });
-            
-            resultTradiitionel = {
-                montantTotal: stockFin.montantTotal - stockDebut.montantTotal,
-                nombreItems: stockFin.nombreItems - stockDebut.nombreItems,
-                details: detailsVariation,
-                type: 'variation',
-                dateDebut: dateDebut,
-                dateFin: dateFin,
-                stockDebut: stockDebut,
-                stockFin: stockFin
+            detailsVariation[produit] = {
+                Montant: montantFin - montantDebut,
+                Quantite: quantiteFin - quantiteDebut,
+                PointVente: (stockFin.details && stockFin.details[produit]) ? stockFin.details[produit].PointVente : 
+                          (stockDebut.details && stockDebut.details[produit]) ? stockDebut.details[produit].PointVente : pointVente
             };
+        });
+        
+            resultTradiitionel = {
+            montantTotal: stockFin.montantTotal - stockDebut.montantTotal,
+            nombreItems: stockFin.nombreItems - stockDebut.nombreItems,
+            details: detailsVariation,
+            type: 'variation',
+            dateDebut: dateDebut,
+            dateFin: dateFin,
+            stockDebut: stockDebut,
+            stockFin: stockFin
+        };
         }
         
         // 🚀 NOUVEAU: Remplacer SEULEMENT le montantTotal par la marge API pour Proxy Marges
@@ -11208,7 +11208,8 @@ let proxyMargesControls = {
     ratioPerteVeau: 8.0,
     coutManuelPacks: 0,
     coutManuelAutre: 0,
-    pointVenteActuel: 'Sélectionner un point de vente'
+    pointVenteActuel: 'Sélectionner un point de vente',
+    modeQuantiteReelle: false  // Nouveau: Mode Quantité Réelle (API) vs Ratio
 };
 
 // Variables globales pour stocker les ratios calculés par les Proxy Marges
@@ -11349,6 +11350,151 @@ function updateProxyMargesControls(pointVente) {
     
     // Mettre à jour l'état global
     proxyMargesControls.calculAutoActif = calculAutoCheckbox ? calculAutoCheckbox.checked : false;
+    
+    // Gérer l'affichage du toggle Mode Calcul
+    updateModeCalculToggle(pointVente);
+}
+
+// Fonction pour gérer l'affichage et les événements du toggle Mode Calcul
+function updateModeCalculToggle(pointVente) {
+    // Supprimer l'ancien toggle s'il existe
+    const existingToggle = document.getElementById('mode-calcul-container');
+    if (existingToggle) {
+        existingToggle.remove();
+    }
+    
+    // Ajouter le toggle seulement pour les points de vente spécifiques
+    if (pointVente !== 'Sélectionner un point de vente' && pointVente !== '') {
+        const toggleHTML = `
+            <div id="mode-calcul-container" style="margin: 15px 0; padding: 10px; background-color: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+                <div style="font-weight: bold; color: #856404; margin-bottom: 10px;">🔄 Mode Calcul Qté Abattue</div>
+                <div style="display: flex; gap: 20px; align-items: center;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="radio" name="mode-calcul" value="ratio" id="mode-ratio" checked 
+                               style="margin-right: 8px; transform: scale(1.1);">
+                        <span style="color: #856404;">📐 Ratio</span>
+                    </label>
+                    <!-- 📊 Quantité Réelle (API) temporairement cachée -->
+                    <div style="display: none;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="radio" name="mode-calcul" value="quantite-reelle" id="mode-quantite-reelle" 
+                                   style="margin-right: 8px; transform: scale(1.1);">
+                            <span style="color: #856404;">📊 Quantité Réelle (API)</span>
+                        </label>
+                    </div>
+                </div>
+                <div style="font-size: 0.85em; color: #6c757d; margin-top: 5px; font-style: italic;">
+                    <span id="mode-calcul-description">
+                        ${proxyMargesControls.modeQuantiteReelle ? 'Utilise les vraies quantités d\'abattage via API réconciliation' : 'Utilise les ratios de perte saisis/calculés'}
+                    </span>
+                </div>
+            </div>
+        `;
+        
+        // Insérer après l'élément de calcul automatique
+        const calculAutoContainer = document.querySelector('#calcul-auto-abattage').closest('div').parentElement;
+        if (calculAutoContainer && calculAutoContainer.nextSibling) {
+            calculAutoContainer.insertAdjacentHTML('afterend', toggleHTML);
+        }
+        
+        // Ajouter les événements pour les radio buttons
+        const modeRatioInput = document.getElementById('mode-ratio');
+        const modeQuantiteReelleInput = document.getElementById('mode-quantite-reelle');
+        const descriptionSpan = document.getElementById('mode-calcul-description');
+        
+        if (modeRatioInput) {
+            modeRatioInput.addEventListener('change', function() {
+                if (this.checked) {
+                    proxyMargesControls.modeQuantiteReelle = false;
+                    descriptionSpan.textContent = 'Utilise les ratios de perte saisis/calculés';
+                    console.log('🔄 Mode Calcul: RATIO activé');
+                }
+            });
+        }
+        
+        if (modeQuantiteReelleInput) {
+            modeQuantiteReelleInput.addEventListener('change', function() {
+                if (this.checked) {
+                    proxyMargesControls.modeQuantiteReelle = true;
+                    descriptionSpan.textContent = 'Utilise les vraies quantités d\'abattage via API réconciliation';
+                    console.log('🔄 Mode Calcul: QUANTITÉ RÉELLE (API) activé');
+                }
+            });
+        }
+        
+        console.log(`🎛️ Toggle Mode Calcul ajouté pour point de vente: ${pointVente}`);
+    } else {
+        // Forcer le mode ratio pour les points de vente globaux
+        proxyMargesControls.modeQuantiteReelle = false;
+        console.log('🔄 Mode global: Mode Ratio forcé');
+    }
+    
+    // 🚫 FORCE: Toujours utiliser le mode Ratio (Quantité Réelle désactivé temporairement)
+    proxyMargesControls.modeQuantiteReelle = false;
+}
+
+// Fonction pour récupérer les quantités réelles d'abattage via API réconciliation
+async function fetchQuantitesReellesAbattage(dateDebut, dateFin, pointVente) {
+    try {
+        console.log(`🔍 Récupération quantités réelles d'abattage: ${dateDebut} à ${dateFin}, Point: ${pointVente}`);
+        
+        // Validation et sécurisation des dates
+        if (!dateDebut || !dateFin || !dateDebut.includes('/') || !dateFin.includes('/')) {
+            throw new Error(`Dates invalides: dateDebut=${dateDebut}, dateFin=${dateFin}`);
+        }
+        
+        // Convertir les dates au format requis par l'API (DD/MM/YYYY -> YYYY-MM-DD)
+        const startDate = dateDebut.split('/').reverse().join('-');
+        const endDate = dateFin.split('/').reverse().join('-');
+        
+        // Validation des dates converties (vérifier que l'année est cohérente)
+        if (!startDate.startsWith('20') || !endDate.startsWith('20')) {
+            throw new Error(`Années converties invalides: ${startDate}, ${endDate} depuis ${dateDebut}, ${dateFin}`);
+        }
+        
+        console.log(`🔍 Conversion dates: ${dateDebut} -> ${startDate}, ${dateFin} -> ${endDate}`);
+        
+        const url = `/api/external/reconciliation/aggregated?startDate=${startDate}&endDate=${endDate}&pointVente=${encodeURIComponent(pointVente)}`;
+        
+        const response = await fetch(url, {
+            headers: {
+                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📊 Données réconciliation reçues:', data);
+        
+        if (data.success && data.data && data.data.ventesTheoriquesNombre) {
+            const ventesTheoriques = data.data.ventesTheoriquesNombre;
+            
+            const quantitesReelles = {
+                qteAbattueBoeuf: ventesTheoriques.boeuf || 0,
+                qteAbattueVeau: ventesTheoriques.veau || 0,
+                source: 'API_RECONCILIATION',
+                metadata: {
+                    periode: `${dateDebut} - ${dateFin}`,
+                    pointVente: pointVente,
+                    timestamp: new Date().toISOString()
+                }
+            };
+            
+            console.log('🎯 Quantités réelles extraites:', quantitesReelles);
+            return quantitesReelles;
+            
+        } else {
+            console.warn('⚠️ Structure de données inattendue ou données manquantes:', data);
+            return null;
+        }
+        
+    } catch (error) {
+        console.error('❌ Erreur lors de la récupération des quantités réelles:', error);
+        return null;
+    }
 }
 
 // Fonction pour filtrer les analytics par point de vente (OPTIMISÉE)
@@ -11462,11 +11608,11 @@ async function calculerRatioPerteDynamique(dateDebut, dateFin, pointVente, categ
         // Appeler l'API pour chaque date et accumuler les sommes
         for (const date of dates) {
             try {
-                const response = await fetch(`/api/external/reconciliation?date=${encodeURIComponent(date)}&key=b326e72b67a9b508c88270b9954c5ca1`, {
+                const response = await fetch(`/api/external/reconciliation?date=${encodeURIComponent(date)}`, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                        'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
                     }
                 });
                 
@@ -11543,7 +11689,7 @@ async function calculerStockSoir(dateFin, pointVente = null) {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
             }
         });
 
@@ -11632,11 +11778,11 @@ async function afficherAnalyticsVentes(ventes) {
 
     // Afficher un loader pendant le calcul
     const loaderHtml = `
-        <div class="text-center py-5" id="analytics-loader">
+        <div class="text-center py-2 mt-3" id="analytics-loader">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Chargement...</span>
             </div>
-            <div class="mt-3">
+            <div class="mt-2">
                 <h5>Calcul des analytics en cours...</h5>
                 <p class="text-muted">Calcul des ratios dynamiques et des proxy marges</p>
             </div>
@@ -11757,7 +11903,7 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
         
         const response = await fetch(`/api/external/achats-boeuf?startDate=${dateDebutFormatted}&endDate=${dateFinFormatted}`, {
             headers: {
-                'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
             }
         });
 
@@ -11766,28 +11912,39 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
         let poidsTotalBoeuf = 0;
         let poidsTotalVeau = 0;
         let achatsPeriode = [];
+        let totals = null; // Déclarer totals en dehors pour l'utiliser dans les calculs
 
         if (response.ok) {
             const achatsData = await response.json();
             console.log('📊 Données d\'achats récupérées pour Proxy Marges:', achatsData);
             
             if (achatsData.success && achatsData.data) {
-                // Récupérer les prix moyens depuis les totals
+                // Récupérer les prix moyens pondérés depuis les totals (priorité aux pondérés)
                 if (achatsData.data.totals) {
-                    const totals = achatsData.data.totals;
-                    if (totals.avgPrixKgBoeuf && totals.avgPrixKgBoeuf > 0) {
+                    totals = achatsData.data.totals;
+                    // Utiliser les moyennes pondérées si disponibles, sinon fallback sur moyennes simples
+                    if (totals.avgWeightedPrixKgBoeuf && totals.avgWeightedPrixKgBoeuf > 0) {
+                        prixAchatBoeuf = totals.avgWeightedPrixKgBoeuf;
+                        console.log(`🎯 Boeuf - Utilisation prix pondéré: ${prixAchatBoeuf.toFixed(2)} FCFA/kg`);
+                    } else if (totals.avgPrixKgBoeuf && totals.avgPrixKgBoeuf > 0) {
                         prixAchatBoeuf = totals.avgPrixKgBoeuf;
+                        console.log(`🎯 Boeuf - Utilisation prix simple: ${prixAchatBoeuf.toFixed(2)} FCFA/kg`);
                     }
-                    if (totals.avgPrixKgVeau && totals.avgPrixKgVeau > 0) {
+                    
+                    if (totals.avgWeightedPrixKgVeau && totals.avgWeightedPrixKgVeau > 0) {
+                        prixAchatVeau = totals.avgWeightedPrixKgVeau;
+                        console.log(`🎯 Veau - Utilisation prix pondéré: ${prixAchatVeau.toFixed(2)} FCFA/kg`);
+                    } else if (totals.avgPrixKgVeau && totals.avgPrixKgVeau > 0) {
                         prixAchatVeau = totals.avgPrixKgVeau;
+                        console.log(`🎯 Veau - Utilisation prix simple: ${prixAchatVeau.toFixed(2)} FCFA/kg`);
                     }
                     
                     // Récupérer les poids totaux
                     poidsTotalBoeuf = totals.totalKgBoeuf || 0;
                     poidsTotalVeau = totals.totalKgVeau || 0;
                     
-                    console.log(`🐄 Boeuf - Prix moyen: ${prixAchatBoeuf.toFixed(2)} FCFA/kg, Poids total: ${poidsTotalBoeuf} kg`);
-                    console.log(`🐂 Veau - Prix moyen: ${prixAchatVeau.toFixed(2)} FCFA/kg, Poids total: ${poidsTotalVeau} kg`);
+                    console.log(`🐄 Boeuf - Prix final: ${prixAchatBoeuf.toFixed(2)} FCFA/kg, Poids total: ${poidsTotalBoeuf} kg`);
+                    console.log(`🐂 Veau - Prix final: ${prixAchatVeau.toFixed(2)} FCFA/kg, Poids total: ${poidsTotalVeau} kg`);
                 }
                 
                 // Récupérer les achats détaillés pour les logs
@@ -11830,6 +11987,18 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
         const stockSoir = await calculerStockSoirVariation(dateDebut, dateFin, proxyMargesControls.pointVenteActuel);
         console.log(`📊 Stock soir récupéré: ${stockSoir.montantTotal} FCFA (${stockSoir.nombreItems} items)`);
 
+        // Récupérer les quantités réelles d'abattage si le mode Quantité Réelle est activé
+        let quantitesReelles = null;
+        // 🚫 Mode Quantité Réelle temporairement désactivé
+        // if (proxyMargesControls.modeQuantiteReelle && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
+        //     quantitesReelles = await fetchQuantitesReellesAbattage(dateDebut, dateFin, proxyMargesControls.pointVenteActuel);
+        //     if (quantitesReelles) {
+        //         console.log(`🎯 Mode Quantité Réelle activé - Quantités d'abattage récupérées:`, quantitesReelles);
+        //     } else {
+        //         console.warn(`⚠️ Mode Quantité Réelle: Échec récupération, fallback vers mode Ratio`);
+        //     }
+        // }
+
         // 🚀 CALCUL UNIQUE DE LA MARGE STOCK SOIR (sera utilisée partout)
         // Cette marge sera la SEULE source de vérité !
         let totauxStockSoir = null;
@@ -11853,7 +12022,16 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
         let analyticsRegroupeesFiltrees = analyticsRegroupees;
         if (proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
             console.log(`🔍 Filtrage des données pour le point de vente: ${proxyMargesControls.pointVenteActuel}`);
-            analyticsRegroupeesFiltrees = await filtrerAnalyticsParPointVente(analyticsRegroupees, proxyMargesControls.pointVenteActuel, dateDebut, dateFin);
+            const filteredData = await filtrerAnalyticsParPointVente(analyticsRegroupees, proxyMargesControls.pointVenteActuel, dateDebut, dateFin);
+            
+            // Protection contre les erreurs API
+            if (filteredData && typeof filteredData === 'object') {
+                analyticsRegroupeesFiltrees = filteredData;
+                console.log(`✅ Données filtrées avec succès pour ${proxyMargesControls.pointVenteActuel}`);
+            } else {
+                console.warn(`⚠️ Échec du filtrage pour ${proxyMargesControls.pointVenteActuel}, utilisation des données globales`);
+                analyticsRegroupeesFiltrees = analyticsRegroupees; // Fallback vers données globales
+            }
         }
 
         // Calculer les ratios dynamiques si le calcul automatique est activé
@@ -11934,6 +12112,13 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
         // Calculer les proxy marges
         const proxyMarges = {};
         
+        // Protection finale contre les données undefined/null
+        if (!analyticsRegroupeesFiltrees || typeof analyticsRegroupeesFiltrees !== 'object') {
+            console.error('❌ analyticsRegroupeesFiltrees est undefined/null, arrêt du calcul');
+            proxyMargesContainer.innerHTML = '<div class="alert alert-warning">Erreur de données, impossible de calculer les proxy marges</div>';
+            return;
+        }
+        
         Object.keys(analyticsRegroupeesFiltrees).forEach(categorie => {
             const data = analyticsRegroupeesFiltrees[categorie];
             let chiffreAffaires;
@@ -11949,54 +12134,86 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
             
             switch (categorie) {
                 case 'Boeuf':
+                    // Toujours utiliser le prix pondéré si disponible
+                    const prixPondereBoeuf = (totals && totals.avgWeightedPrixKgBoeuf) ? totals.avgWeightedPrixKgBoeuf : prixAchatBoeuf;
+                    
                     // Calculer la quantité abattue selon le mode
                     let quantiteAbattueBoeuf;
+                    let ratioCalculeBoeuf = ratioBoeufDynamique; // Ratio par défaut
+                    
                     if (proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
-                        // Mode auto : Qté abattue = Qté vendue / (1 + ratio)
+                        
+                        if (proxyMargesControls.modeQuantiteReelle && quantitesReelles && quantitesReelles.qteAbattueBoeuf > 0) {
+                            // 🆕 MODE QUANTITÉ RÉELLE : Utiliser les vraies quantités d'abattage
+                            quantiteAbattueBoeuf = quantitesReelles.qteAbattueBoeuf;
+                            ratioCalculeBoeuf = (data.quantiteTotal / quantiteAbattueBoeuf) - 1;
+                            console.log(`🎯 Boeuf - MODE QUANTITÉ RÉELLE: Qté abattue API = ${quantiteAbattueBoeuf.toFixed(2)} kg, Ratio calculé = ${(ratioCalculeBoeuf * 100).toFixed(2)}%`);
+                            coutAchat = prixPondereBoeuf * quantiteAbattueBoeuf;
+                        } else {
+                            // 📐 MODE RATIO : Utiliser les ratios pour calculer la quantité abattue
                         quantiteAbattueBoeuf = data.quantiteTotal / (1 + ratioBoeufDynamique);
-                        coutAchat = prixAchatBoeuf * quantiteAbattueBoeuf;
+                            console.log(`📐 Boeuf - MODE RATIO: Qté abattue calculée = ${quantiteAbattueBoeuf.toFixed(2)} kg, Ratio utilisé = ${(ratioBoeufDynamique * 100).toFixed(2)}%`);
+                            coutAchat = prixPondereBoeuf * quantiteAbattueBoeuf;
+                        }
                     } else {
                         // Mode manuel : utiliser les données globales
                         quantiteAbattueBoeuf = poidsTotalBoeuf;
-                        coutAchat = prixAchatBoeuf * poidsTotalBoeuf;
+                        coutAchat = prixPondereBoeuf * poidsTotalBoeuf;
                     }
                     console.log(`💰 CALCUL PROXY MARGE BOEUF:`);
                     console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
                     console.log(`   - Quantité vendue: ${data.quantiteTotal} kg`);
                     console.log(`   - Quantité abattue: ${quantiteAbattueBoeuf.toFixed(2)} kg`);
                     console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
+                    console.log(`   - Prix achat utilisé: ${prixPondereBoeuf.toFixed(2)} FCFA/kg (${(totals && totals.avgWeightedPrixKgBoeuf) ? 'pondéré' : 'simple'})`);
+                    console.log(`   - Coût d'achat: ${prixPondereBoeuf.toFixed(2)} × ${quantiteAbattueBoeuf.toFixed(2)} = ${coutAchat.toFixed(0)} FCFA`);
+                    console.log(`   - Marge: ${chiffreAffaires.toFixed(0)} - ${coutAchat.toFixed(0)} = ${(chiffreAffaires - coutAchat).toFixed(0)} FCFA`);
                     
                     // Sauvegarder le prix moyen pour réutilisation par Stock Soir
                     prixMoyensProxyMarges.prixMoyenBoeuf = data.prixMoyen;
-                    console.log(`   - Prix moyen achat: ${prixAchatBoeuf.toFixed(2)} FCFA/kg`);
-                    console.log(`   - Coût d'achat: ${coutAchat.toFixed(0)} FCFA`);
-                    console.log(`   - Ratio dynamique: ${(ratioBoeufDynamique * 100).toFixed(2)}%`);
-                    console.log(`   - Mode auto: ${proxyMargesControls.calculAutoActif ? 'ACTIF' : 'INACTIF'}`);
+                    console.log(`   - Ratio ${proxyMargesControls.modeQuantiteReelle && quantitesReelles ? 'calculé' : 'dynamique'}: ${(ratioCalculeBoeuf * 100).toFixed(2)}%`);
+                    console.log(`   - Mode: ${proxyMargesControls.calculAutoActif ? 'ACTIF' : 'INACTIF'} | Calcul: ${proxyMargesControls.modeQuantiteReelle ? 'Quantité Réelle (API)' : 'Ratio'}`);
                     break;
                 case 'Veau':
+                    // Toujours utiliser le prix pondéré si disponible
+                    const prixPondereVeau = (totals && totals.avgWeightedPrixKgVeau) ? totals.avgWeightedPrixKgVeau : prixAchatVeau;
+                    
                     // Calculer la quantité abattue selon le mode
                     let quantiteAbattueVeau;
+                    let ratioCalculeVeau = ratioVeauDynamique; // Ratio par défaut
+                    
                     if (proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
-                        // Mode auto : Qté abattue = Qté vendue / (1 + ratio)
+                        
+                        if (proxyMargesControls.modeQuantiteReelle && quantitesReelles && quantitesReelles.qteAbattueVeau > 0) {
+                            // 🆕 MODE QUANTITÉ RÉELLE : Utiliser les vraies quantités d'abattage
+                            quantiteAbattueVeau = quantitesReelles.qteAbattueVeau;
+                            ratioCalculeVeau = (data.quantiteTotal / quantiteAbattueVeau) - 1;
+                            console.log(`🎯 Veau - MODE QUANTITÉ RÉELLE: Qté abattue API = ${quantiteAbattueVeau.toFixed(2)} kg, Ratio calculé = ${(ratioCalculeVeau * 100).toFixed(2)}%`);
+                            coutAchat = prixPondereVeau * quantiteAbattueVeau;
+                        } else {
+                            // 📐 MODE RATIO : Utiliser les ratios pour calculer la quantité abattue
                         quantiteAbattueVeau = data.quantiteTotal / (1 + ratioVeauDynamique);
-                        coutAchat = prixAchatVeau * quantiteAbattueVeau;
+                            console.log(`📐 Veau - MODE RATIO: Qté abattue calculée = ${quantiteAbattueVeau.toFixed(2)} kg, Ratio utilisé = ${(ratioVeauDynamique * 100).toFixed(2)}%`);
+                            coutAchat = prixPondereVeau * quantiteAbattueVeau;
+                        }
                     } else {
                         // Mode manuel : utiliser les données globales
                         quantiteAbattueVeau = poidsTotalVeau;
-                        coutAchat = prixAchatVeau * poidsTotalVeau;
+                        coutAchat = prixPondereVeau * poidsTotalVeau;
                     }
                     console.log(`💰 CALCUL PROXY MARGE VEAU:`);
                     console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
                     console.log(`   - Quantité vendue: ${data.quantiteTotal} kg`);
                     console.log(`   - Quantité abattue: ${quantiteAbattueVeau.toFixed(2)} kg`);
                     console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
+                    console.log(`   - Prix achat utilisé: ${prixPondereVeau.toFixed(2)} FCFA/kg (${(totals && totals.avgWeightedPrixKgVeau) ? 'pondéré' : 'simple'})`);
+                    console.log(`   - Coût d'achat: ${prixPondereVeau.toFixed(2)} × ${quantiteAbattueVeau.toFixed(2)} = ${coutAchat.toFixed(0)} FCFA`);
+                    console.log(`   - Marge: ${chiffreAffaires.toFixed(0)} - ${coutAchat.toFixed(0)} = ${(chiffreAffaires - coutAchat).toFixed(0)} FCFA`);
                     
                     // Sauvegarder le prix moyen pour réutilisation par Stock Soir
                     prixMoyensProxyMarges.prixMoyenVeau = data.prixMoyen;
-                    console.log(`   - Prix moyen achat: ${prixAchatVeau.toFixed(2)} FCFA/kg`);
-                    console.log(`   - Coût d'achat: ${coutAchat.toFixed(0)} FCFA`);
-                    console.log(`   - Ratio dynamique: ${(ratioVeauDynamique * 100).toFixed(2)}%`);
-                    console.log(`   - Mode auto: ${proxyMargesControls.calculAutoActif ? 'ACTIF' : 'INACTIF'}`);
+                    console.log(`   - Ratio ${proxyMargesControls.modeQuantiteReelle && quantitesReelles ? 'calculé' : 'dynamique'}: ${(ratioCalculeVeau * 100).toFixed(2)}%`);
+                    console.log(`   - Mode: ${proxyMargesControls.calculAutoActif ? 'ACTIF' : 'INACTIF'} | Calcul: ${proxyMargesControls.modeQuantiteReelle ? 'Quantité Réelle (API)' : 'Ratio'}`);
                     break;
                 case 'Poulet':
                     coutAchat = prixAchatPoulet * data.quantiteTotal;
@@ -12485,7 +12702,7 @@ async function genererDetailStockSoir(date, pointVente = null) {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
             }
         });
 
@@ -12746,7 +12963,7 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
                 }
             }).then(res => res.ok ? res.json() : {}),
             
@@ -12754,7 +12971,7 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
                 }
             }).then(res => res.ok ? res.json() : {})
         ]);
@@ -12910,7 +13127,7 @@ async function genererCalculsMargeStockSoir(stockDebut, stockFin, dateDebut, dat
             
             const response = await fetch(`/api/external/achats-boeuf?startDate=${dateDebutFormatted}&endDate=${dateFinFormatted}`, {
                 headers: {
-                    'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1'
+                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
                 }
             });
             
@@ -13263,7 +13480,7 @@ async function calculerMargeStockSoirViaAPI(dateDebut, dateFin, pointVente, prix
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'X-API-Key': 'your-secure-api-key-for-relevance' // Use the same API key as other calls
+                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
             }
         });
         
@@ -13339,7 +13556,11 @@ async function calculerMargeStockSoirTotaux(stockDebut, stockFin, dateDebut, dat
 
         try {
             console.log(`🔍 Récupération prix d'achat via API externe: ${dateDebut} à ${dateFin}`);
-            const response = await fetch(`/api/external/achats-boeuf?startDate=${dateDebut}&endDate=${dateFin}`);
+            const response = await fetch(`/api/external/achats-boeuf?startDate=${dateDebut}&endDate=${dateFin}`, {
+                headers: {
+                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                }
+            });
             const data = await response.json();
             
             if (data.success && data.data) {
@@ -13685,7 +13906,7 @@ async function calculerTotauxMargeStockSoir(stockDebut, stockFin, dateDebut, dat
                 const dateFinFormatted = dateFinObj.toISOString().split('T')[0];
                 
                 const response = await fetch(`/api/external/achats-boeuf?startDate=${dateDebutFormatted}&endDate=${dateFinFormatted}`, {
-                    headers: { 'x-api-key': 'b326e72b67a9b508c88270b9954c5ca1' }
+                    headers: { 'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1' }
                 });
                 
                 if (response.ok) {
