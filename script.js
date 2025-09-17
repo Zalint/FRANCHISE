@@ -11060,7 +11060,10 @@ async function calculerMargeStockSoirAPI(dateDebut, dateFin, pointVente = null) 
         
         console.log(`📅 Dates API: ${startDate} à ${endDate}, Point de vente: ${pointVenteParam}`);
         
-        const response = await fetch(`/api/external/stock-soir-marge?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&pointVente=${encodeURIComponent(pointVenteParam)}`, {
+        // Ajouter les paramètres des ratios éditables
+        const ratiosParams = `&ratioPerteBoeuf=${proxyMargesControls.ratioPerteBoeuf}&ratioPerteVeau=${proxyMargesControls.ratioPerteVeau}&calculAutoActif=${proxyMargesControls.calculAutoActif}`;
+        
+        const response = await fetch(`/api/external/stock-soir-marge?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&pointVente=${encodeURIComponent(pointVenteParam)}${ratiosParams}`, {
             method: 'GET',
             headers: {
                 'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
@@ -12941,8 +12944,11 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
         
         console.log(`📅 Appel API marge: ${startDate} à ${endDate}, Point: ${pointVenteParam}`);
         
+        // Ajouter les paramètres des ratios éditables
+        const ratiosParams = `&ratioPerteBoeuf=${proxyMargesControls.ratioPerteBoeuf}&ratioPerteVeau=${proxyMargesControls.ratioPerteVeau}&calculAutoActif=${proxyMargesControls.calculAutoActif}`;
+        
         // Appeler notre API de marge qui a les bonnes quantités abattues
-        const margeResponse = await fetch(`/api/external/stock-soir-marge?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&pointVente=${encodeURIComponent(pointVenteParam)}`, {
+        const margeResponse = await fetch(`/api/external/stock-soir-marge?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&pointVente=${encodeURIComponent(pointVenteParam)}${ratiosParams}`, {
             method: 'GET',
             headers: {
                 'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
@@ -13305,14 +13311,14 @@ async function genererCalculsMargeStockSoir(stockDebut, stockFin, dateDebut, dat
             // Calculer le ratio de perte (même logique que Proxy Marges)
             let ratioPerte = 0;
             if (Math.abs(quantiteAbattue) > 0) {
-                if ((produit.toLowerCase() === 'boeuf' || produit.toLowerCase() === 'veau') && 
-                    proxyMargesControls.calculAutoActif && 
-                    proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
-                    // Pour le mode dynamique, utiliser directement le ratio dynamique
-                    ratioPerte = produit.toLowerCase() === 'boeuf' ? ratioBoeufDynamique * 100 : ratioVeauDynamique * 100;
+                if (produit.toLowerCase() === 'boeuf' || produit.toLowerCase() === 'veau') {
+                    // Utiliser toujours les ratios éditables (qui sont mis à jour par les Proxy Marges)
+                    ratioPerte = produit.toLowerCase() === 'boeuf' ? 
+                        -Math.abs(proxyMargesControls.ratioPerteBoeuf) : 
+                        -Math.abs(proxyMargesControls.ratioPerteVeau);
+                    console.log(`📊 ${produit} - Ratio éditable: ${ratioPerte.toFixed(2)}% (mis à jour par Proxy Marges)`);
                 } else {
-                    // Pour le mode statique, calculer le ratio à partir des quantités
-                    // Si les deux quantités sont négatives (variation de stock), garder le signe négatif correct
+                    // Pour les autres produits, calculer le ratio à partir des quantités
                     if (quantiteVendue < 0 && quantiteAbattue < 0) {
                         ratioPerte = ((Math.abs(quantiteVendue) / Math.abs(quantiteAbattue)) - 1) * -100;
                         console.log(`📊 ${produit} - Variation de stock négative détectée - Ratio corrigé`);
@@ -13322,7 +13328,6 @@ async function genererCalculsMargeStockSoir(stockDebut, stockFin, dateDebut, dat
                         console.log(`📊 ${produit} - CALCUL NORMAL: ((${quantiteVendue} / ${quantiteAbattue}) - 1) * 100 = ${ratioPerte.toFixed(2)}%`);
                     }
                 }
-                console.log(`📊 ${produit} - Ratio de perte calculé: ${ratioPerte.toFixed(2)}%`);
             }
 
             totalCA += caProduit;
@@ -13473,6 +13478,9 @@ async function calculerMargeStockSoirViaAPI(dateDebut, dateFin, pointVente, prix
                 apiUrl += `&prixMoyenOeuf=${prixMoyensProxyMarges.prixMoyenOeuf}`;
             }
         }
+        
+        // Ajouter les paramètres des ratios éditables
+        apiUrl += `&ratioPerteBoeuf=${proxyMargesControls.ratioPerteBoeuf}&ratioPerteVeau=${proxyMargesControls.ratioPerteVeau}&calculAutoActif=${proxyMargesControls.calculAutoActif}`;
         
         console.log(`🌐 URL API avec prix moyens: ${apiUrl}`);
         

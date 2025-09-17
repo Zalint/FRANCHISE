@@ -8377,7 +8377,7 @@ async function getSalesDataForPeriod(startDate, endDate) {
 }
 
 // Helper function to calculate Stock Soir margin (server-side version of genererCalculsMargeStockSoir)
-async function calculateStockSoirMarge(stockDebut, stockFin, dateDebut, dateFin, pointVente, dynamicPrices = {}) {
+async function calculateStockSoirMarge(stockDebut, stockFin, dateDebut, dateFin, pointVente, dynamicPrices = {}, ratiosConfig = {}) {
     try {
         console.log(`🔍 Calculating Stock Soir margin for ${pointVente} from ${dateDebut} to ${dateFin}`);
         console.log(`🎯 Dynamic prices received:`, dynamicPrices);
@@ -8419,9 +8419,9 @@ async function calculateStockSoirMarge(stockDebut, stockFin, dateDebut, dateFin,
             prixAchatPoulet: 2600, // Fixed purchase price (no weighted data yet)
             prixAchatAgneau: 4000, // Fixed purchase price (no weighted data yet)
             prixAchatOeuf: 2200,   // Fixed purchase price (no weighted data yet)
-            // Ratios (use dynamic or defaults)
-            ratioBoeuf: parseFloat(dynamicPrices.ratioBoeuf) || -0.08, // -2.15%
-            ratioVeau: parseFloat(dynamicPrices.ratioVeau) || -0.08   // -10.38%
+            // Ratios (always use editable ratios - they are updated by Proxy Marges calculation)
+            ratioBoeuf: -Math.abs(ratiosConfig.ratioPerteBoeuf || 8.0) / 100,
+            ratioVeau: -Math.abs(ratiosConfig.ratioPerteVeau || 8.0) / 100
         };
         
         // Log the price source for transparency
@@ -8431,6 +8431,11 @@ async function calculateStockSoirMarge(stockDebut, stockFin, dateDebut, dateFin,
         console.log(`  Poulet: ${priceConfig.prixAchatPoulet} FCFA/unité (prix fixe)`);
         console.log(`  Agneau: ${priceConfig.prixAchatAgneau} FCFA/kg (prix fixe)`);
         console.log(`  Oeuf: ${priceConfig.prixAchatOeuf} FCFA/unité (prix fixe)`);
+        
+        console.log(`🎯 Ratios utilisés:`);
+        console.log(`  Boeuf: ${(priceConfig.ratioBoeuf * 100).toFixed(2)}% (éditable - mis à jour par Proxy Marges)`);
+        console.log(`  Veau: ${(priceConfig.ratioVeau * 100).toFixed(2)}% (éditable - mis à jour par Proxy Marges)`);
+        console.log(`  Source: Interface éditables (auto-remplies par calcul Proxy Marges)`);
         
         // Selling prices (PRIORITY: dynamic prices first, then proxy margins) - with explicit debugging
         console.log(`🔍 DEBUG - Dynamic prices received:`, dynamicPrices);
@@ -8696,10 +8701,10 @@ function calculateAchatTotals(achatsArray) {
 // API endpoint for Stock Soir margin calculation
 app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
     try {
-        const { startDate, endDate, pointVente, prixMoyenBoeuf, prixMoyenVeau, prixMoyenPoulet, prixMoyenAgneau, prixMoyenOeuf } = req.query;
+        const { startDate, endDate, pointVente, prixMoyenBoeuf, prixMoyenVeau, prixMoyenPoulet, prixMoyenAgneau, prixMoyenOeuf, ratioPerteBoeuf, ratioPerteVeau, calculAutoActif } = req.query;
         
         console.log('==== EXTERNAL API - STOCK SOIR MARGE ====');
-        console.log('Request params:', { startDate, endDate, pointVente, prixMoyenBoeuf, prixMoyenVeau, prixMoyenPoulet, prixMoyenAgneau, prixMoyenOeuf });
+        console.log('Request params:', { startDate, endDate, pointVente, prixMoyenBoeuf, prixMoyenVeau, prixMoyenPoulet, prixMoyenAgneau, prixMoyenOeuf, ratioPerteBoeuf, ratioPerteVeau, calculAutoActif });
         console.log('🔍 PRIX DEBUG - Boeuf reçu:', prixMoyenBoeuf, typeof prixMoyenBoeuf);
         console.log('🔍 PRIX DEBUG - Poulet reçu:', prixMoyenPoulet, typeof prixMoyenPoulet);
         
@@ -8801,7 +8806,12 @@ app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
             formattedStartDate,
             formattedEndDate,
             pointVenteFilter,
-            enhancedDynamicPrices
+            enhancedDynamicPrices,
+            {
+                ratioPerteBoeuf: parseFloat(ratioPerteBoeuf) || 8.0,
+                ratioPerteVeau: parseFloat(ratioPerteVeau) || 8.0,
+                calculAutoActif: calculAutoActif === 'true'
+            }
         );
         
         res.json({
