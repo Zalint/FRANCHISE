@@ -1769,11 +1769,15 @@ function canModifyStockForDate(dateStr, username) {
 function canModifyStockMatinFields(username) {
     if (!username) return false;
     
-    const userRole = username.toUpperCase();
-    const privilegedUsers = ['SALIOU', 'OUSMANE'];
+    const currentUser = window.currentUser;
+    if (!currentUser) return false;
     
-    // Seuls SALIOU et OUSMANE peuvent modifier les champs du stock matin
-    return privilegedUsers.includes(userRole);
+    // Vérifier si l'utilisateur a les permissions basées sur le rôle
+    // Superviseurs et administrateurs peuvent modifier le stock matin
+    const isSuperviseur = currentUser.role === 'superviseur' || currentUser.role === 'admin';
+    const hasPermission = currentUser.canModifyStockAnytime || isSuperviseur;
+    
+    return hasPermission;
 }
 
 // Fonction pour vérifier les permissions admin dans la section Cash Payment
@@ -11120,7 +11124,13 @@ async function calculerStockSoirVariation(dateDebut, dateFin, pointVente = null)
         } else {
             // Calculer la variation traditionnelle (Stock fin - Stock début)
             console.log(`📅 Période différente, calcul de la variation traditionnelle`);
-        const stockDebut = await calculerStockSoir(dateDebut, pointVente);
+            
+            // Utiliser dateDebut-1 pour le stock de début pour avoir la variation correcte
+            const dateDebutPrecedente = calculerDatePrecedente(dateDebut);
+            console.log(`📅 Stock Début: ${dateDebutPrecedente} (dateDebut-1 pour variation correcte)`);
+            console.log(`📅 Stock Fin: ${dateFin}`);
+            
+        const stockDebut = await calculerStockSoir(dateDebutPrecedente, pointVente);
         const stockFin = await calculerStockSoir(dateFin, pointVente);
         
         // Calculer la variation des détails par produit
@@ -11148,6 +11158,7 @@ async function calculerStockSoirVariation(dateDebut, dateFin, pointVente = null)
             type: 'variation',
             dateDebut: dateDebut,
             dateFin: dateFin,
+            dateDebutReelle: dateDebutPrecedente, // Date réellement utilisée pour le stock de début
             stockDebut: stockDebut,
             stockFin: stockFin
         };
@@ -12651,7 +12662,9 @@ async function afficherDetailStockSoirVariation(type, date1, date2 = '', pointVe
             modalTitle = `Détail du Stock Soir - ${date1}${pointVenteText}`;
             modalContent = await genererDetailStockSoir(date1, pointVente);
         } else if (type === 'variation') {
-            modalTitle = `Détail Stock Soir - Variation ${date1} → ${date2}${pointVenteText}`;
+            // Calculer la date réelle du stock de début (date1 - 1)
+            const dateDebutReelle = calculerDatePrecedente(date1);
+            modalTitle = `Détail Stock Soir - Variation ${dateDebutReelle} → ${date2}${pointVenteText}`;
             modalContent = await genererDetailStockSoirVariation(date1, date2, pointVente);
         } else {
             modalContent = '<div class="text-danger">Type de stock soir non reconnu</div>';
@@ -12964,8 +12977,13 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
         console.log(`✅ Données API récupérées: ${margeData.data.nombreProduits} produits`);
         
         // Récupérer aussi les données de stock traditionnelles pour l'affichage en haut
+        // Utiliser dateDebut-1 pour le stock de début pour avoir la variation correcte
+        const dateDebutPrecedente = calculerDatePrecedente(dateDebut);
+        console.log(`📅 Stock Début pour affichage: ${dateDebutPrecedente} (dateDebut-1)`);
+        console.log(`📅 Stock Fin pour affichage: ${dateFin}`);
+        
         const [stockDebut, stockFin] = await Promise.all([
-            fetch(`/api/external/stock/soir?date=${encodeURIComponent(dateDebut)}`, {
+            fetch(`/api/external/stock/soir?date=${encodeURIComponent(dateDebutPrecedente)}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -13014,7 +13032,7 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
                 <div class="col-md-4">
                     <div class="card border-info">
                         <div class="card-header bg-info text-white">
-                            <h6 class="mb-0">Stock Début (${dateDebut})</h6>
+                            <h6 class="mb-0">Stock Début (${dateDebutPrecedente})</h6>
                         </div>
                         <div class="card-body">
                             <div class="h5 text-info">${Object.values(filteredStockDebut).reduce((sum, item) => sum + (parseFloat(item.Montant) || 0), 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
@@ -13054,8 +13072,8 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
         html += `
             <div class="row">
                 <div class="col-md-6">
-                    <h6>Détail Stock Début (${dateDebut})</h6>
-                    ${await genererDetailStockSoir(dateDebut, pointVente)}
+                    <h6>Détail Stock Début (${dateDebutPrecedente})</h6>
+                    ${await genererDetailStockSoir(dateDebutPrecedente, pointVente)}
                 </div>
                 <div class="col-md-6">
                     <h6>Détail Stock Fin (${dateFin})</h6>

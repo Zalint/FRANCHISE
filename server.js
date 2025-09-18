@@ -8697,6 +8697,28 @@ function calculateAchatTotals(achatsArray) {
     return totals;
 }
 
+// Helper function to get previous date (for stock debut calculation)
+function getPreviousDate(dateStr) {
+    try {
+        // Convert DD/MM/YYYY to Date object
+        const [day, month, year] = dateStr.split('/');
+        const date = new Date(year, month - 1, day); // month is 0-indexed
+        
+        // Subtract 1 day
+        date.setDate(date.getDate() - 1);
+        
+        // Convert back to DD/MM/YYYY format
+        const prevDay = date.getDate().toString().padStart(2, '0');
+        const prevMonth = (date.getMonth() + 1).toString().padStart(2, '0');
+        const prevYear = date.getFullYear();
+        
+        return `${prevDay}/${prevMonth}/${prevYear}`;
+    } catch (error) {
+        console.error('Error calculating previous date:', error);
+        return dateStr; // Return original if error
+    }
+}
+
 // External API version for beef purchases
 // API endpoint for Stock Soir margin calculation
 app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
@@ -8737,10 +8759,16 @@ app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
         const formattedStartDate = formatDate(startDate);
         const formattedEndDate = formatDate(endDate);
         
-        console.log('Formatted dates:', { formattedStartDate, formattedEndDate });
+        // Calculate previous date for stock debut (startDate - 1)
+        const previousStartDate = getPreviousDate(startDate);
+        const formattedPreviousStartDate = formatDate(previousStartDate);
         
-        // Fetch stock data for both dates using internal API calls
-        const stockDebut = await getStockSoirData(formattedStartDate);
+        console.log('Formatted dates:', { formattedStartDate, formattedEndDate, formattedPreviousStartDate });
+        console.log(`📅 Stock Début: ${previousStartDate} (${formattedPreviousStartDate}) - startDate-1 pour variation correcte`);
+        console.log(`📅 Stock Fin: ${endDate} (${formattedEndDate})`);
+        
+        // Fetch stock data: use previous date for debut (startDate-1) and endDate for fin
+        const stockDebut = await getStockSoirData(formattedPreviousStartDate);
         const stockFin = await getStockSoirData(formattedEndDate);
         
         // Only require stockDebut to be successful - stockFin can be missing (future dates)
@@ -8758,7 +8786,10 @@ app.get('/api/external/stock-soir-marge', validateApiKey, async (req, res) => {
         }
         
         // Log status for debugging
-        console.log(`📊 Stock data status: Début=${stockDebut.success ? 'OK' : 'FAIL'}, Fin=${stockFin.success ? 'OK' : 'MISSING'}`);
+        console.log(`📊 Stock data status: Début=${stockDebut.success ? 'OK' : 'FAIL'} (${formattedPreviousStartDate}), Fin=${stockFin.success ? 'OK' : 'MISSING'} (${formattedEndDate})`);
+        if (!stockDebut.success) {
+            console.log(`⚠️ Stock début data missing for ${formattedPreviousStartDate} (startDate-1)`);
+        }
         if (!stockFin.success) {
             console.log(`⚠️ Stock fin data missing for ${formattedEndDate}, using empty data`);
         }
