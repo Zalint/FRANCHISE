@@ -1731,33 +1731,39 @@ function canPerformActionForDate(dateStr) {
 function canAddSaleForDate(dateStr, username) {
     if (!username || !dateStr) return false;
     
-    const userRole = username.toUpperCase();
-    const privilegedUsers = ['SALIOU', 'OUSMANE'];
-    const limitedAccessUsers = ['NADOU', 'PAPI', 'MBA', 'OSF', 'KMS', 'LNG', 'DHR', 'TBM'];
+    const currentUser = window.currentUser;
+    if (!currentUser) return false;
     
-    // Les utilisateurs privilégiés peuvent ajouter des ventes pour n'importe quelle date
-    if (privilegedUsers.includes(userRole)) {
+    // Vérifier si l'utilisateur peut contourner les restrictions temporelles
+    // Superviseurs et administrateurs peuvent ajouter des ventes pour n'importe quelle date
+    const canBypassTimeRestrictions = currentUser.bypassTimeRestrictions || 
+                                    currentUser.canAddSalesAnytime ||
+                                    currentUser.role === 'superviseur' || 
+                                    currentUser.role === 'admin';
+    
+    if (canBypassTimeRestrictions) {
         return true;
     }
     
-    // Les utilisateurs avec accès limité ne peuvent ajouter des ventes que selon les nouvelles restrictions temporelles
-    if (limitedAccessUsers.includes(userRole)) {
-        return canPerformActionForDate(dateStr);
-    }
-    
-    // Autres utilisateurs : accès normal (pas de restriction)
-    return true;
+    // Tous les autres utilisateurs sont soumis aux restrictions temporelles
+    return canPerformActionForDate(dateStr);
 }
 
 // Fonction pour vérifier si un utilisateur peut modifier le stock pour une date donnée
 function canModifyStockForDate(dateStr, username) {
     if (!username || !dateStr) return false;
     
-    const userRole = username.toUpperCase();
-    const privilegedUsers = ['SALIOU', 'OUSMANE'];
+    const currentUser = window.currentUser;
+    if (!currentUser) return false;
     
-    // Les utilisateurs privilégiés peuvent modifier le stock pour n'importe quelle date
-    if (privilegedUsers.includes(userRole)) {
+    // Vérifier si l'utilisateur peut contourner les restrictions temporelles
+    // Superviseurs et administrateurs peuvent modifier le stock pour n'importe quelle date
+    const canBypassTimeRestrictions = currentUser.bypassTimeRestrictions || 
+                                    currentUser.canModifyStockAnytime ||
+                                    currentUser.role === 'superviseur' || 
+                                    currentUser.role === 'admin';
+    
+    if (canBypassTimeRestrictions) {
         return true;
     }
     

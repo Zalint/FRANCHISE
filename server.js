@@ -1549,11 +1549,15 @@ app.get('/api/stock/:type', checkAuth, checkReadAccess, async (req, res) => {
 function checkStockTimeRestrictions(dateStr, username) {
     if (!username || !dateStr) return { allowed: false, message: 'Données manquantes' };
     
+    // Vérifier les permissions basées sur le rôle via la session utilisateur
+    // Note: Cette fonction devrait idéalement recevoir l'objet user complet
+    // Pour l'instant, on accepte les superviseurs et administrateurs
     const userRole = username.toUpperCase();
-    const privilegedUsers = ['SALIOU', 'OUSMANE'];
+    const privilegedUsers = ['SALIOU', 'OUSMANE']; // Gardés pour rétrocompatibilité
+    const supervisorUsers = ['NADOU']; // Ajout des superviseurs
     
-    // Les utilisateurs privilégiés peuvent modifier le stock pour n'importe quelle date
-    if (privilegedUsers.includes(userRole)) {
+    // Les utilisateurs privilégiés et superviseurs peuvent modifier le stock pour n'importe quelle date
+    if (privilegedUsers.includes(userRole) || supervisorUsers.includes(userRole)) {
         return { allowed: true };
     }
     
@@ -1647,11 +1651,12 @@ function checkSaleTimeRestrictions(dateStr, username) {
     if (!username || !dateStr) return { allowed: false, message: 'Données manquantes' };
     
     const userRole = username.toUpperCase();
-    const privilegedUsers = ['SALIOU', 'OUSMANE'];
-    const limitedAccessUsers = ['NADOU', 'PAPI', 'MBA', 'OSF', 'KMS', 'LNG', 'DHR', 'TBM'];
+    const privilegedUsers = ['SALIOU', 'OUSMANE']; // Gardés pour rétrocompatibilité
+    const supervisorUsers = ['NADOU']; // Ajout des superviseurs
+    const limitedAccessUsers = ['PAPI', 'MBA', 'OSF', 'KMS', 'LNG', 'DHR', 'TBM'];
     
-    // Les utilisateurs privilégiés peuvent ajouter des ventes pour n'importe quelle date
-    if (privilegedUsers.includes(userRole)) {
+    // Les utilisateurs privilégiés et superviseurs peuvent ajouter des ventes pour n'importe quelle date
+    if (privilegedUsers.includes(userRole) || supervisorUsers.includes(userRole)) {
         return { allowed: true };
     }
     
