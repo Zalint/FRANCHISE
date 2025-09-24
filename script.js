@@ -11085,17 +11085,22 @@ async function calculerMargeStockSoirAPI(dateDebut, dateFin, pointVente = null) 
             throw new Error(`Erreur API: ${response.status} ${response.statusText}`);
         }
         
-        const data = await response.json();
-        console.log(`✅ Marge API récupérée: ${data.data.marge.toLocaleString()} FCFA`);
-        console.log(`📊 Détails API: CA=${data.data.totalCA.toLocaleString()}, Coût=${data.data.totalCout.toLocaleString()}`);
+        const json = await response.json();
+        // Support both old {data: {...}} and new {stockSoirMarge: {...}} shapes
+        const node = json?.stockSoirMarge || json?.data;
+        if (!node) {
+            throw new Error('Structure de réponse inattendue (stockSoirMarge/data manquant)');
+        }
+        console.log(`✅ Marge API récupérée: ${Number(node.marge).toLocaleString()} FCFA`);
+        console.log(`📊 Détails API: CA=${Number(node.totalCA).toLocaleString()}, Coût=${Number(node.totalCout).toLocaleString()}`);
         
         return {
-            montantTotal: data.data.marge,
-            margeAPI: data.data.marge,
-            totalCA: data.data.totalCA,
-            totalCout: data.data.totalCout,
-            detailsAPI: data.data.detailParProduit,
-            nombreProduits: data.data.nombreProduits,
+            montantTotal: Number(node.marge) || 0,
+            margeAPI: Number(node.marge) || 0,
+            totalCA: Number(node.totalCA) || 0,
+            totalCout: Number(node.totalCout) || 0,
+            detailsAPI: node.detailParProduit || [],
+            nombreProduits: node.nombreProduits || 0,
             type: 'marge_api',
             sourceAPI: true
         };
@@ -12034,6 +12039,21 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                 dateFin: stockSoir.dateFin,
                 pointVente: proxyMargesControls.pointVenteActuel
             };
+            // ⚡ Calculer IMMÉDIATEMENT les totaux via l'API pour éviter le fallback à 512 360 FCFA
+            try {
+                console.log(`🚀 CALCUL IMMÉDIAT: Appel de l'API Stock Soir Marge (pré-boucle)...`);
+                totauxStockSoir = await calculerMargeStockSoirViaAPI(
+                    totauxStockSoirPromise.dateDebut,
+                    totauxStockSoirPromise.dateFin,
+                    totauxStockSoirPromise.pointVente,
+                    prixMoyensProxyMarges
+                );
+                if (totauxStockSoir) {
+                    console.log(`✅ CALCUL API (pré-boucle): ${totauxStockSoir.marge.toFixed(0)} FCFA`);
+                }
+            } catch (e) {
+                console.warn('⚠️ API Stock Soir Marge (pré-boucle) indisponible, on tentera plus tard:', e.message);
+            }
         } else {
             console.log(`⚠️ Type de Stock Soir non géré pour calcul détaillé: ${stockSoir.type}`);
         }
@@ -12326,29 +12346,29 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                     }
                     break;
                 case 'Stock Soir':
-                    // 🚀 UTILISER DIRECTEMENT LES TOTAUX PRÉ-CALCULÉS
+                    // 🚀 UTILISER DIRECTEMENT LES TOTAUX PRÉ-CALCULÉS DE L'API
                     console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
                     console.log(`🎯 Point de vente sélectionné: ${proxyMargesControls.pointVenteActuel}`);
                     console.log(`🔍 DEBUG: totauxStockSoir disponible: ${!!totauxStockSoir}`);
                     console.log(`🔍 DEBUG: stockSoir.montantTotal: ${stockSoir.montantTotal}`);
                     
-                    // 🎯 UTILISER LA MARGE UNIQUE CALCULÉE UNE SEULE FOIS !
+                    // 🎯 UTILISER LES VALEURS DÉJÀ ARRONDIES DE L'API
                     if (totauxStockSoir) {
-                        // Utiliser directement les totaux calculés par calculerTotauxMargeStockSoir
-                        chiffreAffaires = totauxStockSoir.totalCA;
-                        coutAchat = totauxStockSoir.totalCout;
+                        // API returns already rounded values (Math.round applied server-side)
+                        chiffreAffaires = totauxStockSoir.totalCA;  // Already rounded by API
+                        coutAchat = totauxStockSoir.totalCout;      // Already rounded by API
                         
-                        console.log(`📊 TOTAUX FINAUX STOCK SOIR (utilisation directe du calcul unique):`);
-                        console.log(`   - CA calculé: ${chiffreAffaires.toFixed(0)} FCFA`);
-                        console.log(`   - Coût calculé: ${coutAchat.toFixed(0)} FCFA`);
-                        console.log(`   - Marge calculée: ${(chiffreAffaires - coutAchat).toFixed(0)} FCFA`);
-                        console.log(`🎯 DEBUG: Utilisation du calcul unique (${totauxStockSoir.marge.toFixed(0)} FCFA)`);
+                        console.log(`📊 TOTAUX FINAUX STOCK SOIR (API pré-arrondis):`);
+                        console.log(`   - CA API (pré-arrondi): ${chiffreAffaires} FCFA`);
+                        console.log(`   - Coût API (pré-arrondi): ${coutAchat} FCFA`);
+                        console.log(`   - Marge API (pré-arrondie): ${totauxStockSoir.marge} FCFA`);
+                        console.log(`🎯 DEBUG: Utilisation directe des valeurs API arrondies`);
                     } else {
-                        // Fallback simple si calcul unique a échoué
-                        chiffreAffaires = stockSoir.montantTotal;
+                        // Fallback explicite à 0 si les totaux API ne sont pas disponibles
+                        chiffreAffaires = 0;
                         coutAchat = 0;
-                        console.log(`⚠️ Fallback: Marge = CA = ${chiffreAffaires.toFixed(0)} FCFA`);
-                        console.log(`🔍 DEBUG: Utilisation du fallback pour Stock Soir`);
+                        console.log(`⚠️ Fallback: Marge indisponible → 0 FCFA (aucun total API)`);
+                        console.log(`🔍 DEBUG: Utilisation du fallback zéro pour Stock Soir`);
                     }
                     
                     // Afficher les détails selon le type de calcul
@@ -12373,16 +12393,31 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                     break;
             }
             
-            proxyMarges[categorie] = {
-                chiffreAffaires: chiffreAffaires,
-                coutAchat: coutAchat,
-                proxyMarge: chiffreAffaires - coutAchat,
-                prixAchat: categorie === 'Boeuf' ? prixAchatBoeuf : 
-                          categorie === 'Veau' ? prixAchatVeau :
-                          categorie === 'Poulet' ? prixAchatPoulet : 
-                          categorie === 'Agneau' ? prixAchatAgneau :
-                          categorie === 'Oeuf' ? prixAchatOeuf : 0
-            };
+            // Calculate final margin with API-style precision
+            const finalMarge = chiffreAffaires - coutAchat;
+            
+            // For Stock Soir, use API's already-rounded values; for others, apply API-style rounding
+            if (categorie === 'Stock Soir' && totauxStockSoir) {
+                // Stock Soir: Use API's exact rounded values (no additional rounding)
+                proxyMarges[categorie] = {
+                    chiffreAffaires: totauxStockSoir.totalCA,    // API's rounded value
+                    coutAchat: totauxStockSoir.totalCout,        // API's rounded value
+                    proxyMarge: totauxStockSoir.marge,           // API's rounded value
+                    prixAchat: 0  // N/A for Stock Soir
+                };
+            } else {
+                // Other categories: Apply API-style rounding (round final result only)
+                proxyMarges[categorie] = {
+                    chiffreAffaires: Math.round(chiffreAffaires),  // API-style: round final CA
+                    coutAchat: Math.round(coutAchat),              // API-style: round final cost
+                    proxyMarge: Math.round(finalMarge),            // API-style: round final margin
+                    prixAchat: categorie === 'Boeuf' ? prixAchatBoeuf : 
+                              categorie === 'Veau' ? prixAchatVeau :
+                              categorie === 'Poulet' ? prixAchatPoulet : 
+                              categorie === 'Agneau' ? prixAchatAgneau :
+                              categorie === 'Oeuf' ? prixAchatOeuf : 0
+                };
+            }
         });
 
         // Calculer le total des proxy marges
@@ -12404,6 +12439,10 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
             
             // Récupérer la quantité depuis les analytics filtrées
             const quantiteVendue = analyticsRegroupeesFiltrees[categorie] ? analyticsRegroupeesFiltrees[categorie].quantiteTotal : 0;
+            // Afficher le prix moyen issu des analytics; pour Agneau, forcer exact prix utilisé par l'API si disponible
+            const prixMoyenAffiche = (categorie === 'Agneau' && prixMoyensProxyMarges?.prixMoyenAgneau)
+                ? prixMoyensProxyMarges.prixMoyenAgneau
+                : (analyticsRegroupeesFiltrees[categorie]?.prixMoyen ?? 0);
             
             // Calculer la quantité abattue selon le mode (dynamique ou statique)
             let quantiteAbattue = quantiteVendue;
@@ -12483,7 +12522,7 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                                  <button class="btn btn-sm btn-outline-info mt-1" id="btn-detail-stock-soir" onclick="afficherDetailStockSoirAvecSpinner('${stockSoir.type}', '${stockSoir.dateUtilisee || stockSoir.dateDebut}', '${stockSoir.dateFin || ''}', '${proxyMargesControls.pointVenteActuel}')" title="Voir le détail pour ${proxyMargesControls.pointVenteActuel}">
                                      <i class="fas fa-info-circle"></i> Détail
                                  </button>` :
-                                `<small class="text-muted d-block">Prix vente: ${analyticsRegroupeesFiltrees[categorie].prixMoyen.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>
+                                `<small class="text-muted d-block">Prix vente: ${(+prixMoyenAffiche).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>
                                  ${marge.prixAchat > 0 ? `<small class="text-muted d-block">Prix achat: ${marge.prixAchat.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>` : '<small class="text-info d-block">Pas de coût d\'achat</small>'}
                                  <small class="text-muted d-block">Qté vendue: ${quantiteVendue.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>
                                  ${categorie !== 'Packs' && categorie !== 'Divers' && categorie !== 'Autre' && categorie !== 'Stock Soir' && categorie !== 'Poulet' && categorie !== 'Oeuf' ? `<small class="text-muted d-block">Qté abattue: ${quantiteAbattue.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} kg</small>` : ''}
@@ -12564,34 +12603,7 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                     console.log(`   - Agneau: ${prixMoyensProxyMarges.prixMoyenAgneau ? prixMoyensProxyMarges.prixMoyenAgneau.toFixed(0) + ' FCFA/kg' : 'N/A'}`);
                     console.log(`   - Oeuf/Tablette: ${prixMoyensProxyMarges.prixMoyenOeuf ? prixMoyensProxyMarges.prixMoyenOeuf.toFixed(0) + ' FCFA/kg' : 'N/A'}`);
 
-                    // 🚀 MAINTENANT calculer la marge Stock Soir avec les prix moyens disponibles
-                    if (totauxStockSoirPromise) {
-                        console.log(`🚀 CALCUL UNIQUE: Appel de l'API Stock Soir Marge...`);
-                        
-        // NOUVEAU: Utiliser l'API externe en passant les prix moyens calculés
-        totauxStockSoir = await calculerMargeStockSoirViaAPI(
-            totauxStockSoirPromise.dateDebut,
-            totauxStockSoirPromise.dateFin,
-            totauxStockSoirPromise.pointVente,
-            prixMoyensProxyMarges // Passer les prix moyens déjà calculés
-        );
-                        
-                        if (totauxStockSoir) {
-                            console.log(`✅ CALCUL API TERMINÉ: ${totauxStockSoir.marge.toFixed(0)} FCFA`);
-                        } else {
-                            console.log(`❌ ÉCHEC de l'API - fallback sur le calcul direct`);
-                            // Fallback to the existing calculation if API fails
-                            totauxStockSoir = await calculerMargeStockSoirTotaux(
-                                totauxStockSoirPromise.stockDebut,
-                                totauxStockSoirPromise.stockFin,
-                                totauxStockSoirPromise.dateDebut,
-                                totauxStockSoirPromise.dateFin,
-                                totauxStockSoirPromise.pointVente
-                            );
-                        }
-                        console.log(`   - CA: ${totauxStockSoir.totalCA.toFixed(0)} FCFA`);
-                        console.log(`   - Coût: ${totauxStockSoir.totalCout.toFixed(0)} FCFA`);
-                    }
+                    // Le calcul de la marge Stock Soir via l'API sera exécuté plus bas
                 } else {
                     console.log(`⚠️ Pas de données Boeuf/Veau ou pas de quantités abattues pour calculer les ratios`);
                 }
@@ -12600,6 +12612,8 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                 console.warn('Erreur lors du calcul des ratios globaux en mode statique:', error);
             }
         }
+
+        // API already called pre-boucle to avoid fallback; reuse totauxStockSoir
 
     } catch (error) {
         console.error('Erreur lors du calcul des proxy marges:', error);
@@ -12947,10 +12961,112 @@ function genererCalculsMargeStockSoirAPI(margeData) {
     return html;
 }
 
+// Fonction pour générer les détails de stock à partir des données API
+function genererDetailStockFromAPI(margeData, dateDebut, dateFin) {
+    const { detailParProduit } = margeData;
+    
+    // Séparer les produits en Stock Début et Stock Fin basé sur les quantités
+    const stockDebutProduits = [];
+    const stockFinProduits = [];
+    
+    detailParProduit.forEach(produit => {
+        if (produit.quantiteVendue < 0) {
+            // Quantité négative = diminution de stock = était en stock au début
+            stockDebutProduits.push({
+                produit: produit.produit,
+                quantite: Math.abs(produit.quantiteVendue),
+                prixUnitaire: produit.prixVenteProduit,
+                total: Math.abs(produit.quantiteVendue) * produit.prixVenteProduit,
+                pointVente: produit.pointVente
+            });
+        } else if (produit.quantiteVendue > 0) {
+            // Quantité positive = augmentation de stock = ajouté en fin
+            stockFinProduits.push({
+                produit: produit.produit,
+                quantite: produit.quantiteVendue,
+                prixUnitaire: produit.prixVenteProduit,
+                total: produit.quantiteVendue * produit.prixVenteProduit,
+                pointVente: produit.pointVente
+            });
+        }
+    });
+    
+    // Générer le HTML pour Stock Début
+    const genererTableauStock = (produits, titre) => {
+        if (produits.length === 0) {
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">${titre}</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Aucun produit</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        const totalGeneral = produits.reduce((sum, p) => sum + p.total, 0);
+        
+        let html = `
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">${titre}</h6>
+                    <span class="badge bg-primary">${totalGeneral.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Produit</th>
+                                    <th>Quantité</th>
+                                    <th>Prix Unitaire</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+        `;
+        
+        produits.forEach(produit => {
+            html += `
+                <tr>
+                    <td><strong>${produit.produit}</strong></td>
+                    <td>${produit.quantite.toFixed(2)} kg</td>
+                    <td>${produit.prixUnitaire.toLocaleString()} FCFA/kg</td>
+                    <td>${produit.total.toLocaleString()} FCFA</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                            </tbody>
+                        </table>
+                    </div>
+                    <small class="text-muted">${produits.length} items avec stock</small>
+                </div>
+            </div>
+        `;
+        
+        return html;
+    };
+    
+    return `
+        <div class="row mt-4">
+            <div class="col-md-6">
+                ${genererTableauStock(stockDebutProduits, `Détail Stock Début (${dateDebut})`)}
+            </div>
+            <div class="col-md-6">
+                ${genererTableauStock(stockFinProduits, `Détail Stock Fin (${dateFin})`)}
+            </div>
+        </div>
+    `;
+}
+
 // Fonction pour générer le détail de variation entre deux dates
 async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = null) {
     try {
-        console.log(`🔍 🚀 NOUVEAU: Génération détail via API de marge pour ${pointVente || 'tous les points de vente'}`);
+        console.log(`🔍 🚀 SINGLE SOURCE OF TRUTH: Génération détail via API UNIQUEMENT pour ${pointVente || 'tous les points de vente'}`);
         
         // Convertir les dates au format DD/MM/YYYY pour l'API
         const formatForAPI = (dateStr) => {
@@ -12980,58 +13096,37 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
         }
         
         const margeData = await margeResponse.json();
-        console.log(`✅ Données API récupérées: ${margeData.data.nombreProduits} produits`);
+        console.log(`✅ Données API récupérées: ${margeData.stockSoirMarge.nombreProduits} produits`);
+        console.log(`🎯 API Response:`, margeData);
         
-        // Récupérer aussi les données de stock traditionnelles pour l'affichage en haut
-        // Utiliser dateDebut-1 pour le stock de début pour avoir la variation correcte
+        // 🚀 NOUVEAU: Utiliser UNIQUEMENT les données de l'API pour tout l'affichage
+        // Calculer les totaux à partir des données API
         const dateDebutPrecedente = calculerDatePrecedente(dateDebut);
-        console.log(`📅 Stock Début pour affichage: ${dateDebutPrecedente} (dateDebut-1)`);
-        console.log(`📅 Stock Fin pour affichage: ${dateFin}`);
         
-        const [stockDebut, stockFin] = await Promise.all([
-            fetch(`/api/external/stock/soir?date=${encodeURIComponent(dateDebutPrecedente)}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
-                }
-            }).then(res => res.ok ? res.json() : {}),
-            
-            fetch(`/api/external/stock/soir?date=${encodeURIComponent(dateFin)}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
-                }
-            }).then(res => res.ok ? res.json() : {})
-        ]);
-
-        // Filtrer par point de vente si spécifié
-        let filteredStockDebut = stockDebut;
-        let filteredStockFin = stockFin;
+        // Calculer Stock Début et Stock Fin à partir des données API
+        let stockDebutTotal = 0;
+        let stockFinTotal = 0;
+        let stockDebutItems = 0;
+        let stockFinItems = 0;
         
-        if (pointVente && pointVente !== 'Sélectionner un point de vente') {
-            console.log(`🔍 Filtrage des données pour ${pointVente}`);
-            
-            filteredStockDebut = {};
-            filteredStockFin = {};
-            
-            Object.entries(stockDebut).forEach(([key, item]) => {
-                const pointVenteFromKey = key.split('-')[0];
-                if (pointVenteFromKey === pointVente) {
-                    filteredStockDebut[key] = item;
-                }
-            });
-            
-            Object.entries(stockFin).forEach(([key, item]) => {
-                const pointVenteFromKey = key.split('-')[0];
-                if (pointVenteFromKey === pointVente) {
-                    filteredStockFin[key] = item;
-                }
-            });
-            
-            console.log(`✅ Données filtrées: Début=${Object.keys(filteredStockDebut).length}, Fin=${Object.keys(filteredStockFin).length}`);
-        }
+        // Utiliser les détails par produit de l'API pour reconstituer les stocks
+        margeData.stockSoirMarge.detailParProduit.forEach(produit => {
+            // Stock Début = produits avec quantité négative (diminution de stock)
+            // Stock Fin = produits avec quantité positive (augmentation de stock)
+            if (produit.quantiteVendue < 0) {
+                // Quantité négative = diminution de stock = était en stock au début
+                const stockDebutProduit = Math.abs(produit.quantiteVendue) * produit.prixVenteProduit;
+                stockDebutTotal += stockDebutProduit;
+                stockDebutItems++;
+            } else if (produit.quantiteVendue > 0) {
+                // Quantité positive = augmentation de stock = ajouté en fin
+                const stockFinProduit = produit.quantiteVendue * produit.prixVenteProduit;
+                stockFinTotal += stockFinProduit;
+                stockFinItems++;
+            }
+        });
+        
+        const variationTotal = stockFinTotal - stockDebutTotal;
 
         let html = `
             <div class="row mb-3">
@@ -13041,8 +13136,8 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
                             <h6 class="mb-0">Stock Début (${dateDebutPrecedente})</h6>
                         </div>
                         <div class="card-body">
-                            <div class="h5 text-info">${Object.values(filteredStockDebut).reduce((sum, item) => sum + (parseFloat(item.Montant) || 0), 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
-                            <small class="text-muted">${Object.keys(filteredStockDebut).length} items</small>
+                            <div class="h5 text-info">${stockDebutTotal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
+                            <small class="text-muted">${stockDebutItems} items</small>
                         </div>
                     </div>
                 </div>
@@ -13052,8 +13147,8 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
                             <h6 class="mb-0">Stock Fin (${dateFin})</h6>
                         </div>
                         <div class="card-body">
-                            <div class="h5 text-success">${Object.values(filteredStockFin).reduce((sum, item) => sum + (parseFloat(item.Montant) || 0), 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
-                            <small class="text-muted">${Object.keys(filteredStockFin).length} items</small>
+                            <div class="h5 text-success">${stockFinTotal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
+                            <small class="text-muted">${stockFinItems} items</small>
                         </div>
                     </div>
                 </div>
@@ -13063,7 +13158,7 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
                             <h6 class="mb-0">Variation</h6>
                         </div>
                         <div class="card-body">
-                            <div class="h5 text-warning">${(Object.values(filteredStockFin).reduce((sum, item) => sum + (parseFloat(item.Montant) || 0), 0) - Object.values(filteredStockDebut).reduce((sum, item) => sum + (parseFloat(item.Montant) || 0), 0)).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
+                            <div class="h5 text-warning">${variationTotal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA</div>
                             <small class="text-muted">Différence</small>
                         </div>
                     </div>
@@ -13071,22 +13166,11 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
             </div>
         `;
 
-        // 🚀 NOUVEAU: Ajouter les calculs de marge de l'API (avec bonnes quantités abattues)
-        html += genererCalculsMargeStockSoirAPI(margeData.data);
+        // 🚀 PRINCIPAL: Ajouter les calculs de marge de l'API (SINGLE SOURCE OF TRUTH)
+        html += genererCalculsMargeStockSoirAPI(margeData.stockSoirMarge);
         
-        // Ajouter les détails des deux dates
-        html += `
-            <div class="row">
-                <div class="col-md-6">
-                    <h6>Détail Stock Début (${dateDebutPrecedente})</h6>
-                    ${await genererDetailStockSoir(dateDebutPrecedente, pointVente)}
-                </div>
-                <div class="col-md-6">
-                    <h6>Détail Stock Fin (${dateFin})</h6>
-                    ${await genererDetailStockSoir(dateFin, pointVente)}
-                </div>
-            </div>
-        `;
+        // 🚀 NOUVEAU: Ajouter les détails des stocks basés sur l'API
+        html += genererDetailStockFromAPI(margeData.stockSoirMarge, dateDebutPrecedente, dateFin);
 
         return html;
 
@@ -13523,16 +13607,16 @@ async function calculerMargeStockSoirViaAPI(dateDebut, dateFin, pointVente, prix
         
         const result = await response.json();
         
-        if (result.success) {
-            console.log(`✅ API Success:`, result.data);
+        if (result.success && result.stockSoirMarge) {
+            console.log(`✅ API Success:`, result.stockSoirMarge);
             return {
-                totalCA: result.data.totalCA,
-                totalCout: result.data.totalCout,
-                marge: result.data.marge,
-                detailParProduit: result.data.detailParProduit
+                totalCA: result.stockSoirMarge.totalCA,
+                totalCout: result.stockSoirMarge.totalCout,
+                marge: result.stockSoirMarge.marge,
+                detailParProduit: result.stockSoirMarge.detailParProduit
             };
         } else {
-            console.error(`❌ API Error:`, result.message);
+            console.error(`❌ API Error:`, result.message || 'Structure stockSoirMarge manquante');
             return null;
         }
         
