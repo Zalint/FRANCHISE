@@ -8592,7 +8592,10 @@ async function fetchWeightedPurchasePrices(startDate, endDate) {
         const formattedEndDate = convertDateFormat(endDate);
         
         // Call achats-boeuf API
-        const achatsUrl = `http://localhost:3000/api/external/achats-boeuf?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
+        const baseUrl = process.env.NODE_ENV === 'production' 
+            ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+            : 'http://localhost:3000';
+        const achatsUrl = `${baseUrl}/api/external/achats-boeuf?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
         console.log(`🔍 Calling achats-boeuf API: ${achatsUrl}`);
         
         const achatsResponse = await fetch(achatsUrl, {
@@ -8770,7 +8773,10 @@ async function fetchSellingPricesFromVentes(startDate, endDate, pointVente) {
         
         // Call the existing ventes API (same as analytics container)
         const fetch = require('node-fetch');
-        const response = await fetch(`http://localhost:3000/api/external/ventes?dateDebut=${dateDebutAPI}&dateFin=${dateFinAPI}&pointVente=${encodeURIComponent(pointVenteAPI)}`, {
+        const baseUrl = process.env.NODE_ENV === 'production' 
+            ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+            : 'http://localhost:3000';
+        const response = await fetch(`${baseUrl}/api/external/ventes?dateDebut=${dateDebutAPI}&dateFin=${dateFinAPI}&pointVente=${encodeURIComponent(pointVenteAPI)}`, {
             method: 'GET',
             headers: {
                 'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
@@ -9609,7 +9615,10 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             // STEP 1: Get reconciliation data to calculate ratios (Mode SPÉCIFIQUE)
             console.log(`🔍 Getting reconciliation data for ratios calculation...`);
             
-            const reconciliationUrl = `http://localhost:3000/api/external/reconciliation/aggregated?startDate=${startDate}&endDate=${endDate}&pointVente=${encodeURIComponent(pointVente)}`;
+            const baseUrl = process.env.NODE_ENV === 'production' 
+                ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+                : 'http://localhost:3000';
+            const reconciliationUrl = `${baseUrl}/api/external/reconciliation/aggregated?startDate=${startDate}&endDate=${endDate}&pointVente=${encodeURIComponent(pointVente)}`;
             console.log(`🔍 Calling reconciliation API: ${reconciliationUrl}`);
             
             const reconciliationResponse = await fetch(reconciliationUrl, {
@@ -9679,7 +9688,10 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 let veauPrice = 3500;  // Default fallback
                 
                 try {
-                    const achatsUrl = `http://localhost:3000/api/external/achats-boeuf?startDate=${startDate}&endDate=${endDate}`;
+                    const baseUrlAchats = process.env.NODE_ENV === 'production' 
+                        ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+                        : 'http://localhost:3000';
+                    const achatsUrl = `${baseUrlAchats}/api/external/achats-boeuf?startDate=${startDate}&endDate=${endDate}`;
                     const achatsResponse = await fetch(achatsUrl, {
                         method: 'GET',
                         headers: {
@@ -9700,7 +9712,10 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                     console.log(`⚠️ Could not fetch prices from achats-boeuf, using defaults: Boeuf=${boeufPrice}, Veau=${veauPrice}`);
                 }
                 
-                const stockSoirUrl = `http://localhost:3000/api/external/stock-soir-marge?startDate=${adjustedStartDate}&endDate=${endDate}&pointVente=${encodeURIComponent(pointVente)}&prixMoyenBoeuf=${boeufPrice}&prixMoyenVeau=${veauPrice}`;
+                const baseUrlStock = process.env.NODE_ENV === 'production' 
+                    ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+                    : 'http://localhost:3000';
+                const stockSoirUrl = `${baseUrlStock}/api/external/stock-soir-marge?startDate=${adjustedStartDate}&endDate=${endDate}&pointVente=${encodeURIComponent(pointVente)}&prixMoyenBoeuf=${boeufPrice}&prixMoyenVeau=${veauPrice}`;
                 console.log(`🔍 Calling stock-soir-marge API with adjusted start date and correct prices: ${stockSoirUrl}`);
                 console.log(`🔍 Original startDate: ${startDate}, Adjusted startDate: ${adjustedStartDate}`);
                 
@@ -9762,7 +9777,10 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             };
             
             try {
-                const achatsUrl = `http://localhost:3000/api/external/achats-boeuf?startDate=${startDate}&endDate=${endDate}`;
+                const baseUrl = process.env.NODE_ENV === 'production' 
+                    ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+                    : 'http://localhost:3000';
+                const achatsUrl = `${baseUrl}/api/external/achats-boeuf?startDate=${startDate}&endDate=${endDate}`;
                 console.log(`🔍 Calling achats-boeuf API: ${achatsUrl}`);
                 
                 const achatsResponse = await fetch(achatsUrl, {
