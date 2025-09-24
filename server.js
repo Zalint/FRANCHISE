@@ -9891,22 +9891,49 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             
                 // Format the result according to the exact logic from the screenshot (Mode SPÉCIFIQUE)
                 // Using ratios to calculate quantities abattues and prices
+                const agneauData = formatProductFromSalesWithRatios(salesResult.rows, 'agneau', ratios.agneau || 0, null, purchasePrices);
+                const boeufData = formatProductFromSalesWithRatios(salesResult.rows, 'boeuf', ratios.boeuf || 0, null, purchasePrices);
+                const veauData = formatProductFromSalesWithRatios(salesResult.rows, 'veau', ratios.veau || 0, null, purchasePrices);
+                const pouletData = formatProductFromSalesWithRatios(salesResult.rows, 'poulet', 0, null, purchasePrices); // No ratio for poulet
+                const oeufData = formatProductFromSalesWithRatios(salesResult.rows, 'oeuf', 0, null, purchasePrices);     // No ratio for oeuf
+                const packsData = formatProductFromSalesWithRatios(salesResult.rows, 'pack', 0, 'packs', purchasePrices);
+                const diversData = formatProductFromSalesWithRatios(salesResult.rows, 'divers', 0, 'divers', purchasePrices);
+                const autreData = formatProductFromSalesWithRatios(salesResult.rows, 'autre', 0, 'autre', purchasePrices);
+                
+                // Calculate correct totals by summing all categories including stockSoir
+                const totalChiffreAffaires = agneauData.chiffreAffaires + boeufData.chiffreAffaires + veauData.chiffreAffaires + 
+                                          pouletData.chiffreAffaires + oeufData.chiffreAffaires + packsData.chiffreAffaires + 
+                                          diversData.chiffreAffaires + autreData.chiffreAffaires + stockSoirData.chiffreAffaires;
+                
+                const totalCout = agneauData.cout + boeufData.cout + veauData.cout + 
+                                pouletData.cout + oeufData.cout + packsData.cout + 
+                                diversData.cout + autreData.cout + stockSoirData.cout;
+                
+                const totalMarge = agneauData.marge + boeufData.marge + veauData.marge + 
+                                 pouletData.marge + oeufData.marge + packsData.marge + 
+                                 diversData.marge + autreData.marge + stockSoirData.marge;
+                
+                console.log(`🔍 TOTALS CALCULATION for ${pointVente}:`);
+                console.log(`   - Total CA: ${totalChiffreAffaires} (sum of all categories)`);
+                console.log(`   - Total Coût: ${totalCout} (sum of all categories)`);
+                console.log(`   - Total Marge: ${totalMarge} (sum of all categories)`);
+                
                 const formattedResult = {
-                    agneau: formatProductFromSalesWithRatios(salesResult.rows, 'agneau', ratios.agneau || 0, null, purchasePrices),
-                    boeuf: formatProductFromSalesWithRatios(salesResult.rows, 'boeuf', ratios.boeuf || 0, null, purchasePrices),
-                    veau: formatProductFromSalesWithRatios(salesResult.rows, 'veau', ratios.veau || 0, null, purchasePrices),
-                    poulet: formatProductFromSalesWithRatios(salesResult.rows, 'poulet', 0, null, purchasePrices), // No ratio for poulet
-                    oeuf: formatProductFromSalesWithRatios(salesResult.rows, 'oeuf', 0, null, purchasePrices),     // No ratio for oeuf
-                    packs: formatProductFromSalesWithRatios(salesResult.rows, 'pack', 0, 'packs', purchasePrices),
-                    divers: formatProductFromSalesWithRatios(salesResult.rows, 'divers', 0, 'divers', purchasePrices),
-                    autre: formatProductFromSalesWithRatios(salesResult.rows, 'autre', 0, 'autre', purchasePrices),
-                stockSoir: stockSoirData,
-                totaux: {
-                    totalChiffreAffaires: totalCA,
-                    totalCout: Math.round(totalCA * 0.7), // Estimate 70% cost
-                    totalMarge: Math.round(totalCA * 0.3)  // Estimate 30% margin
-                }
-            };
+                    agneau: agneauData,
+                    boeuf: boeufData,
+                    veau: veauData,
+                    poulet: pouletData,
+                    oeuf: oeufData,
+                    packs: packsData,
+                    divers: diversData,
+                    autre: autreData,
+                    stockSoir: stockSoirData,
+                    totaux: {
+                        totalChiffreAffaires: totalChiffreAffaires,
+                        totalCout: totalCout,
+                        totalMarge: totalMarge
+                    }
+                };
             
             console.log(`✅ Successfully formatted result for ${pointVente}: CA=${totalCA}`);
             return formattedResult;
