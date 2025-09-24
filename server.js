@@ -9601,15 +9601,9 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             
             console.log(`🔍 Date conversion: ${startDate} -> ${startDDMMYYYY}, ${endDate} -> ${endDDMMYYYY}`);
         
-        // Query sales data directly from the database instead of using stock-soir-marge API
-        const { Pool } = require('pg');
-        const pool = new Pool({
-            host: process.env.DB_HOST || 'localhost',
-            port: process.env.DB_PORT || 5432,
-            user: process.env.DB_USER || 'postgres',
-            password: process.env.DB_PASSWORD || 'password',
-            database: process.env.DB_NAME || 'matix_db'
-        });
+        // Query sales data directly from the database using the same connection as other endpoints
+        const { sequelize } = require('./db');
+        const { QueryTypes } = require('sequelize');
         
         try {
             // STEP 1: Get reconciliation data to calculate ratios (Mode SPÉCIFIQUE)
@@ -9813,6 +9807,9 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             // STEP 4: Get sales data for prices and quantities (filtered by exact dates using TO_DATE)
             console.log(`🔍 Getting sales data for ${pointVente} from ${startDDMMYYYY} to ${endDDMMYYYY} using TO_DATE`);
             
+            const startYYYYMMDD = startDDMMYYYY.replace(/(\d{2})-(\d{2})-(\d{4})/, '$3-$2-$1'); // Convert DD-MM-YYYY to YYYY-MM-DD
+            const endYYYYMMDD = endDDMMYYYY.replace(/(\d{2})-(\d{2})-(\d{4})/, '$3-$2-$1');
+
             const salesQuery = `
                 SELECT 
                     produit,
@@ -9820,30 +9817,33 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                     ROUND(SUM(prix_unit * nombre)) as chiffre_affaires,
                     ROUND(AVG(prix_unit)) as prix_moyen
                 FROM ventes 
-                WHERE point_vente = '${pointVente}'
+                WHERE point_vente = $1
                 AND (
                     -- Format DD-MM-YYYY (ancien format)
                     (date ~ '^[0-9]{2}-[0-9]{2}-[0-9]{4}$' 
-                     AND TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDDMMYYYY}', 'DD-MM-YYYY')
-                     AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDDMMYYYY}', 'DD-MM-YYYY'))
+                     AND TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE($2, 'DD-MM-YYYY')
+                     AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE($3, 'DD-MM-YYYY'))
                     OR
                     -- Format YYYY-MM-DD (nouveau format)
                     (date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-                     AND TO_DATE(date, 'YYYY-MM-DD') >= TO_DATE('${startDDMMYYYY.replace(/(\d{2})-(\d{2})-(\d{4})/, '$3-$2-$1')}', 'YYYY-MM-DD')
-                     AND TO_DATE(date, 'YYYY-MM-DD') <= TO_DATE('${endDDMMYYYY.replace(/(\d{2})-(\d{2})-(\d{4})/, '$3-$2-$1')}', 'YYYY-MM-DD'))
+                     AND TO_DATE(date, 'YYYY-MM-DD') >= TO_DATE($4, 'YYYY-MM-DD')
+                     AND TO_DATE(date, 'YYYY-MM-DD') <= TO_DATE($5, 'YYYY-MM-DD'))
                 )
                 GROUP BY produit
                 ORDER BY chiffre_affaires DESC
             `;
             
-            const salesResult = await pool.query(salesQuery);
-            console.log(`🔍 Found ${salesResult.rows.length} products for ${pointVente} using TO_DATE filtering`);
+            const salesResult = await sequelize.query(salesQuery, {
+                type: QueryTypes.SELECT,
+                replacements: [pointVente, startDDMMYYYY, endDDMMYYYY, startYYYYMMDD, endYYYYMMDD]
+            });
+            console.log(`🔍 Found ${salesResult.length} products for ${pointVente} using TO_DATE filtering`);
             
             // Debug: Log all products found
-            console.log(`🔍 Products found:`, salesResult.rows.map(row => `${row.produit}: ${row.quantite_totale} units, ${row.chiffre_affaires} FCFA`));
+            console.log(`🔍 Products found:`, salesResult.map(row => `${row.produit}: ${row.quantite_totale} units, ${row.chiffre_affaires} FCFA`));
             
             // Debug: Log divers products specifically
-            const diversProductsDebug = salesResult.rows.filter(row => 
+            const diversProductsDebug = salesResult.filter(row => 
                 row.produit.toLowerCase().includes('sans os') ||
                 row.produit.toLowerCase().includes('foie') ||
                 row.produit.toLowerCase().includes('peaux') ||
@@ -9864,35 +9864,38 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                     SUM(nombre) as quantite_totale,
                     ROUND(SUM(prix_unit * nombre)) as chiffre_affaires_total
                 FROM ventes 
-                WHERE point_vente = '${pointVente}'
+                WHERE point_vente = $1
                 AND (
                     -- Format DD-MM-YYYY (ancien format)
                     (date ~ '^[0-9]{2}-[0-9]{2}-[0-9]{4}$' 
-                     AND TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE('${startDDMMYYYY}', 'DD-MM-YYYY')
-                     AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE('${endDDMMYYYY}', 'DD-MM-YYYY'))
+                     AND TO_DATE(date, 'DD-MM-YYYY') >= TO_DATE($2, 'DD-MM-YYYY')
+                     AND TO_DATE(date, 'DD-MM-YYYY') <= TO_DATE($3, 'DD-MM-YYYY'))
                     OR
                     -- Format YYYY-MM-DD (nouveau format)
                     (date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
-                     AND TO_DATE(date, 'YYYY-MM-DD') >= TO_DATE('${startDDMMYYYY.replace(/(\d{2})-(\d{2})-(\d{4})/, '$3-$2-$1')}', 'YYYY-MM-DD')
-                     AND TO_DATE(date, 'YYYY-MM-DD') <= TO_DATE('${endDDMMYYYY.replace(/(\d{2})-(\d{2})-(\d{4})/, '$3-$2-$1')}', 'YYYY-MM-DD'))
+                     AND TO_DATE(date, 'YYYY-MM-DD') >= TO_DATE($4, 'YYYY-MM-DD')
+                     AND TO_DATE(date, 'YYYY-MM-DD') <= TO_DATE($5, 'YYYY-MM-DD'))
                 )
             `;
             
-            const totalResult = await pool.query(totalQuery);
-            const totalCA = totalResult.rows[0].chiffre_affaires_total || 0;
-            const totalQuantite = totalResult.rows[0].quantite_totale || 0;
+            const totalResult = await sequelize.query(totalQuery, {
+                type: QueryTypes.SELECT,
+                replacements: [pointVente, startDDMMYYYY, endDDMMYYYY, startYYYYMMDD, endYYYYMMDD]
+            });
+            const totalCA = totalResult[0].chiffre_affaires_total || 0;
+            const totalQuantite = totalResult[0].quantite_totale || 0;
             
                 // Format the result according to the exact logic from the screenshot (Mode SPÉCIFIQUE)
                 // Using ratios to calculate quantities abattues and prices
                 const formattedResult = {
-                    agneau: formatProductFromSalesWithRatios(salesResult.rows, 'agneau', ratios.agneau || 0, null, purchasePrices),
-                    boeuf: formatProductFromSalesWithRatios(salesResult.rows, 'boeuf', ratios.boeuf || 0, null, purchasePrices),
-                    veau: formatProductFromSalesWithRatios(salesResult.rows, 'veau', ratios.veau || 0, null, purchasePrices),
-                    poulet: formatProductFromSalesWithRatios(salesResult.rows, 'poulet', 0, null, purchasePrices), // No ratio for poulet
-                    oeuf: formatProductFromSalesWithRatios(salesResult.rows, 'oeuf', 0, null, purchasePrices),     // No ratio for oeuf
-                    packs: formatProductFromSalesWithRatios(salesResult.rows, 'pack', 0, 'packs', purchasePrices),
-                    divers: formatProductFromSalesWithRatios(salesResult.rows, 'divers', 0, 'divers', purchasePrices),
-                    autre: formatProductFromSalesWithRatios(salesResult.rows, 'autre', 0, 'autre', purchasePrices),
+                    agneau: formatProductFromSalesWithRatios(salesResult, 'agneau', ratios.agneau || 0, null, purchasePrices),
+                    boeuf: formatProductFromSalesWithRatios(salesResult, 'boeuf', ratios.boeuf || 0, null, purchasePrices),
+                    veau: formatProductFromSalesWithRatios(salesResult, 'veau', ratios.veau || 0, null, purchasePrices),
+                    poulet: formatProductFromSalesWithRatios(salesResult, 'poulet', 0, null, purchasePrices), // No ratio for poulet
+                    oeuf: formatProductFromSalesWithRatios(salesResult, 'oeuf', 0, null, purchasePrices),     // No ratio for oeuf
+                    packs: formatProductFromSalesWithRatios(salesResult, 'pack', 0, 'packs', purchasePrices),
+                    divers: formatProductFromSalesWithRatios(salesResult, 'divers', 0, 'divers', purchasePrices),
+                    autre: formatProductFromSalesWithRatios(salesResult, 'autre', 0, 'autre', purchasePrices),
                 stockSoir: stockSoirData,
                 totaux: {
                     totalChiffreAffaires: totalCA,
@@ -9904,8 +9907,9 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             console.log(`✅ Successfully formatted result for ${pointVente}: CA=${totalCA}`);
             return formattedResult;
             
-        } finally {
-            await pool.end();
+        } catch (dbError) {
+            console.error(`❌ Database error in getProxyMargesViaAPI for ${pointVente}:`, dbError);
+            throw dbError;
         }
         
     } catch (error) {
