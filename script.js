@@ -10876,6 +10876,7 @@ function calculerAnalyticsVentes(ventes) {
         'Poulet': { prixTotal: 0, quantiteTotal: 0, nombreVentes: 0 },
         'Oeuf': { prixTotal: 0, quantiteTotal: 0, nombreVentes: 0 },
         'Packs': { prixTotal: 0, quantiteTotal: 0, nombreVentes: 0 },
+        'Sur Pieds': { prixTotal: 0, quantiteTotal: 0, nombreVentes: 0 },
         'Divers': { prixTotal: 0, quantiteTotal: 0, nombreVentes: 0 },
         'Autre': { prixTotal: 0, quantiteTotal: 0, nombreVentes: 0 },
         'Stock Soir': { prixTotal: 0, quantiteTotal: 0, nombreVentes: 0 }
@@ -10965,6 +10966,10 @@ function calculerAnalyticsVentes(ventes) {
             categorieIndividuelle = 'Packs';
             categorieRegroupee = 'Packs';
             console.log(`🔍 Détection Pack: ${produit} (par nom) - PU: ${vente.PU}, Qté: ${vente.Nombre}`);
+        } else if (produit.toLowerCase().includes('sur pied')) {
+            categorieIndividuelle = 'Sur Pieds';
+            categorieRegroupee = 'Sur Pieds';
+            console.log(`🔍 Détection Sur Pieds: ${produit} - PU: ${vente.PU}, Qté: ${vente.Nombre}, Montant: ${prixUnitaire * quantite}`);
         } else if (produit.toLowerCase().includes('autre viande')) {
             categorieIndividuelle = 'Autre';
             categorieRegroupee = 'Autre';
@@ -12313,6 +12318,27 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                         console.log(`   - Coût final: ${coutAchat.toFixed(0)} FCFA`);
                     }
                     break;
+                case 'Sur Pieds':
+                    // Même logique que Packs: Si mode Auto OFF, forcer le coût à zéro, sinon coût = CA (pas de marge)
+                    if (!proxyMargesControls.calculAutoActif) {
+                        coutAchat = 0;
+                        console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
+                        console.log(`   - Composition: Tous les produits "sur pied"`);
+                        console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA/unité`);
+                        console.log(`   - Quantité totale: ${data.quantiteTotal} unité`);
+                        console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
+                        console.log(`   - Mode Auto: OFF - Coût forcé à 0 FCFA`);
+                        console.log(`   - Coût final: ${coutAchat.toFixed(0)} FCFA`);
+                    } else {
+                        coutAchat = chiffreAffaires; // CA = Coût, donc Marge = 0
+                        console.log(`💰 CALCUL PROXY MARGE ${categorie.toUpperCase()}:`);
+                        console.log(`   - Composition: Tous les produits "sur pied"`);
+                        console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA/unité`);
+                        console.log(`   - Quantité totale: ${data.quantiteTotal} unité`);
+                        console.log(`   - Chiffre d'affaires: ${chiffreAffaires.toFixed(0)} FCFA`);
+                        console.log(`   - Coût = CA (pas de marge): ${coutAchat.toFixed(0)} FCFA`);
+                    }
+                    break;
                 case 'Divers':
                     // Pas de coût d'achat pour cette catégorie
                     coutAchat = 0;
@@ -12433,6 +12459,8 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
             // Icônes spécifiques par catégorie
             if (categorie === 'Packs') {
                 icone = 'fa-box';
+            } else if (categorie === 'Sur Pieds') {
+                icone = 'fa-horse-head';
             } else if (categorie === 'Divers') {
                 icone = 'fa-ellipsis-h';
             }
@@ -12522,11 +12550,11 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                                  <button class="btn btn-sm btn-outline-info mt-1" id="btn-detail-stock-soir" onclick="afficherDetailStockSoirAvecSpinner('${stockSoir.type}', '${stockSoir.dateUtilisee || stockSoir.dateDebut}', '${stockSoir.dateFin || ''}', '${proxyMargesControls.pointVenteActuel}')" title="Voir le détail pour ${proxyMargesControls.pointVenteActuel}">
                                      <i class="fas fa-info-circle"></i> Détail
                                  </button>` :
-                                `<small class="text-muted d-block">Prix vente: ${(+prixMoyenAffiche).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>
-                                 ${marge.prixAchat > 0 ? `<small class="text-muted d-block">Prix achat: ${marge.prixAchat.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>` : '<small class="text-info d-block">Pas de coût d\'achat</small>'}
-                                 <small class="text-muted d-block">Qté vendue: ${quantiteVendue.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>
-                                 ${categorie !== 'Packs' && categorie !== 'Divers' && categorie !== 'Autre' && categorie !== 'Stock Soir' && categorie !== 'Poulet' && categorie !== 'Oeuf' ? `<small class="text-muted d-block">Qté abattue: ${quantiteAbattue.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} kg</small>` : ''}
-                                 ${categorie !== 'Packs' && categorie !== 'Divers' && categorie !== 'Autre' && categorie !== 'Stock Soir' && categorie !== 'Poulet' && categorie !== 'Oeuf' ? `<small class="text-${couleurRatio} d-block">Ratio perte: ${ratioPerte >= 0 ? '+' : ''}${ratioPerte.toFixed(1)}%</small>` : ''}`
+                                `<small class="text-muted d-block">Prix vente: ${(+prixMoyenAffiche).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Sur Pieds' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>
+                                 ${marge.prixAchat > 0 ? `<small class="text-muted d-block">Prix achat: ${marge.prixAchat.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA/${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Sur Pieds' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>` : '<small class="text-info d-block">Pas de coût d\'achat</small>'}
+                                 <small class="text-muted d-block">Qté vendue: ${quantiteVendue.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ${categorie === 'Poulet' || categorie === 'Oeuf' || categorie === 'Packs' || categorie === 'Sur Pieds' || categorie === 'Divers' || categorie === 'Autre' ? 'unité' : 'kg'}</small>
+                                 ${categorie !== 'Packs' && categorie !== 'Sur Pieds' && categorie !== 'Divers' && categorie !== 'Autre' && categorie !== 'Stock Soir' && categorie !== 'Poulet' && categorie !== 'Oeuf' ? `<small class="text-muted d-block">Qté abattue: ${quantiteAbattue.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} kg</small>` : ''}
+                                 ${categorie !== 'Packs' && categorie !== 'Sur Pieds' && categorie !== 'Divers' && categorie !== 'Autre' && categorie !== 'Stock Soir' && categorie !== 'Poulet' && categorie !== 'Oeuf' ? `<small class="text-${couleurRatio} d-block">Ratio perte: ${ratioPerte >= 0 ? '+' : ''}${ratioPerte.toFixed(1)}%</small>` : ''}`
                             }
                         </div>
                         <div class="col-6">

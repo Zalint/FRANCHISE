@@ -9897,20 +9897,21 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 const pouletData = formatProductFromSalesWithRatios(salesResult.rows, 'poulet', 0, null, purchasePrices); // No ratio for poulet
                 const oeufData = formatProductFromSalesWithRatios(salesResult.rows, 'oeuf', 0, null, purchasePrices);     // No ratio for oeuf
                 const packsData = formatProductFromSalesWithRatios(salesResult.rows, 'pack', 0, 'packs', purchasePrices);
+                const surPiedsData = formatProductFromSalesWithRatios(salesResult.rows, 'sur pieds', 0, 'sur pieds', purchasePrices);
                 const diversData = formatProductFromSalesWithRatios(salesResult.rows, 'divers', 0, 'divers', purchasePrices);
                 const autreData = formatProductFromSalesWithRatios(salesResult.rows, 'autre', 0, 'autre', purchasePrices);
                 
                 // Calculate correct totals by summing all categories including stockSoir
                 const totalChiffreAffaires = agneauData.chiffreAffaires + boeufData.chiffreAffaires + veauData.chiffreAffaires + 
                                           pouletData.chiffreAffaires + oeufData.chiffreAffaires + packsData.chiffreAffaires + 
-                                          diversData.chiffreAffaires + autreData.chiffreAffaires + stockSoirData.chiffreAffaires;
+                                          surPiedsData.chiffreAffaires + diversData.chiffreAffaires + autreData.chiffreAffaires + stockSoirData.chiffreAffaires;
                 
                 const totalCout = agneauData.cout + boeufData.cout + veauData.cout + 
                                 pouletData.cout + oeufData.cout + packsData.cout + 
-                                diversData.cout + autreData.cout + stockSoirData.cout;
+                                surPiedsData.cout + diversData.cout + autreData.cout + stockSoirData.cout;
                 
                 const totalMarge = agneauData.marge + boeufData.marge + veauData.marge + 
-                                 pouletData.marge + oeufData.marge + packsData.marge + 
+                                 pouletData.marge + oeufData.marge + packsData.marge + surPiedsData.marge + 
                                  diversData.marge + autreData.marge + stockSoirData.marge;
                 
                 console.log(`🔍 TOTALS CALCULATION for ${pointVente}:`);
@@ -9925,6 +9926,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                     poulet: pouletData,
                     oeuf: oeufData,
                     packs: packsData,
+                    surPieds: surPiedsData,
                     divers: diversData,
                     autre: autreData,
                     stockSoir: stockSoirData,
@@ -9962,14 +9964,20 @@ function formatProductFromSalesWithRatios(salesRows, productType, ratio, special
             );
             break;
         case 'boeuf':
-            matchingProducts = salesRows.filter(row => 
-                row.produit.toLowerCase().includes('boeuf')
-            );
+            matchingProducts = salesRows.filter(row => {
+                const produitLower = row.produit.toLowerCase().trim();
+                return produitLower === 'boeuf en détail' || 
+                       produitLower === 'boeuf en detail' ||
+                       produitLower === 'boeuf en gros';
+            });
             break;
         case 'veau':
-            matchingProducts = salesRows.filter(row => 
-                row.produit.toLowerCase().includes('veau')
-            );
+            matchingProducts = salesRows.filter(row => {
+                const produitLower = row.produit.toLowerCase().trim();
+                return produitLower === 'veau en détail' || 
+                       produitLower === 'veau en detail' ||
+                       produitLower === 'veau en gros';
+            });
             break;
         case 'poulet':
             matchingProducts = salesRows.filter(row => 
@@ -10015,10 +10023,17 @@ function formatProductFromSalesWithRatios(salesRows, productType, ratio, special
             });
             console.log(`🔍 DIVERS TOTAL CALCULATED: ${totalDiversQuantite} units, ${totalDiversCA} FCFA`);
             break;
+        case 'sur pieds':
+            matchingProducts = salesRows.filter(row => {
+                const produitLower = row.produit.toLowerCase().trim();
+                return produitLower.includes('sur pied');
+            });
+            break;
         case 'autre':
-            matchingProducts = salesRows.filter(row => 
-                row.produit.toLowerCase().includes('autre')
-            );
+            matchingProducts = salesRows.filter(row => {
+                const produitLower = row.produit.toLowerCase().trim();
+                return produitLower.includes('autre');
+            });
             break;
     }
     
@@ -10032,7 +10047,7 @@ function formatProductFromSalesWithRatios(salesRows, productType, ratio, special
             chiffreAffaires: 0,
             cout: 0,
             marge: 0,
-            unite: productType === 'poulet' || productType === 'oeuf' ? 'unité' : 'kg'
+            unite: productType === 'poulet' || productType === 'oeuf' || productType === 'sur pieds' ? 'unité' : 'kg'
         };
     }
     
@@ -10055,8 +10070,8 @@ function formatProductFromSalesWithRatios(salesRows, productType, ratio, special
     let prixAchat = 0;
     let cout, marge;
     
-    if (specialType === 'packs' || specialType === 'autre') {
-        // For Packs and Autre: "Pas de coût d'achat", Coût = CA, Marge = 0
+    if (specialType === 'packs' || specialType === 'autre' || specialType === 'sur pieds') {
+        // For Packs, Autre and Sur Pieds: "Pas de coût d'achat", Coût = CA, Marge = 0
         cout = totalCA;
         marge = 0;
     } else if (specialType === 'divers') {
@@ -10098,7 +10113,7 @@ function formatProductFromSalesWithRatios(salesRows, productType, ratio, special
         chiffreAffaires: totalCA,
         cout: Math.round(cout),
         marge: Math.round(marge),
-        unite: productType === 'poulet' || productType === 'oeuf' ? 'unité' : 'kg'
+        unite: productType === 'poulet' || productType === 'oeuf' || productType === 'sur pieds' ? 'unité' : 'kg'
     };
 }
 
@@ -10116,14 +10131,20 @@ function formatProductFromSales(salesRows, productType, prixAchatDefault, specia
             );
             break;
         case 'boeuf':
-            matchingProducts = salesRows.filter(row => 
-                row.produit.toLowerCase().includes('boeuf')
-            );
+            matchingProducts = salesRows.filter(row => {
+                const produitLower = row.produit.toLowerCase().trim();
+                return produitLower === 'boeuf en détail' || 
+                       produitLower === 'boeuf en detail' ||
+                       produitLower === 'boeuf en gros';
+            });
             break;
         case 'veau':
-            matchingProducts = salesRows.filter(row => 
-                row.produit.toLowerCase().includes('veau')
-            );
+            matchingProducts = salesRows.filter(row => {
+                const produitLower = row.produit.toLowerCase().trim();
+                return produitLower === 'veau en détail' || 
+                       produitLower === 'veau en detail' ||
+                       produitLower === 'veau en gros';
+            });
             break;
         case 'poulet':
             matchingProducts = salesRows.filter(row => 
@@ -10169,10 +10190,17 @@ function formatProductFromSales(salesRows, productType, prixAchatDefault, specia
             });
             console.log(`🔍 DIVERS TOTAL CALCULATED: ${totalDiversQuantite} units, ${totalDiversCA} FCFA`);
             break;
+        case 'sur pieds':
+            matchingProducts = salesRows.filter(row => {
+                const produitLower = row.produit.toLowerCase().trim();
+                return produitLower.includes('sur pied');
+            });
+            break;
         case 'autre':
-            matchingProducts = salesRows.filter(row => 
-                row.produit.toLowerCase().includes('autre')
-            );
+            matchingProducts = salesRows.filter(row => {
+                const produitLower = row.produit.toLowerCase().trim();
+                return produitLower.includes('autre');
+            });
             break;
     }
     
@@ -10186,7 +10214,7 @@ function formatProductFromSales(salesRows, productType, prixAchatDefault, specia
             chiffreAffaires: 0,
             cout: 0,
             marge: 0,
-            unite: productType === 'poulet' || productType === 'oeuf' ? 'unité' : 'kg'
+            unite: productType === 'poulet' || productType === 'oeuf' || productType === 'sur pieds' ? 'unité' : 'kg'
         };
     }
     
@@ -10204,11 +10232,11 @@ function formatProductFromSales(salesRows, productType, prixAchatDefault, specia
     // Apply the exact logic from the screenshot
     let cout, marge;
     
-    if (specialType === 'packs' || specialType === 'autre') {
-        // For Packs and Autre: "Pas de coût d'achat", Coût = CA, Marge = 0
+    if (specialType === 'packs' || specialType === 'autre' || specialType === 'sur pieds') {
+        // For Packs, Autre and Sur Pieds: "Pas de coût d'achat", Coût = CA, Marge = 0
         cout = totalCA;
         marge = 0;
-        console.log(`   - Packs/Autre logic: cout=${cout}, marge=${marge}`);
+        console.log(`   - Packs/Autre/Sur Pieds logic: cout=${cout}, marge=${marge}`);
     } else if (specialType === 'divers') {
         // For Divers: "Pas de coût d'achat", Coût = 0, Marge = CA
         cout = 0;
@@ -10230,7 +10258,7 @@ function formatProductFromSales(salesRows, productType, prixAchatDefault, specia
         chiffreAffaires: totalCA,
         cout: Math.round(cout),
         marge: Math.round(marge),
-        unite: productType === 'poulet' || productType === 'oeuf' ? 'unité' : 'kg'
+        unite: productType === 'poulet' || productType === 'oeuf' || productType === 'sur pieds' ? 'unité' : 'kg'
     };
 }
 
