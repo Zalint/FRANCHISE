@@ -9530,7 +9530,10 @@ app.get('/api/external/analytics', validateApiKey, async (req, res) => {
                     totauxGeneraux: {
                         totalChiffreAffaires: 0,
                         totalCout: 0,
-                        totalMarge: 0
+                        totalMarge: 0,
+                        totalChiffreAffairesSansStockSoir: 0,
+                        totalCoutSansStockSoir: 0,
+                        totalMargeSansStockSoir: 0
                     }
                 }
             }
@@ -9551,12 +9554,17 @@ app.get('/api/external/analytics', validateApiKey, async (req, res) => {
                 
                 result.data.analytics.proxyMarges[pv] = proxyMargesData;
                 
-                // Add to general totals
+                // Add to general totals (with Stock Soir)
                 result.data.analytics.totauxGeneraux.totalChiffreAffaires += proxyMargesData.totaux.totalChiffreAffaires;
                 result.data.analytics.totauxGeneraux.totalCout += proxyMargesData.totaux.totalCout;
                 result.data.analytics.totauxGeneraux.totalMarge += proxyMargesData.totaux.totalMarge;
                 
-                console.log(`✅ Successfully processed ${pv}: CA=${proxyMargesData.totaux.totalChiffreAffaires}, Marge=${proxyMargesData.totaux.totalMarge}`);
+                // Add to general totals (sans Stock Soir)
+                result.data.analytics.totauxGeneraux.totalChiffreAffairesSansStockSoir += proxyMargesData.totaux.totalChiffreAffairesSansStockSoir;
+                result.data.analytics.totauxGeneraux.totalCoutSansStockSoir += proxyMargesData.totaux.totalCoutSansStockSoir;
+                result.data.analytics.totauxGeneraux.totalMargeSansStockSoir += proxyMargesData.totaux.totalMargeSansStockSoir;
+                
+                console.log(`✅ Successfully processed ${pv}: CA=${proxyMargesData.totaux.totalChiffreAffaires}, CA sans stock=${proxyMargesData.totaux.totalChiffreAffairesSansStockSoir}`);
                 
             } catch (error) {
                 console.error(`❌ Error processing point of sale ${pv}:`, error);
