@@ -9483,9 +9483,35 @@ app.get('/api/external/analytics', validateApiKey, async (req, res) => {
             return `${day}/${month}/${year}`;
         };
         
+        // Helper function to get today
+        const getToday = () => {
+            const today = new Date();
+            const day = today.getDate().toString().padStart(2, '0');
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const year = today.getFullYear();
+            return `${day}/${month}/${year}`;
+        };
+        
+        // Helper function to check if today is the first day of the month
+        const isFirstDayOfMonth = () => {
+            const today = new Date();
+            return today.getDate() === 1;
+        };
+        
         // Set default dates if not provided
-        const finalStartDate = startDate ? normalizeDate(startDate) : getFirstDayOfMonth();
-        const finalEndDate = endDate ? normalizeDate(endDate) : getYesterday();
+        // Special case: if no dates provided AND today is the 1st of the month → use only today
+        let finalStartDate, finalEndDate;
+        
+        if (!startDate && !endDate && isFirstDayOfMonth()) {
+            // Premier jour du mois sans arguments → utiliser seulement aujourd'hui
+            finalStartDate = getToday();
+            finalEndDate = getToday();
+            console.log(`🗓️  Premier jour du mois détecté - période limitée à aujourd'hui uniquement`);
+        } else {
+            // Comportement normal
+            finalStartDate = startDate ? normalizeDate(startDate) : getFirstDayOfMonth();
+            finalEndDate = endDate ? normalizeDate(endDate) : getYesterday();
+        }
         
         console.log(`📅 Final dates: ${finalStartDate} to ${finalEndDate}`);
         
@@ -9593,6 +9619,94 @@ app.get('/api/external/analytics', validateApiKey, async (req, res) => {
         });
     }
 });
+
+// Helper function to retry achats-boeuf API call with decremented startDate until data is found
+async function fetchAchatsBoeufWithRetry(initialStartDate, endDate, maxRetries = 30) {
+    const baseUrl = process.env.NODE_ENV === 'production' 
+        ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+        : 'http://localhost:3000';
+    
+    // Helper to decrement date by N days
+    const decrementDate = (dateStr, days) => {
+        const parts = dateStr.split('-');
+        let date;
+        
+        if (parts[0].length === 4) {
+            // YYYY-MM-DD
+            date = new Date(parts[0], parts[1] - 1, parts[2]);
+        } else {
+            // DD-MM-YYYY
+            date = new Date(parts[2], parts[1] - 1, parts[0]);
+        }
+        
+        date.setDate(date.getDate() - days);
+        
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        
+        return `${day}-${month}-${year}`;
+    };
+    
+    let currentStartDate = initialStartDate;
+    let attempts = 0;
+    
+    while (attempts < maxRetries) {
+        attempts++;
+        
+        const achatsUrl = `${baseUrl}/api/external/achats-boeuf?startDate=${currentStartDate}&endDate=${endDate}`;
+        console.log(`🔄 Attempt ${attempts}: Calling achats-boeuf API with startDate=${currentStartDate}`);
+        
+        try {
+            const achatsResponse = await fetch(achatsUrl, {
+                method: 'GET',
+                headers: {
+                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (achatsResponse.ok) {
+                const achatsResult = await achatsResponse.json();
+                
+                if (achatsResult.success && achatsResult.data) {
+                    const totalsData = achatsResult.data.totals || {};
+                    const avgPrixKgBoeuf = totalsData.avgWeightedPrixKgBoeuf;
+                    const avgPrixKgVeau = totalsData.avgWeightedPrixKgVeau;
+                    
+                    // Check if we have at least one valid price
+                    if (avgPrixKgBoeuf > 0 || avgPrixKgVeau > 0) {
+                        console.log(`✅ Found purchase data on attempt ${attempts} with startDate=${currentStartDate}`);
+                        console.log(`   - Prix Boeuf: ${avgPrixKgBoeuf}, Prix Veau: ${avgPrixKgVeau}`);
+                        
+                        return {
+                            success: true,
+                            avgPrixKgBoeuf: avgPrixKgBoeuf ? Math.round(avgPrixKgBoeuf) : null,
+                            avgPrixKgVeau: avgPrixKgVeau ? Math.round(avgPrixKgVeau) : null,
+                            effectiveStartDate: currentStartDate,
+                            attempts: attempts
+                        };
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`❌ Error on attempt ${attempts}:`, error.message);
+        }
+        
+        // No data found, shift startDate -1 day and retry
+        currentStartDate = decrementDate(currentStartDate, 1);
+        console.log(`   → No data found, retrying with startDate=${currentStartDate}`);
+    }
+    
+    console.warn(`⚠️ No purchase data found after ${maxRetries} attempts`);
+    return {
+        success: false,
+        avgPrixKgBoeuf: null,
+        avgPrixKgVeau: null,
+        effectiveStartDate: null,
+        attempts: maxRetries
+    };
+}
 
 // NEW: Helper function to get proxy marges by calling the existing stock-soir-marge API
 async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgneau = 4000, prixAchatPoulet = 2600, prixAchatOeuf = 2200) {
@@ -9781,8 +9895,8 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 console.error(`❌ Error calling stock soir API:`, error);
             }
             
-            // STEP 3: Get purchase prices from achats-boeuf API
-            console.log(`🔍 Getting purchase prices from achats-boeuf API...`);
+            // STEP 3: Get purchase prices from achats-boeuf API with retry logic
+            console.log(`🔍 Getting purchase prices from achats-boeuf API with retry logic...`);
             let purchasePrices = {
                 avgPrixKgBoeuf: null, // Will be set from achats-boeuf API
                 avgPrixKgVeau: null,  // Will be set from achats-boeuf API
@@ -9791,38 +9905,43 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 prixAchatOeuf: prixAchatOeuf      // From API parameters
             };
             
+            let achatsBoeufDebugInfo = {
+                requestedStartDate: startDate,
+                effectiveStartDate: null,
+                attemptsRequired: 0,
+                prixBoeufUtilise: null,
+                prixVeauUtilise: null,
+                comment: null
+            };
+            
             try {
-                const baseUrl = process.env.NODE_ENV === 'production' 
-                    ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
-                    : 'http://localhost:3000';
-                const achatsUrl = `${baseUrl}/api/external/achats-boeuf?startDate=${startDate}&endDate=${endDate}`;
-                console.log(`🔍 Calling achats-boeuf API: ${achatsUrl}`);
+                // Use the retry function to get purchase prices
+                const achatsResult = await fetchAchatsBoeufWithRetry(startDate, endDate, 30);
                 
-                const achatsResponse = await fetch(achatsUrl, {
-                    method: 'GET',
-                    headers: {
-                        'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (achatsResponse.ok) {
-                    const achatsResult = await achatsResponse.json();
-                    console.log(`🔍 Achats API response received:`, achatsResult.success);
+                if (achatsResult.success) {
+                    purchasePrices.avgPrixKgBoeuf = achatsResult.avgPrixKgBoeuf;
+                    purchasePrices.avgPrixKgVeau = achatsResult.avgPrixKgVeau;
                     
-                    if (achatsResult.success && achatsResult.data) {
-                        const data = achatsResult.data;
-                        // Extract the weighted average prices from the totals data (exact date range)
-                        const totalsData = data.totals || {};
-                        purchasePrices.avgPrixKgBoeuf = totalsData.avgWeightedPrixKgBoeuf ? Math.round(totalsData.avgWeightedPrixKgBoeuf) : null;
-                        purchasePrices.avgPrixKgVeau = totalsData.avgWeightedPrixKgVeau ? Math.round(totalsData.avgWeightedPrixKgVeau) : null;
-                        console.log(`✅ Purchase prices extracted:`, purchasePrices);
+                    achatsBoeufDebugInfo.effectiveStartDate = achatsResult.effectiveStartDate;
+                    achatsBoeufDebugInfo.attemptsRequired = achatsResult.attempts;
+                    achatsBoeufDebugInfo.prixBoeufUtilise = achatsResult.avgPrixKgBoeuf;
+                    achatsBoeufDebugInfo.prixVeauUtilise = achatsResult.avgPrixKgVeau;
+                    
+                    if (achatsResult.effectiveStartDate !== startDate) {
+                        achatsBoeufDebugInfo.comment = `Aucune donnée trouvée pour la période initiale. Données trouvées à partir du ${achatsResult.effectiveStartDate} après ${achatsResult.attempts} tentative(s).`;
+                    } else {
+                        achatsBoeufDebugInfo.comment = `Données trouvées pour la période demandée.`;
                     }
+                    
+                    console.log(`✅ Purchase prices obtained:`, purchasePrices);
+                    console.log(`📅 Effective start date: ${achatsResult.effectiveStartDate} (${achatsResult.attempts} attempt(s))`);
                 } else {
-                    console.error(`❌ Achats API call failed: ${achatsResponse.status}`);
+                    achatsBoeufDebugInfo.comment = `Aucune donnée d'achat trouvée après ${achatsResult.attempts} tentatives. Prix par défaut utilisés.`;
+                    console.warn(`⚠️ No purchase prices found after retry. Using defaults if available.`);
                 }
             } catch (error) {
-                console.error(`❌ Error calling achats API:`, error);
+                console.error(`❌ Error calling achats API with retry:`, error);
+                achatsBoeufDebugInfo.comment = `Erreur lors de la récupération des prix d'achat: ${error.message}`;
             }
             
             // STEP 4: Get sales data for prices and quantities (filtered by exact dates using TO_DATE)
@@ -9961,6 +10080,9 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                         totalChiffreAffairesSansStockSoir: totalChiffreAffairesSansStockSoir,
                         totalCoutSansStockSoir: totalCoutSansStockSoir,
                         totalMargeSansStockSoir: totalMargeSansStockSoir
+                    },
+                    debug: {
+                        achatsBoeuf: achatsBoeufDebugInfo
                     }
                 };
             

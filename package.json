@@ -27,6 +27,8 @@
     "cy:run": "cypress run",
     "cy:reconciliation": "cypress run --spec 'cypress/e2e/reconciliation.cy.js'",
     "test:unit": "jest --testPathPattern='tests/.*\\.test\\.js' --testPathIgnorePatterns=\"auth.test.js|auth.integration.test.js|reconciliation.integration.test.js\"",
+    "test:analytics": "jest tests/analytics.test.js --verbose",
+    "test:analytics:watch": "jest tests/analytics.test.js --watch",
     "test:e2e": "npm run cy:run",
     "test:all": "npm run test:unit && npm run test:e2e",
     "postinstall": "echo 'Installed packages:' && npm list --depth=0",
