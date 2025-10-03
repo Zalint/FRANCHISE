@@ -9901,7 +9901,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 const diversData = formatProductFromSalesWithRatios(salesResult.rows, 'divers', 0, 'divers', purchasePrices);
                 const autreData = formatProductFromSalesWithRatios(salesResult.rows, 'autre', 0, 'autre', purchasePrices);
                 
-                // Calculate correct totals by summing all categories including stockSoir
+                // Calculate totals INCLUDING stockSoir (original behavior)
                 const totalChiffreAffaires = agneauData.chiffreAffaires + boeufData.chiffreAffaires + veauData.chiffreAffaires + 
                                           pouletData.chiffreAffaires + oeufData.chiffreAffaires + packsData.chiffreAffaires + 
                                           surPiedsData.chiffreAffaires + diversData.chiffreAffaires + autreData.chiffreAffaires + stockSoirData.chiffreAffaires;
@@ -9914,10 +9914,26 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                                  pouletData.marge + oeufData.marge + packsData.marge + surPiedsData.marge + 
                                  diversData.marge + autreData.marge + stockSoirData.marge;
                 
+                // Calculate totals EXCLUDING stockSoir (for sales-only analysis)
+                const totalChiffreAffairesSansStockSoir = agneauData.chiffreAffaires + boeufData.chiffreAffaires + veauData.chiffreAffaires + 
+                                          pouletData.chiffreAffaires + oeufData.chiffreAffaires + packsData.chiffreAffaires + 
+                                          surPiedsData.chiffreAffaires + diversData.chiffreAffaires + autreData.chiffreAffaires;
+                
+                const totalCoutSansStockSoir = agneauData.cout + boeufData.cout + veauData.cout + 
+                                pouletData.cout + oeufData.cout + packsData.cout + 
+                                surPiedsData.cout + diversData.cout + autreData.cout;
+                
+                const totalMargeSansStockSoir = agneauData.marge + boeufData.marge + veauData.marge + 
+                                 pouletData.marge + oeufData.marge + packsData.marge + surPiedsData.marge + 
+                                 diversData.marge + autreData.marge;
+                
                 console.log(`🔍 TOTALS CALCULATION for ${pointVente}:`);
-                console.log(`   - Total CA: ${totalChiffreAffaires} (sum of all categories)`);
-                console.log(`   - Total Coût: ${totalCout} (sum of all categories)`);
-                console.log(`   - Total Marge: ${totalMarge} (sum of all categories)`);
+                console.log(`   - Total CA (avec Stock Soir): ${totalChiffreAffaires}`);
+                console.log(`   - Total CA (sans Stock Soir): ${totalChiffreAffairesSansStockSoir}`);
+                console.log(`   - Total Coût (avec Stock Soir): ${totalCout}`);
+                console.log(`   - Total Coût (sans Stock Soir): ${totalCoutSansStockSoir}`);
+                console.log(`   - Total Marge (avec Stock Soir): ${totalMarge}`);
+                console.log(`   - Total Marge (sans Stock Soir): ${totalMargeSansStockSoir}`);
                 
                 const formattedResult = {
                     agneau: agneauData,
@@ -9933,7 +9949,10 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                     totaux: {
                         totalChiffreAffaires: totalChiffreAffaires,
                         totalCout: totalCout,
-                        totalMarge: totalMarge
+                        totalMarge: totalMarge,
+                        totalChiffreAffairesSansStockSoir: totalChiffreAffairesSansStockSoir,
+                        totalCoutSansStockSoir: totalCoutSansStockSoir,
+                        totalMargeSansStockSoir: totalMargeSansStockSoir
                     }
                 };
             
