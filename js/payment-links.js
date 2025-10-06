@@ -469,8 +469,9 @@ function toggleClientAbonneSection() {
         btn.classList.remove('btn-primary');
         btn.classList.add('btn-outline-primary');
         
-        // Effacer la sélection si la section est masquée
-        clearClientAbonneSelection();
+        // Ne PAS effacer la sélection quand on masque la section
+        // L'utilisateur peut vouloir garder le client sélectionné
+        // clearClientAbonneSelection();
     }
 }
 
