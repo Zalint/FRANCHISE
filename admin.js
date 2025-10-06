@@ -1085,6 +1085,7 @@ function hideLoading() {
 // Variables globales pour la configuration des produits
 let currentProduitsConfig = {};
 let currentInventaireConfig = {};
+let currentAbonnementConfig = {};
 
 // Charger la configuration des produits généraux
 async function chargerConfigProduits() {
@@ -1125,6 +1126,27 @@ async function chargerConfigInventaire() {
     } catch (error) {
         console.error('Erreur lors du chargement de la configuration d\'inventaire:', error);
         alert('Erreur lors du chargement de la configuration d\'inventaire');
+    }
+}
+
+// Charger la configuration des produits d'abonnement
+async function chargerConfigAbonnement() {
+    try {
+        const response = await fetch('/api/admin/config/produits-abonnement', {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            currentAbonnementConfig = data.produitsAbonnement;
+            afficherAbonnementConfig();
+        } else {
+            console.error('Erreur lors du chargement de la configuration d\'abonnement:', data.message);
+            alert('Erreur lors du chargement de la configuration d\'abonnement');
+        }
+    } catch (error) {
+        console.error('Erreur lors du chargement de la configuration d\'abonnement:', error);
+        alert('Erreur lors du chargement de la configuration d\'abonnement');
     }
 }
 
@@ -1385,6 +1407,104 @@ function genererLignesProduitsInventaire(produits) {
                 </td>
                 <td>
                     <button class="btn btn-sm btn-danger" onclick="supprimerProduitInventaire('${produit}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    return html;
+}
+
+// Afficher la configuration des produits d'abonnement
+function afficherAbonnementConfig() {
+    const container = document.getElementById('abonnement-categories');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    Object.keys(currentAbonnementConfig).forEach((categorie, index) => {
+        if (typeof currentAbonnementConfig[categorie] === 'object' && currentAbonnementConfig[categorie] !== null) {
+            const nombreProduits = Object.keys(currentAbonnementConfig[categorie]).length;
+            
+            const categorieHtml = `
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="abonnement-heading-${index}">
+                        <button class="accordion-button ${index === 0 ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#abonnement-collapse-${index}" aria-expanded="${index === 0 ? 'true' : 'false'}" aria-controls="abonnement-collapse-${index}">
+                            <i class="fas fa-star me-2"></i>
+                            ${categorie} (${nombreProduits} produits)
+                            <div class="ms-auto me-3">
+                                <button class="btn btn-sm btn-success" onclick="ajouterProduitAbonnementCategorie('${categorie}')" data-bs-toggle="modal" data-bs-target="#addAbonnementProductModal">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                ${getCategorieDeleteButton(categorie)}
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="abonnement-collapse-${index}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}" aria-labelledby="abonnement-heading-${index}" data-bs-parent="#abonnement-categories">
+                        <div class="accordion-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Produit</th>
+                                            <th>Prix Défaut</th>
+                                            <th>Alternatives</th>
+                                            <th>Prix Spéciaux</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${genererLignesProduitsAbonnement(categorie)}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', categorieHtml);
+        }
+    });
+}
+
+// Générer les lignes de produits pour une catégorie d'abonnement
+function genererLignesProduitsAbonnement(categorie) {
+    let html = '';
+    const produits = currentAbonnementConfig[categorie];
+    
+    Object.keys(produits).forEach(produit => {
+        const config = produits[produit];
+        const alternatives = config.alternatives ? config.alternatives.join(', ') : '';
+        const prixSpeciaux = Object.keys(config)
+            .filter(key => !['default', 'alternatives'].includes(key))
+            .map(key => `${key}: ${config[key]}`)
+            .join(', ');
+        
+        html += `
+            <tr>
+                <td>
+                    <input type="text" class="form-control form-control-sm" value="${produit}" 
+                           onchange="modifierNomProduitAbonnement('${categorie}', '${produit}', this.value)">
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" value="${config.default}" 
+                           onchange="modifierPrixAbonnement('${categorie}', '${produit}', 'default', this.value)">
+                </td>
+                <td>
+                    <input type="text" class="form-control form-control-sm" value="${alternatives}" 
+                           placeholder="Ex: 3500,3600"
+                           onchange="modifierAlternativesAbonnement('${categorie}', '${produit}', this.value)">
+                </td>
+                <td>
+                    <small class="text-muted">${prixSpeciaux}</small>
+                    <button class="btn btn-sm btn-outline-primary ms-1" onclick="modifierPrixSpeciauxAbonnement('${categorie}', '${produit}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="supprimerProduitAbonnement('${categorie}', '${produit}')">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -2040,6 +2160,46 @@ async function sauvegarderConfigInventaire() {
     }
 }
 
+// Sauvegarder la configuration des produits d'abonnement
+async function sauvegarderConfigAbonnement() {
+    try {
+        const response = await fetch('/api/admin/config/produits-abonnement', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ produitsAbonnement: currentAbonnementConfig })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert('Configuration des produits d\'abonnement sauvegardée avec succès !');
+            
+            // Recharger automatiquement la configuration serveur
+            try {
+                const reloadResponse = await fetch('/api/admin/reload-products', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const reloadData = await reloadResponse.json();
+                if (reloadData.success) {
+                    console.log('Configuration serveur rechargée automatiquement');
+                } else {
+                    console.warn('Erreur lors du rechargement automatique:', reloadData.message);
+                }
+            } catch (reloadError) {
+                console.warn('Erreur lors du rechargement automatique:', reloadError);
+            }
+        } else {
+            alert(`Erreur lors de la sauvegarde: ${data.message}`);
+        }
+    } catch (error) {
+        console.error('Erreur lors de la sauvegarde:', error);
+        alert('Erreur lors de la sauvegarde de la configuration des produits d\'abonnement');
+    }
+}
+
     // Initialiser les event listeners pour les points de vente
     function initPointsVenteEventListeners() {
         // Formulaire d'ajout de point de vente
@@ -2076,6 +2236,16 @@ async function sauvegarderConfigInventaire() {
         reloadInventaire.addEventListener('click', chargerConfigInventaire);
     }
     
+    const saveAbonnement = document.getElementById('save-abonnement-btn');
+    if (saveAbonnement) {
+        saveAbonnement.addEventListener('click', sauvegarderConfigAbonnement);
+    }
+    
+    const reloadAbonnement = document.getElementById('reload-abonnement-btn');
+    if (reloadAbonnement) {
+        reloadAbonnement.addEventListener('click', chargerConfigAbonnement);
+    }
+    
         // Bouton de rechargement de la configuration serveur
     const reloadServerConfigBtn = document.getElementById('reload-server-config-btn');
     if (reloadServerConfigBtn) {
@@ -2092,6 +2262,7 @@ async function sauvegarderConfigInventaire() {
                     // Recharger aussi l'interface admin
                     chargerConfigProduits();
                     chargerConfigInventaire();
+                    chargerConfigAbonnement();
                 } else {
                     alert('Erreur lors du rechargement: ' + data.message);
                 }
@@ -2241,6 +2412,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Charger la configuration des produits
             chargerConfigProduits();
             chargerConfigInventaire();
+            chargerConfigAbonnement();
             
             // Initialiser la section stocks si elle existe
             const stocksSection = document.getElementById('stocks-section');

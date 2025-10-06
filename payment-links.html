@@ -210,6 +210,41 @@
                             </div>
                         </div>
 
+                        <!-- Bouton pour afficher Client Abonné -->
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="toggle-client-abonne-btn">
+                                    <i class="bi bi-person-badge"></i> Paiement pour un client abonné
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Client Abonné Selection (Compact) - Caché par défaut -->
+                        <div class="row mb-3" id="client-abonne-section" style="display: none;">
+                            <div class="col-12">
+                                <div class="card bg-light border-primary" style="padding: 0.75rem;">
+                                    <div class="row align-items-center g-2">
+                                        <div class="col-md-8">
+                                            <label for="client-abonne-select" class="form-label mb-1 small">
+                                                <i class="bi bi-person-badge"></i> Client Abonné (optionnel)
+                                            </label>
+                                            <select class="form-select form-select-sm" id="client-abonne-select">
+                                                <option value="">-- Sélectionner un client abonné --</option>
+                                            </select>
+                                            <small class="text-muted" style="font-size: 0.75rem;">
+                                                Sélectionnez un client abonné pour pré-remplir automatiquement le formulaire avec le montant d'abonnement (5000 FCFA)
+                                            </small>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="clear-client-abonne-btn">
+                                                <i class="bi bi-x-circle"></i> Effacer
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="row">
                             <div class="col-12 d-flex justify-content-end">
                                 <button type="submit" class="btn btn-primary btn-lg">

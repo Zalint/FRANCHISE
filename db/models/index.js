@@ -6,9 +6,22 @@ const CashPayment = require('./CashPayment');
 const AchatBoeuf = require('./AchatBoeuf');
 const WeightParams = require('./WeightParams');
 const Precommande = require('./Precommande');
+const ClientAbonne = require('./ClientAbonne');
+const PaiementAbonnement = require('./PaiementAbonnement');
 const { sequelize } = require('../index');
 
 // Définir les relations entre les modèles si nécessaire
+
+// Relations pour les abonnements
+ClientAbonne.hasMany(PaiementAbonnement, {
+  foreignKey: 'client_id',
+  as: 'paiements'
+});
+
+PaiementAbonnement.belongsTo(ClientAbonne, {
+  foreignKey: 'client_id',
+  as: 'client'
+});
 
 // Fonction pour synchroniser les modèles avec la base de données
 async function syncDatabase(force = false) {
@@ -31,5 +44,7 @@ module.exports = {
   AchatBoeuf,
   WeightParams,
   Precommande,
+  ClientAbonne,
+  PaiementAbonnement,
   syncDatabase
 }; 

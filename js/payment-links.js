@@ -8,6 +8,8 @@ let generatedPaymentLinks = [];
 let filteredPaymentLinks = [];
 let currentPage = 1;
 const itemsPerPage = 30;
+let clientsAbonnes = [];
+let selectedClientAbonne = null;
 
 // Initialisation au chargement de la page
 document.addEventListener('DOMContentLoaded', function() {
@@ -23,6 +25,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Charger les points de vente accessibles
     loadAccessiblePointsVente();
+    
+    // Charger les clients abonnés
+    loadClientsAbonnes();
     
         // Écouter les messages du parent (pour recharger les liens quand l'onglet est cliqué)
         window.addEventListener('message', function(event) {
@@ -124,6 +129,24 @@ function initEventListeners() {
     const pointVenteSelect = document.getElementById('point-vente');
     if (pointVenteSelect) {
         pointVenteSelect.addEventListener('change', handlePointVenteChange);
+    }
+    
+    // Client abonné selection
+    const clientAbonneSelect = document.getElementById('client-abonne-select');
+    if (clientAbonneSelect) {
+        clientAbonneSelect.addEventListener('change', handleClientAbonneChange);
+    }
+    
+    // Bouton pour effacer la sélection du client abonné
+    const clearClientAbonneBtn = document.getElementById('clear-client-abonne-btn');
+    if (clearClientAbonneBtn) {
+        clearClientAbonneBtn.addEventListener('click', clearClientAbonneSelection);
+    }
+    
+    // Bouton pour afficher/masquer la section client abonné
+    const toggleClientAbonneBtn = document.getElementById('toggle-client-abonne-btn');
+    if (toggleClientAbonneBtn) {
+        toggleClientAbonneBtn.addEventListener('click', toggleClientAbonneSection);
     }
     
     // Bouton d'archivage
@@ -285,6 +308,239 @@ function populatePointsVenteSelect(pointsVente) {
 }
 
 /**
+ * Charger les clients abonnés actifs
+ */
+async function loadClientsAbonnes() {
+    try {
+        console.log('🔄 Chargement des clients abonnés...');
+        
+        const response = await fetch('/api/abonnements/clients', {
+            method: 'GET',
+            credentials: 'include'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            // Filtrer uniquement les clients actifs
+            clientsAbonnes = result.data.filter(client => client.statut === 'actif');
+            console.log('✅ Clients abonnés actifs chargés:', clientsAbonnes.length);
+            
+            // Peupler le select
+            populateClientsAbonnesSelect();
+        } else {
+            console.warn('Aucun client abonné trouvé ou erreur:', result.message);
+        }
+    } catch (error) {
+        console.error('Erreur lors du chargement des clients abonnés:', error);
+    }
+}
+
+/**
+ * Peupler le select des clients abonnés
+ */
+function populateClientsAbonnesSelect() {
+    const select = document.getElementById('client-abonne-select');
+    if (!select) return;
+    
+    // Vider le select (garder l'option par défaut)
+    select.innerHTML = '<option value="">-- Sélectionner un client abonné --</option>';
+    
+    // Ajouter les options
+    clientsAbonnes.forEach(client => {
+        const option = document.createElement('option');
+        option.value = client.id;
+        option.textContent = `${client.prenom} ${client.nom} - ${client.telephone} (${client.point_vente_defaut})`;
+        option.dataset.client = JSON.stringify(client);
+        select.appendChild(option);
+    });
+    
+    console.log('✅ Select des clients abonnés peuplé avec', clientsAbonnes.length, 'clients');
+}
+
+/**
+ * Gérer le changement de sélection du client abonné
+ */
+function handleClientAbonneChange(event) {
+    const select = event.target;
+    const selectedOption = select.options[select.selectedIndex];
+    
+    if (!selectedOption.value) {
+        // Aucun client sélectionné
+        clearClientAbonneSelection();
+        return;
+    }
+    
+    try {
+        // Récupérer les données du client depuis l'attribut data
+        const clientData = JSON.parse(selectedOption.dataset.client);
+        selectedClientAbonne = clientData;
+        
+        console.log('✅ Client abonné sélectionné:', clientData);
+        
+        // Pré-remplir le formulaire
+        fillFormWithClientAbonne(clientData);
+        
+        // Afficher un message de confirmation
+        showSuccess(`Client abonné sélectionné : ${clientData.prenom} ${clientData.nom}`);
+        
+    } catch (error) {
+        console.error('Erreur lors de la sélection du client abonné:', error);
+        showError('Erreur lors de la sélection du client abonné');
+    }
+}
+
+/**
+ * Pré-remplir le formulaire avec les données du client abonné
+ */
+function fillFormWithClientAbonne(client) {
+    // Point de vente (bloqué visuellement mais reste enabled pour envoyer la valeur)
+    const pointVenteSelect = document.getElementById('point-vente');
+    if (pointVenteSelect) {
+        pointVenteSelect.value = client.point_vente_defaut;
+        // Garder le select enabled mais bloquer visuellement
+        pointVenteSelect.style.backgroundColor = '#e9ecef';
+        pointVenteSelect.style.pointerEvents = 'none'; // Empêcher la modification
+        pointVenteSelect.dataset.locked = 'true'; // Marqueur pour savoir qu'il est verrouillé
+    }
+    
+    // Montant : 5000 FCFA pour l'abonnement (éditable)
+    const amountInput = document.getElementById('amount');
+    if (amountInput) {
+        amountInput.value = 5000;
+        // Laisser le champ éditable
+        amountInput.disabled = false;
+        amountInput.style.backgroundColor = '';
+    }
+    
+    // Nom du client (bloqué visuellement avec pointerEvents)
+    const clientNameInput = document.getElementById('client-name');
+    if (clientNameInput) {
+        clientNameInput.value = `${client.prenom} ${client.nom}`;
+        clientNameInput.style.backgroundColor = '#e9ecef';
+        clientNameInput.style.pointerEvents = 'none';
+    }
+    
+    // Téléphone (bloqué visuellement avec pointerEvents)
+    const phoneNumberInput = document.getElementById('phone-number');
+    if (phoneNumberInput) {
+        phoneNumberInput.value = client.telephone;
+        phoneNumberInput.style.backgroundColor = '#e9ecef';
+        phoneNumberInput.style.pointerEvents = 'none';
+    }
+    
+    // Adresse (bloquée visuellement avec pointerEvents)
+    const addressInput = document.getElementById('address');
+    if (addressInput) {
+        addressInput.value = client.adresse || '';
+        addressInput.style.backgroundColor = '#e9ecef';
+        addressInput.style.pointerEvents = 'none';
+    }
+    
+    // Désactiver le checkbox versement
+    const versementCheckbox = document.getElementById('versement-checkbox');
+    if (versementCheckbox) {
+        versementCheckbox.checked = false;
+        versementCheckbox.disabled = true;
+    }
+    
+    console.log('✅ Formulaire pré-rempli pour le client abonné');
+}
+
+/**
+ * Afficher/Masquer la section client abonné
+ */
+function toggleClientAbonneSection() {
+    const section = document.getElementById('client-abonne-section');
+    const btn = document.getElementById('toggle-client-abonne-btn');
+    
+    if (!section || !btn) return;
+    
+    if (section.style.display === 'none') {
+        // Afficher la section
+        section.style.display = '';
+        btn.innerHTML = '<i class="bi bi-chevron-up"></i> Masquer client abonné';
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-primary');
+    } else {
+        // Masquer la section
+        section.style.display = 'none';
+        btn.innerHTML = '<i class="bi bi-person-badge"></i> Paiement pour un client abonné';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-primary');
+        
+        // Effacer la sélection si la section est masquée
+        clearClientAbonneSelection();
+    }
+}
+
+/**
+ * Effacer la sélection du client abonné
+ */
+function clearClientAbonneSelection() {
+    selectedClientAbonne = null;
+    
+    // Réinitialiser le select
+    const select = document.getElementById('client-abonne-select');
+    if (select) {
+        select.value = '';
+    }
+    
+    // Réactiver et vider les champs
+    const pointVenteSelect = document.getElementById('point-vente');
+    if (pointVenteSelect) {
+        pointVenteSelect.style.backgroundColor = '';
+        pointVenteSelect.style.pointerEvents = '';
+        delete pointVenteSelect.dataset.locked;
+    }
+    
+    const amountInput = document.getElementById('amount');
+    if (amountInput) {
+        amountInput.value = '';
+        amountInput.disabled = false;
+        amountInput.style.backgroundColor = '';
+    }
+    
+    const clientNameInput = document.getElementById('client-name');
+    if (clientNameInput) {
+        clientNameInput.value = '';
+        clientNameInput.style.backgroundColor = '';
+        clientNameInput.style.pointerEvents = '';
+    }
+    
+    const phoneNumberInput = document.getElementById('phone-number');
+    if (phoneNumberInput) {
+        phoneNumberInput.value = '';
+        phoneNumberInput.style.backgroundColor = '';
+        phoneNumberInput.style.pointerEvents = '';
+    }
+    
+    const addressInput = document.getElementById('address');
+    if (addressInput) {
+        addressInput.value = '';
+        addressInput.style.backgroundColor = '';
+        addressInput.style.pointerEvents = '';
+    }
+    
+    const versementCheckbox = document.getElementById('versement-checkbox');
+    if (versementCheckbox) {
+        versementCheckbox.disabled = false;
+    }
+    
+    // Masquer la section client abonné
+    const section = document.getElementById('client-abonne-section');
+    const btn = document.getElementById('toggle-client-abonne-btn');
+    if (section && btn) {
+        section.style.display = 'none';
+        btn.innerHTML = '<i class="bi bi-person-badge"></i> Paiement pour un client abonné';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-primary');
+    }
+    
+    console.log('✅ Sélection du client abonné effacée');
+}
+
+/**
  * Valider le montant en temps réel
  */
 function validateAmount(event) {
@@ -417,8 +673,12 @@ async function handlePaymentFormSubmit(event) {
         amount: parseFloat(formData.get('amount')),
         address: formData.get('address'),
         dueDate: dueDate,
-        isVersement: isVersement
+        isVersement: isVersement,
+        isAbonnement: selectedClientAbonne !== null,
+        clientAbonneId: selectedClientAbonne ? selectedClientAbonne.id : null
     };
+    
+    console.log('📝 Données du paiement:', paymentData);
     
     // Validation côté client
     if (!validatePaymentData(paymentData)) {
@@ -449,6 +709,12 @@ async function handlePaymentFormSubmit(event) {
             
             // Réinitialiser le formulaire
             form.reset();
+            
+            // Effacer la sélection du client abonné
+            clearClientAbonneSelection();
+            
+            // Réinitialiser la date d'expiration par défaut
+            initializeDefaultDueDate();
             
             // Afficher un message de succès
             showSuccess('Lien de paiement généré avec succès!');

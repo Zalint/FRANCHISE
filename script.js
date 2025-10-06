@@ -1244,6 +1244,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const pointVenteValue = this.value;
             console.log("[Point Vente Change] Value:", pointVenteValue);
             
+            // Charger les clients abonnés pour ce point de vente
+            if (window.venteAbonnementModule) {
+                window.venteAbonnementModule.chargerClientsAbonnes(pointVenteValue);
+            }
+            
             // Mettre à jour les prix unitaires pour tous les produits selon le point de vente
             document.querySelectorAll('.produit-select').forEach(select => {
                 if (select.value) {
@@ -1261,6 +1266,16 @@ document.addEventListener('DOMContentLoaded', function() {
             chargerDernieresVentes();
             // Réinitialiser les champs client quand le point de vente change
             resetClientFields();
+        });
+    }
+    
+    // Event listener pour le client abonné
+    const clientAbonneSelect = document.getElementById('client-abonne');
+    if (clientAbonneSelect) {
+        clientAbonneSelect.addEventListener('change', function() {
+            if (window.venteAbonnementModule) {
+                window.venteAbonnementModule.gererSelectionClientAbonne();
+            }
         });
     }
     
@@ -1455,21 +1470,75 @@ function creerNouvelleEntree() {
 
     // Mise à jour auto du prix unitaire
     const prixUnitInput = div.querySelector('.prix-unit');
-    produitSelect.addEventListener('change', function() {
-        const selectedProduit = this.value;
+    
+    // Fonction pour calculer et appliquer le prix
+    const calculerEtAppliquerPrix = function() {
+        const selectedProduit = produitSelect.value;
         const categorie = categorieSelect.value;
         const pointVente = document.getElementById('point-vente').value;
         
-        // Utiliser le prix depuis produitsDB
-        if (categorie && selectedProduit && produits[categorie] && produits[categorie][selectedProduit]) {
-            // Prendre le prix spécifique au point de vente ou le prix par défaut
-            prixUnitInput.value = produits.getPrixDefaut(categorie, selectedProduit, pointVente) || '';
+        if (!selectedProduit) return;
+        
+        console.log(`🔍 Produit sélectionné - Catégorie: "${categorie}", Produit: "${selectedProduit}"`);
+        
+        // Utiliser le module d'abonnement qui gère automatiquement prix abonné vs normal
+        let prixApplique = null;
+        if (window.venteAbonnementModule && categorie && selectedProduit) {
+            prixApplique = window.venteAbonnementModule.obtenirPrixProduit(categorie, selectedProduit, pointVente);
+            
+            // Vérifier si c'est un prix abonné (client abonné sélectionné)
+            const clientAbonne = window.venteAbonnementModule.getClientAbonneSelectionne();
+            if (clientAbonne && prixApplique !== null) {
+                prixUnitInput.style.backgroundColor = '#d4edda'; // Vert clair pour prix abonné
+                console.log(`✅ Prix abonné appliqué: ${selectedProduit} = ${prixApplique} FCFA`);
+            } else {
+                prixUnitInput.style.backgroundColor = ''; // Réinitialiser
+                console.log(`✅ Prix normal appliqué: ${selectedProduit} = ${prixApplique} FCFA`);
+            }
+        }
+        
+        // Si pas de prix trouvé via le module, utiliser produits directement
+        if (prixApplique === null && categorie && selectedProduit && produits[categorie] && produits[categorie][selectedProduit]) {
+            prixApplique = produits.getPrixDefaut(categorie, selectedProduit, pointVente) || '';
+        }
+        
+        if (prixApplique !== null) {
+            prixUnitInput.value = prixApplique;
         } else {
             console.warn(`Prix non trouvé pour ${categorie} > ${selectedProduit}`);
             prixUnitInput.value = '';
         }
         
         calculerTotal(div); // Recalculer le total ligne quand produit change
+    };
+    
+    // Déclencher lors du changement (sélection d'un nouveau produit)
+    produitSelect.addEventListener('change', calculerEtAppliquerPrix);
+    
+    // UNIQUEMENT pour le mode abonnement : listeners supplémentaires
+    // Déclencher lors du focus (clic sur le select) UNIQUEMENT si un client abonné est déjà sélectionné
+    produitSelect.addEventListener('focus', function() {
+        // Vérifier que le module d'abonnement existe ET qu'un client est sélectionné
+        if (!window.venteAbonnementModule) return;
+        
+        const clientAbonne = window.venteAbonnementModule.getClientAbonneSelectionne();
+        if (clientAbonne && this.value) {
+            console.log('🎯 Focus sur produit avec client abonné, vérification du prix...');
+            // Petit délai pour laisser le temps au DOM de se mettre à jour si nécessaire
+            setTimeout(calculerEtAppliquerPrix, 50);
+        }
+    });
+    
+    // UNIQUEMENT pour le mode abonnement : Déclencher lors du clic
+    produitSelect.addEventListener('click', function() {
+        // Vérifier que le module d'abonnement existe ET qu'un client est sélectionné
+        if (!window.venteAbonnementModule) return;
+        
+        const clientAbonne = window.venteAbonnementModule.getClientAbonneSelectionne();
+        if (clientAbonne && this.value) {
+            console.log('👆 Clic sur produit avec client abonné, recalcul du prix...');
+            calculerEtAppliquerPrix();
+        }
     });
 
     // Calcul auto du total
@@ -1544,8 +1613,16 @@ document.getElementById('vente-form').addEventListener('submit', async function(
         const quantite = entry.querySelector('.quantite').value;
         const prixUnit = entry.querySelector('.prix-unit').value;
         const total = entry.querySelector('.total').value;
+        
         // Utiliser les informations client de l'en-tête au lieu des champs individuels
-        const nomClient = clientNom;
+        let nomClient = clientNom;
+        
+        // Ajouter le préfixe "(A)" si c'est un client abonné
+        if (window.venteAbonnementModule && window.venteAbonnementModule.getClientAbonneSelectionne()) {
+            nomClient = nomClient ? `(A) ${nomClient}` : '';
+            console.log(`✅ Client abonné détecté, nom avec préfixe: ${nomClient}`);
+        }
+        
         const numeroClient = clientNumero;
         const adresseClient = clientAdresse;
         const creance = clientCreance;
@@ -1554,7 +1631,7 @@ document.getElementById('vente-form').addEventListener('submit', async function(
             const mois = new Date(date.split('/').reverse().join('-')).toLocaleString('fr-FR', { month: 'long' });
             const semaine = `S${Math.ceil(new Date(date.split('/').reverse().join('-')).getDate() / 7)}`;
             
-            entries.push({
+            const entry = {
                 id: venteId,
                 mois,
                 date,
@@ -1569,7 +1646,26 @@ document.getElementById('vente-form').addEventListener('submit', async function(
                 numeroClient,
                 adresseClient,
                 creance
-            });
+            };
+            
+            // Ajouter les données d'abonnement si un client abonné est sélectionné
+            if (window.venteAbonnementModule) {
+                const clientAbonne = window.venteAbonnementModule.getClientAbonneSelectionne();
+                if (clientAbonne) {
+                    entry.client_abonne_id = clientAbonne.id;
+                    
+                    // Calculer le prix normal (sans rabais) depuis produitsAbonnement
+                    if (window.produits && window.produits[categorie] && window.produits[categorie][produit]) {
+                        const prixNormal = window.produits.getPrixDefaut(categorie, produit, pointVente);
+                        entry.prix_normal = prixNormal;
+                        entry.rabais_applique = prixNormal - parseFloat(prixUnit);
+                        
+                        console.log(`💰 Rabais calculé: ${entry.rabais_applique} FCFA (Prix normal: ${prixNormal}, Prix abonné: ${prixUnit})`);
+                    }
+                }
+            }
+            
+            entries.push(entry);
         }
     });
     
@@ -1608,6 +1704,24 @@ document.getElementById('vente-form').addEventListener('submit', async function(
             
             // Réinitialiser le formulaire
             this.reset();
+            
+            // Réinitialiser complètement le client abonné
+            const clientAbonneSelect = document.getElementById('client-abonne');
+            if (clientAbonneSelect) {
+                clientAbonneSelect.value = '';
+                // Déclencher l'événement change pour nettoyer les champs
+                if (window.venteAbonnementModule) {
+                    window.venteAbonnementModule.gererSelectionClientAbonne();
+                }
+            }
+            
+            // Réinitialiser les champs client manuellement
+            document.getElementById('client-nom').value = '';
+            document.getElementById('client-numero').value = '';
+            document.getElementById('client-adresse').value = '';
+            document.getElementById('client-creance').value = 'false';
+            
+            console.log('✅ Formulaire complètement réinitialisé');
             
             // Réinitialiser la date à aujourd'hui
             document.getElementById('date')._flatpickr.setDate(new Date());

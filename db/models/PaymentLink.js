@@ -77,6 +77,15 @@ const PaymentLink = sequelize.define('PaymentLink', {
         type: DataTypes.INTEGER,
         allowNull: false,
         defaultValue: 0
+    },
+    is_abonnement: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
+    },
+    client_abonne_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
     }
 }, {
     tableName: 'payment_links',

@@ -92,7 +92,7 @@ let produits = require('./data/by-date/produits');
 let produitsInventaire = require('./data/by-date/produitsInventaire');
 const bcrypt = require('bcrypt');
 const fsPromises = require('fs').promises;
-const { Vente, Stock, Transfert, Reconciliation, CashPayment, AchatBoeuf, Depense, WeightParams, Precommande } = require('./db/models');
+const { Vente, Stock, Transfert, Reconciliation, CashPayment, AchatBoeuf, Depense, WeightParams, Precommande, ClientAbonne, PaiementAbonnement } = require('./db/models');
 const { testConnection, sequelize } = require('./db');
 const { Op, fn, col, literal } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
@@ -102,6 +102,8 @@ const { spawn } = require('child_process');
 // Import the schema update scripts
 const { updateSchema } = require('./db/update-schema');
 const { updateVenteSchema } = require('./db/update-vente-schema');
+const { updateVenteSchemaAbonnement } = require('./db/update-vente-schema-abonnement');
+let produitsAbonnement = require('./data/by-date/produitsAbonnement');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -117,6 +119,7 @@ console.log('Estimation.create:', typeof Estimation.create === 'function' ? 'fun
     console.log('Running database schema updates...');
     await updateSchema();
     await updateVenteSchema();
+    await updateVenteSchemaAbonnement(); // Ajouter les colonnes pour les abonnements
         
     // Add commentaire column if it doesn't exist
     try {
@@ -128,6 +131,79 @@ console.log('Estimation.create:', typeof Estimation.create === 'function' ? 'fun
         console.log('Commentaire column ensured');
     } catch (error) {
         console.log('Note: commentaire column may already exist:', error.message);
+    }
+    
+    // Ajouter les colonnes abonnement à payment_links si elles n'existent pas
+    try {
+        console.log('🔧 Ajout des colonnes abonnement à payment_links...');
+        await sequelize.query(`
+            ALTER TABLE payment_links 
+            ADD COLUMN IF NOT EXISTS is_abonnement BOOLEAN DEFAULT FALSE;
+        `);
+        await sequelize.query(`
+            ALTER TABLE payment_links 
+            ADD COLUMN IF NOT EXISTS client_abonne_id INTEGER;
+        `);
+        console.log('✅ Colonnes abonnement ajoutées à payment_links');
+    } catch (error) {
+        console.log('Note: Colonnes abonnement déjà présentes:', error.message);
+    }
+    
+    // Create abonnements tables if they don't exist
+    try {
+        console.log('🔧 Checking abonnements tables...');
+        
+        // Create clients_abonnes table
+        await sequelize.query(`
+            CREATE TABLE IF NOT EXISTS clients_abonnes (
+                id SERIAL PRIMARY KEY,
+                abonne_id VARCHAR(20) UNIQUE NOT NULL,
+                prenom VARCHAR(100) NOT NULL,
+                nom VARCHAR(100) NOT NULL,
+                telephone VARCHAR(20) UNIQUE NOT NULL,
+                adresse TEXT,
+                position_gps VARCHAR(255),
+                lien_google_maps TEXT,
+                point_vente_defaut VARCHAR(50) NOT NULL,
+                statut VARCHAR(20) DEFAULT 'actif' CHECK (statut IN ('actif', 'inactif')),
+                date_inscription DATE DEFAULT CURRENT_DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        console.log('✅ Table clients_abonnes OK');
+        
+        // Create paiements_abonnement table
+        await sequelize.query(`
+            CREATE TABLE IF NOT EXISTS paiements_abonnement (
+                id SERIAL PRIMARY KEY,
+                client_id INTEGER NOT NULL REFERENCES clients_abonnes(id) ON DELETE CASCADE,
+                mois VARCHAR(7) NOT NULL,
+                montant DECIMAL(10, 2) NOT NULL DEFAULT 5000,
+                date_paiement DATE NOT NULL,
+                mode_paiement VARCHAR(50),
+                payment_link_id VARCHAR(255),
+                reference VARCHAR(255),
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(client_id, mois)
+            );
+        `);
+        console.log('✅ Table paiements_abonnement OK');
+        
+        // Create indexes
+        await sequelize.query(`
+            CREATE INDEX IF NOT EXISTS idx_clients_abonnes_abonne_id ON clients_abonnes(abonne_id);
+            CREATE INDEX IF NOT EXISTS idx_clients_abonnes_telephone ON clients_abonnes(telephone);
+            CREATE INDEX IF NOT EXISTS idx_clients_abonnes_statut ON clients_abonnes(statut);
+            CREATE INDEX IF NOT EXISTS idx_paiements_client_id ON paiements_abonnement(client_id);
+            CREATE INDEX IF NOT EXISTS idx_paiements_mois ON paiements_abonnement(mois);
+        `);
+        console.log('✅ Abonnements indexes created');
+        
+    } catch (error) {
+        console.log('Note: Abonnements tables may already exist:', error.message);
     }
     
     console.log('Database schema updates completed successfully');
@@ -788,6 +864,66 @@ ${functionsContent}`;
     } catch (error) {
         console.error('Erreur lors de la sauvegarde des produits d\'inventaire:', error);
         res.status(500).json({ success: false, message: 'Erreur lors de la sauvegarde de la configuration des produits d\'inventaire' });
+    }
+});
+
+// Route pour lire la configuration des produits d'abonnement
+app.get('/api/admin/config/produits-abonnement', checkAuth, checkAdmin, (req, res) => {
+    try {
+        const abonnementPath = path.join(__dirname, 'data/by-date/produitsAbonnement.js');
+        const abonnementContent = fs.readFileSync(abonnementPath, 'utf8');
+        
+        // Extraire l'objet produitsAbonnement du fichier JavaScript
+        const abonnementMatch = abonnementContent.match(/const produitsAbonnement = ({[\s\S]*?});/);
+        if (!abonnementMatch) {
+            return res.status(500).json({ success: false, message: 'Format de fichier produitsAbonnement invalide' });
+        }
+        
+        // Évaluer l'objet JavaScript de manière sécurisée
+        const abonnementObj = eval('(' + abonnementMatch[1] + ')');
+        
+        res.json({ success: true, produitsAbonnement: abonnementObj });
+    } catch (error) {
+        console.error('Erreur lors de la lecture des produits d\'abonnement:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de la lecture de la configuration des produits d\'abonnement' });
+    }
+});
+
+// Route pour sauvegarder la configuration des produits d'abonnement
+app.post('/api/admin/config/produits-abonnement', checkAuth, checkAdmin, (req, res) => {
+    try {
+        const { produitsAbonnement: nouveauxProduitsAbonnement } = req.body;
+        
+        if (!nouveauxProduitsAbonnement || typeof nouveauxProduitsAbonnement !== 'object') {
+            return res.status(400).json({ success: false, message: 'Configuration de produits d\'abonnement invalide' });
+        }
+        
+        const abonnementPath = path.join(__dirname, 'data/by-date/produitsAbonnement.js');
+        
+        // Créer une sauvegarde
+        const backupPath = `${abonnementPath}.backup.${Date.now()}`;
+        fs.copyFileSync(abonnementPath, backupPath);
+        
+        // Lire le contenu actuel pour préserver les fonctions utilitaires
+        const abonnementContent = fs.readFileSync(abonnementPath, 'utf8');
+        const functionsMatch = abonnementContent.match(/(\/\/ Fonctions utilitaires[\s\S]*)/);
+        const functionsContent = functionsMatch ? functionsMatch[1] : '';
+        
+        // Générer le nouveau contenu
+        const newContent = `const produitsAbonnement = ${JSON.stringify(nouveauxProduitsAbonnement, null, 4)};
+
+${functionsContent}`;
+        
+        // Écrire le nouveau fichier
+        fs.writeFileSync(abonnementPath, newContent, 'utf8');
+        
+        // Recharger le module dans le cache Node.js
+        delete require.cache[require.resolve('./data/by-date/produitsAbonnement')];
+        
+        res.json({ success: true, message: 'Configuration des produits d\'abonnement sauvegardée avec succès' });
+    } catch (error) {
+        console.error('Erreur lors de la sauvegarde des produits d\'abonnement:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de la sauvegarde de la configuration des produits d\'abonnement' });
     }
 });
 
@@ -4941,7 +5077,9 @@ const bictorys = axios.create({
                     status: paymentData.status,
                     created_by: user.username,
                     due_date: paymentData.dueDate || null,
-                    archived: 0
+                    archived: 0,
+                    is_abonnement: paymentData.isAbonnement || false,
+                    client_abonne_id: paymentData.clientAbonneId || null
                 });
 
                 console.log('Lien de paiement sauvegardé avec ID:', paymentLink.id);
@@ -4965,6 +5103,72 @@ const bictorys = axios.create({
             } catch (error) {
                 console.error('Erreur lors de la mise à jour du statut:', error);
                 throw error;
+            }
+        }
+
+        // Fonction pour enregistrer automatiquement un paiement d'abonnement
+        async function recordAbonnementPayment(paymentLink) {
+            try {
+                // Vérifier si c'est bien un abonnement
+                if (!paymentLink.is_abonnement || !paymentLink.client_abonne_id) {
+                    console.log('❌ Pas un paiement d\'abonnement, ignoré');
+                    return;
+                }
+
+                // Déterminer le mois du paiement (mois actuel au format YYYY-MM)
+                const now = new Date();
+                const mois = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+                console.log('🔔 Enregistrement du paiement d\'abonnement pour le client:', paymentLink.client_abonne_id, 'Mois:', mois);
+
+                // Vérifier si un paiement existe déjà pour ce mois
+                const [existingPayment] = await sequelize.query(`
+                    SELECT id FROM paiements_abonnement 
+                    WHERE client_id = :clientId AND mois = :mois
+                `, {
+                    replacements: { clientId: paymentLink.client_abonne_id, mois: mois },
+                    type: sequelize.QueryTypes.SELECT
+                });
+
+                if (existingPayment) {
+                    console.log('✅ Paiement déjà enregistré pour ce mois');
+                    return;
+                }
+
+                // Enregistrer le paiement dans la table paiements_abonnement
+                await sequelize.query(`
+                    INSERT INTO paiements_abonnement 
+                    (client_id, mois, montant, date_paiement, mode_paiement, payment_link_id, reference, notes, created_at, updated_at)
+                    VALUES (:clientId, :mois, :montant, :datePaiement, :modePaiement, :paymentLinkId, :reference, :notes, NOW(), NOW())
+                `, {
+                    replacements: {
+                        clientId: paymentLink.client_abonne_id,
+                        mois: mois,
+                        montant: paymentLink.amount,
+                        datePaiement: new Date(),
+                        modePaiement: 'Bictorys',
+                        paymentLinkId: paymentLink.payment_link_id,
+                        reference: paymentLink.reference,
+                        notes: `Paiement automatique via ${paymentLink.reference}`
+                    }
+                });
+
+                console.log('✅ Paiement d\'abonnement enregistré avec succès');
+
+                // Réactiver le client si inactif
+                await sequelize.query(`
+                    UPDATE clients_abonnes 
+                    SET statut = 'actif', updated_at = NOW()
+                    WHERE id = :clientId AND statut = 'inactif'
+                `, {
+                    replacements: { clientId: paymentLink.client_abonne_id }
+                });
+
+                console.log('✅ Statut du client vérifié/réactivé');
+
+            } catch (error) {
+                console.error('❌ Erreur lors de l\'enregistrement du paiement d\'abonnement:', error);
+                // Ne pas bloquer le processus si l'enregistrement échoue
             }
         }
 
@@ -5029,7 +5233,7 @@ app.post('/api/payment-links/create', checkAuth, async (req, res) => {
         const user = req.user;
         
         // Validation des données - seulement Point de Vente et Montant sont obligatoires
-        const { pointVente, clientName, phoneNumber, amount, address, dueDate } = req.body;
+        const { pointVente, clientName, phoneNumber, amount, address, dueDate, isAbonnement, clientAbonneId } = req.body;
         
         if (!pointVente || !amount) {
             return res.status(400).json({
@@ -5045,6 +5249,11 @@ app.post('/api/payment-links/create', checkAuth, async (req, res) => {
                 success: false,
                 message: 'Le montant doit être un nombre positif'
             });
+        }
+        
+        // Log pour les abonnements
+        if (isAbonnement) {
+            console.log('🔔 Paiement d\'abonnement détecté pour le client:', clientAbonneId);
         }
         
         // Traitement de la date d'expiration
@@ -5082,12 +5291,18 @@ app.post('/api/payment-links/create', checkAuth, async (req, res) => {
         }
         
         // Obtenir la référence du point de vente
-        const paymentRef = POINT_VENTE_TO_REF[pointVente];
+        let paymentRef = POINT_VENTE_TO_REF[pointVente];
         if (!paymentRef) {
             return res.status(400).json({
                 success: false,
                 message: 'Point de vente non reconnu'
             });
+        }
+        
+        // Si c'est un abonnement, remplacer V_ par A_ dans la référence
+        if (isAbonnement) {
+            paymentRef = paymentRef.replace('V_', 'A_');
+            console.log('🔔 Référence modifiée pour abonnement:', paymentRef);
         }
         
         // Préparer les données pour l'API Bictorys
@@ -5152,8 +5367,10 @@ app.post('/api/payment-links/create', checkAuth, async (req, res) => {
                 phoneNumber: phoneNumber || null,
                 address: address || null,
                 status: response.data.status,
-                description: `Paiement pour ${pointVente}${clientName ? ` - ${clientName}` : ''}`,
-                dueDate: processedDueDate
+                description: `Paiement ${isAbonnement ? 'abonnement' : ''} pour ${pointVente}${clientName ? ` - ${clientName}` : ''}`,
+                dueDate: processedDueDate,
+                isAbonnement: isAbonnement || false,
+                clientAbonneId: clientAbonneId || null
             };
             
             // Sauvegarder en base de données
@@ -5254,8 +5471,21 @@ app.get('/api/payment-links/status/:paymentLinkId', checkAuth, async (req, res) 
             
             // Mettre à jour le statut en base de données
             try {
+                // Récupérer l'ancien statut avant mise à jour
+                const existingLink = await PaymentLink.findOne({
+                    where: { payment_link_id: paymentLinkId }
+                });
+                
+                const oldStatus = existingLink ? existingLink.status : null;
+                
                 await updatePaymentLinkStatus(paymentLinkId, paymentData.status);
                 console.log('Statut mis à jour en base de données');
+                
+                // Si le statut passe à "paid" et que c'est un abonnement, enregistrer le paiement
+                if (paymentData.status === 'paid' && oldStatus !== 'paid' && existingLink) {
+                    console.log('🔔 Nouveau paiement détecté, vérification si abonnement...');
+                    await recordAbonnementPayment(existingLink);
+                }
             } catch (dbError) {
                 console.error('Erreur lors de la mise à jour du statut en base:', dbError);
                 // On continue même si la mise à jour en base échoue
@@ -5784,6 +6014,8 @@ app.post('/api/payment-links/update-open-payments', checkAuth, async (req, res) 
                     if (currentStatus !== payment.status) {
                         console.log(`📝 Mise à jour du statut: ${payment.payment_link_id} ${payment.status} -> ${currentStatus}`);
                         
+                        const oldStatus = payment.status;
+                        
                         // Mettre à jour le statut en base
                         await PaymentLink.update(
                             { 
@@ -5796,6 +6028,12 @@ app.post('/api/payment-links/update-open-payments', checkAuth, async (req, res) 
                         );
                         
                         updated++;
+                        
+                        // Si le statut passe à "paid" et que c'est un abonnement, enregistrer le paiement
+                        if (currentStatus === 'paid' && oldStatus !== 'paid') {
+                            console.log('🔔 Nouveau paiement détecté, vérification si abonnement...');
+                            await recordAbonnementPayment(payment);
+                        }
                     } else {
                         console.log(`✅ Statut inchangé pour: ${payment.payment_link_id} (${currentStatus})`);
                     }
@@ -5831,6 +6069,13 @@ app.post('/api/payment-links/update-open-payments', checkAuth, async (req, res) 
         });
     }
 });
+
+// =================== ROUTES ABONNEMENTS ===================
+// Importer et utiliser les routes d'abonnement
+const abonnementsRoutes = require('./routes/abonnements');
+app.use('/api/abonnements', checkAuth, abonnementsRoutes);
+
+console.log('✅ Routes d\'abonnement chargées');
 
 // Démarrage du serveur
 app.listen(PORT, () => {

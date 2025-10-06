@@ -55,6 +55,12 @@
                         <li class="nav-item">
                             <a class="nav-link" href="#" data-section="corrections">Corrections</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-section="abonnements">
+                                <i class="fas fa-credit-card me-1"></i>
+                                Abonnements
+                            </a>
+                        </li>
                         <li class="nav-item" id="user-management-nav" style="display: none;">
                             <a class="nav-link" href="user-management.html">
                                 <i class="fas fa-users-cog me-1"></i>
@@ -245,6 +251,11 @@
                                     <i class="fas fa-warehouse"></i> Produits Inventaire (produitsInventaire.js)
                                 </button>
                             </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="abonnement-tab" data-bs-toggle="tab" data-bs-target="#abonnement-content" type="button" role="tab" aria-controls="abonnement-content" aria-selected="false">
+                                    <i class="fas fa-star"></i> Produits Abonnement (produitsAbonnement.js)
+                                </button>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -302,6 +313,34 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Configuration Produits Abonnement -->
+                    <div class="tab-pane fade" id="abonnement-content" role="tabpanel" aria-labelledby="abonnement-tab">
+                        <div class="card mt-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">Gestion des Produits pour Clients Abonnés</h5>
+                                <div>
+                                    <button class="btn btn-success btn-sm me-2" id="add-abonnement-category-btn" data-bs-toggle="modal" data-bs-target="#addAbonnementCategoryModal">
+                                        <i class="fas fa-plus"></i> Ajouter Catégorie
+                                    </button>
+                                    <button class="btn btn-info btn-sm me-2" id="save-abonnement-btn">
+                                        <i class="fas fa-save"></i> Sauvegarder
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm" id="reload-abonnement-btn">
+                                        <i class="fas fa-sync"></i> Recharger
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info" role="alert">
+                                    <i class="fas fa-info-circle"></i> Ces prix sont appliqués automatiquement lorsqu'un client abonné est sélectionné dans la saisie des ventes.
+                                </div>
+                                <div id="abonnement-categories" class="accordion">
+                                    <!-- Les catégories seront générées dynamiquement -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -337,6 +376,124 @@
                             </div>
                         </div>
                         <button class="btn btn-primary" id="corriger-total">Corriger le Total</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section Abonnements -->
+            <div id="abonnements-section" class="admin-section">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-credit-card me-2"></i>Configuration des Abonnements
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>Coût mensuel:</strong> 5000 FCFA
+                                    <br>
+                                    <small>Les clients abonnés bénéficient de prix préférentiels sur les produits sélectionnés.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h6 class="mb-3">Prix Préférentiels</h6>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover" id="abonnement-prix-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Produit</th>
+                                        <th>Prix Normal (FCFA)</th>
+                                        <th>Prix Abonné (FCFA)</th>
+                                        <th>Rabais (FCFA)</th>
+                                        <th>Unité</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Boeuf</strong></td>
+                                        <td class="text-end">3 800</td>
+                                        <td class="text-end text-success"><strong>3 600</strong></td>
+                                        <td class="text-end text-danger">-200</td>
+                                        <td>kg</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Veau</strong></td>
+                                        <td class="text-end">4 000</td>
+                                        <td class="text-end text-success"><strong>3 800</strong></td>
+                                        <td class="text-end text-danger">-200</td>
+                                        <td>kg</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Agneau</strong></td>
+                                        <td class="text-end">4 600</td>
+                                        <td class="text-end text-success"><strong>4 400</strong></td>
+                                        <td class="text-end text-danger">-200</td>
+                                        <td>kg</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Poulet</strong></td>
+                                        <td class="text-end">3 400</td>
+                                        <td class="text-end text-success"><strong>3 000</strong></td>
+                                        <td class="text-end text-danger">-400</td>
+                                        <td>unité</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-4">
+                            <h6 class="mb-3">Références de Paiement Bictorys</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ul class="list-group">
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span><strong>Mbao:</strong></span>
+                                            <code>A_MBA</code>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span><strong>O.Foire:</strong></span>
+                                            <code>A_OSF</code>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span><strong>Keur Massar:</strong></span>
+                                            <code>A_KM</code>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <ul class="list-group">
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span><strong>Linguere:</strong></span>
+                                            <code>A_LGR</code>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span><strong>Sacre Coeur:</strong></span>
+                                            <code>A_SAC</code>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span><strong>Dahra:</strong></span>
+                                            <code>A_DHR</code>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <a href="abonnements.html" class="btn btn-primary">
+                                <i class="fas fa-users me-2"></i>Gérer les Clients Abonnés
+                            </a>
+                        </div>
+
+                        <div class="mt-4 alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Note:</strong> Pour modifier les prix ou la configuration, éditez le fichier 
+                            <code>data/by-date/produitsAbonnement.js</code> et rechargez le serveur.
+                        </div>
                     </div>
                 </div>
             </div>

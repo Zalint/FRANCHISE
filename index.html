@@ -343,6 +343,11 @@
                                 <i class="bi bi-credit-card"></i> Générer Paiement
                             </a>
                         </li>
+                        <li class="nav-item" id="abonnements-item">
+                            <a class="nav-link" href="abonnements.html">
+                                <i class="bi bi-credit-card-2-front"></i> Abonnements
+                            </a>
+                        </li>
                     </ul>
                     <div class="navbar-nav">
                         <span class="nav-item nav-link" id="user-info"></span>
@@ -373,6 +378,26 @@
                                     <select class="form-select" id="point-vente" required>
                                         <option value="">Sélectionner un point de vente</option>
                                     </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Client Abonné -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="client-abonne" class="form-label">
+                                        <i class="bi bi-credit-card-2-front"></i> Client Abonné
+                                    </label>
+                                    <select class="form-select" id="client-abonne">
+                                        <option value="">-- Aucun --</option>
+                                    </select>
+                                    <small class="text-muted">Sélectionnez un client abonné pour bénéficier des prix préférentiels</small>
+                                </div>
+                                <div class="col-md-6" id="abonne-info-display" style="display:none;">
+                                    <div class="alert alert-success mt-4 mb-0">
+                                        <i class="bi bi-check-circle"></i> <strong id="abonne-nom"></strong>
+                                        <br>
+                                        <small>Prix abonnés appliqués automatiquement</small>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -2382,8 +2407,10 @@
     <!-- Scripts locaux -->
     <script src="data/by-date/produits.js"></script>
     <script src="data/by-date/produitsInventaire.js"></script>
+    <script src="data/by-date/produitsAbonnement.js"></script>
     <script src="reconciliationManager.js"></script>
     <script src="cash-payment-function.js"></script>
+    <script src="js/vente-abonnement.js"></script>
     <script src="script.js"></script>
     <script src="cash-payment.js"></script>
     <script src="transfert.js"></script>
