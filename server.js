@@ -102,7 +102,8 @@ const { spawn } = require('child_process');
 // Import the schema update scripts
 const { updateSchema } = require('./db/update-schema');
 const { updateVenteSchema } = require('./db/update-vente-schema');
-const { updateVenteSchemaAbonnement } = require('./db/update-vente-schema-abonnement');
+// Note: updateVenteSchemaAbonnement is handled by SQL queries below (lines 42-77)
+// const { updateVenteSchemaAbonnement } = require('./db/update-vente-schema-abonnement');
 let produitsAbonnement = require('./data/by-date/produitsAbonnement');
 
 const app = express();
@@ -119,7 +120,8 @@ console.log('Estimation.create:', typeof Estimation.create === 'function' ? 'fun
     console.log('Running database schema updates...');
     await updateSchema();
     await updateVenteSchema();
-    await updateVenteSchemaAbonnement(); // Ajouter les colonnes pour les abonnements
+    // Note: Abonnement schema updates are now handled by SQL queries in the startup sequence above
+    // await updateVenteSchemaAbonnement(); // Ajouter les colonnes pour les abonnements
         
     // Add commentaire column if it doesn't exist
     try {
