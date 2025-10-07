@@ -660,36 +660,63 @@ async function showCommandesModal(clientId) {
         // Afficher la modal
         commandesModal.show();
         
+        // Initialiser les statistiques à zéro
+        document.getElementById('commandes-total-global').textContent = formatMontant(0);
+        document.getElementById('commandes-total-mois').textContent = formatMontant(0);
+        document.getElementById('commandes-total-rabais').textContent = formatMontant(0);
+        document.getElementById('commandes-nombre-total').textContent = '0';
+        
         // Afficher un message de chargement
-        document.getElementById('commandes-table-body').innerHTML = '<tr><td colspan="7" class="text-center">Chargement...</td></tr>';
+        const tbody = document.getElementById('commandes-table-body');
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Chargement...</td></tr>';
         document.getElementById('no-commandes').style.display = 'none';
         
         // Charger les statistiques
-        const statsResponse = await fetch(`/api/abonnements/clients/${clientId}/ventes/stats`, {
-            credentials: 'include'
-        });
-        const statsResult = await statsResponse.json();
-        
-        if (statsResult.success && statsResult.data) {
-            const stats = statsResult.data;
-            document.getElementById('commandes-total-global').textContent = formatMontant(stats.totalGlobal);
-            document.getElementById('commandes-total-mois').textContent = formatMontant(stats.totalMois);
-            document.getElementById('commandes-total-rabais').textContent = formatMontant(stats.totalRabaisEconomise);
-            document.getElementById('commandes-nombre-total').textContent = stats.nombreCommandesTotal;
+        try {
+            const statsResponse = await fetch(`/api/abonnements/clients/${clientId}/ventes/stats`, {
+                credentials: 'include'
+            });
+            
+            if (statsResponse.ok) {
+                const statsResult = await statsResponse.json();
+                
+                if (statsResult.success && statsResult.data) {
+                    const stats = statsResult.data;
+                    document.getElementById('commandes-total-global').textContent = formatMontant(stats.totalGlobal);
+                    document.getElementById('commandes-total-mois').textContent = formatMontant(stats.totalMois);
+                    document.getElementById('commandes-total-rabais').textContent = formatMontant(stats.totalRabaisEconomise);
+                    document.getElementById('commandes-nombre-total').textContent = stats.nombreCommandesTotal;
+                }
+            } else {
+                console.warn('Erreur lors du chargement des statistiques:', statsResponse.status);
+            }
+        } catch (statsError) {
+            console.warn('Erreur lors du chargement des statistiques:', statsError);
+            // Ne pas bloquer, continuer avec les ventes
         }
         
         // Charger l'historique des commandes
-        const ventesResponse = await fetch(`/api/abonnements/clients/${clientId}/ventes`, {
-            credentials: 'include'
-        });
-        const ventesResult = await ventesResponse.json();
-        
-        if (ventesResult.success && ventesResult.data) {
-            const ventes = ventesResult.data.ventes;
-            const tbody = document.getElementById('commandes-table-body');
+        try {
+            const ventesResponse = await fetch(`/api/abonnements/clients/${clientId}/ventes`, {
+                credentials: 'include'
+            });
+            
+            let ventes = [];
+            
+            if (ventesResponse.ok) {
+                const ventesResult = await ventesResponse.json();
+                
+                if (ventesResult.success && ventesResult.data && ventesResult.data.ventes) {
+                    ventes = ventesResult.data.ventes;
+                }
+            } else {
+                console.warn('Erreur lors du chargement des ventes:', ventesResponse.status);
+            }
+            
+            // Afficher les ventes ou le message "aucune commande"
             tbody.innerHTML = '';
             
-            if (ventes.length === 0) {
+            if (!ventes || ventes.length === 0) {
                 document.getElementById('no-commandes').style.display = 'block';
                 tbody.closest('.table-responsive').style.display = 'none';
             } else {
@@ -720,12 +747,21 @@ async function showCommandesModal(clientId) {
                     tbody.appendChild(row);
                 });
             }
-        } else {
-            showNotification('Erreur lors du chargement des commandes', 'error');
+        } catch (ventesError) {
+            console.error('Erreur lors du chargement des ventes:', ventesError);
+            tbody.innerHTML = '';
+            document.getElementById('no-commandes').style.display = 'block';
+            tbody.closest('.table-responsive').style.display = 'none';
         }
     } catch (error) {
         console.error('Erreur lors de l\'affichage des commandes:', error);
         showNotification('Erreur lors du chargement des commandes', 'error');
+        
+        // Afficher quand même un message approprié dans la modal
+        const tbody = document.getElementById('commandes-table-body');
+        tbody.innerHTML = '';
+        document.getElementById('no-commandes').style.display = 'block';
+        tbody.closest('.table-responsive').style.display = 'none';
     }
 }
 

@@ -544,6 +544,39 @@ router.get('/clients/:id/ventes/stats', async (req, res) => {
         const now = new Date();
         const moisActuel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         
+        // Vérifier si la colonne client_abonne_id existe
+        try {
+            const columnCheck = await sequelize.query(`
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'ventes' 
+                AND column_name = 'client_abonne_id'
+            `, {
+                type: sequelize.QueryTypes.SELECT
+            });
+            
+            if (!columnCheck || columnCheck.length === 0) {
+                console.log('⚠️ Colonne client_abonne_id non trouvée dans la table ventes');
+                // Retourner des statistiques vides
+                return res.json({
+                    success: true,
+                    data: {
+                        totalMois: 0,
+                        nombreCommandesMois: 0,
+                        totalGlobal: 0,
+                        nombreCommandesTotal: 0,
+                        derniereCommande: null,
+                        totalRabaisEconomise: 0,
+                        moisActuel
+                    },
+                    message: 'Colonne client_abonne_id non disponible'
+                });
+            }
+        } catch (checkError) {
+            console.error('Erreur lors de la vérification de la colonne:', checkError);
+            // Continuer quand même, l'erreur sera capturée plus bas
+        }
+        
         // Total du mois en cours
         const [totalMoisResult] = await sequelize.query(`
             SELECT COALESCE(SUM(montant), 0) as total, COUNT(*) as nombre_commandes
@@ -605,9 +638,23 @@ router.get('/clients/:id/ventes/stats', async (req, res) => {
         });
     } catch (error) {
         console.error('Erreur lors de la récupération des stats de ventes:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Erreur serveur',
+        
+        // Retourner des statistiques vides au lieu d'une erreur 500
+        const now = new Date();
+        const moisActuel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        
+        res.json({
+            success: true,
+            data: {
+                totalMois: 0,
+                nombreCommandesMois: 0,
+                totalGlobal: 0,
+                nombreCommandesTotal: 0,
+                derniereCommande: null,
+                totalRabaisEconomise: 0,
+                moisActuel
+            },
+            warning: 'Erreur lors de la récupération des statistiques',
             error: error.message
         });
     }
@@ -628,6 +675,35 @@ router.get('/clients/:id/ventes', async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: 'Client non trouvé'
+            });
+        }
+        
+        // Vérifier si la colonne client_abonne_id existe
+        try {
+            await sequelize.query(`
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'ventes' 
+                AND column_name = 'client_abonne_id'
+            `, {
+                type: sequelize.QueryTypes.SELECT
+            });
+        } catch (checkError) {
+            console.log('⚠️ Colonne client_abonne_id non trouvée dans la table ventes');
+            // Retourner une réponse vide plutôt qu'une erreur
+            return res.json({
+                success: true,
+                data: {
+                    client: {
+                        id: client.id,
+                        abonne_id: client.abonne_id,
+                        nom: `${client.prenom} ${client.nom}`,
+                        telephone: client.telephone
+                    },
+                    ventes: [],
+                    count: 0
+                },
+                message: 'La colonne client_abonne_id n\'existe pas encore. Aucune vente liée.'
             });
         }
         
@@ -663,7 +739,7 @@ router.get('/clients/:id/ventes', async (req, res) => {
                     nom: `${client.prenom} ${client.nom}`,
                     telephone: client.telephone
                 },
-                ventes: ventes.map(v => ({
+                ventes: ventes && ventes.length > 0 ? ventes.map(v => ({
                     id: v.id,
                     date: v.date,
                     mois: v.mois,
@@ -676,15 +752,22 @@ router.get('/clients/:id/ventes', async (req, res) => {
                     prixNormal: v.prixNormal ? parseFloat(v.prixNormal) : null,
                     rabaisApplique: v.rabaisApplique ? parseFloat(v.rabaisApplique) : null,
                     createdAt: v.createdAt
-                })),
-                count: ventes.length
+                })) : [],
+                count: ventes ? ventes.length : 0
             }
         });
     } catch (error) {
         console.error('Erreur lors de la récupération des ventes:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Erreur serveur',
+        
+        // Retourner une réponse vide plutôt qu'une erreur 500
+        res.json({
+            success: true,
+            data: {
+                client: null,
+                ventes: [],
+                count: 0
+            },
+            warning: 'Erreur lors de la récupération des ventes',
             error: error.message
         });
     }
