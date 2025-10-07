@@ -667,6 +667,9 @@ async function handlePaymentFormSubmit(event) {
     }
     
     // Validation des données
+    console.log('🔍 DEBUG - selectedClientAbonne avant création paymentData:', selectedClientAbonne);
+    console.log('🔍 DEBUG - selectedClientAbonne est null?', selectedClientAbonne === null);
+    
     const paymentData = {
         pointVente: formData.get('pointVente'),
         clientName: clientName,
@@ -680,6 +683,8 @@ async function handlePaymentFormSubmit(event) {
     };
     
     console.log('📝 Données du paiement:', paymentData);
+    console.log('🔍 DEBUG - isAbonnement dans paymentData:', paymentData.isAbonnement);
+    console.log('🔍 DEBUG - clientAbonneId dans paymentData:', paymentData.clientAbonneId);
     
     // Validation côté client
     if (!validatePaymentData(paymentData)) {

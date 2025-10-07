@@ -2,7 +2,7 @@
 let currentUser = null;
 let selectedClientId = null;
 let clients = [];
-let clientModal, detailsModal, paiementModal;
+let clientModal, detailsModal, paiementModal, commandesModal;
 
 // Initialisation au chargement de la page
 document.addEventListener('DOMContentLoaded', async () => {
@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     clientModal = new bootstrap.Modal(document.getElementById('clientModal'));
     detailsModal = new bootstrap.Modal(document.getElementById('detailsModal'));
     paiementModal = new bootstrap.Modal(document.getElementById('paiementModal'));
+    commandesModal = new bootstrap.Modal(document.getElementById('commandesModal'));
     
     // Charger les points de vente
     await loadPointsVente();
@@ -130,7 +131,7 @@ async function loadClients() {
 }
 
 // Afficher les clients
-function displayClients(clientsToDisplay) {
+async function displayClients(clientsToDisplay) {
     const container = document.getElementById('clients-container');
     const noClientsMessage = document.getElementById('no-clients-message');
     
@@ -143,7 +144,8 @@ function displayClients(clientsToDisplay) {
     
     noClientsMessage.style.display = 'none';
     
-    clientsToDisplay.forEach(client => {
+    // Charger les statistiques de ventes pour tous les clients
+    for (const client of clientsToDisplay) {
         const card = document.createElement('div');
         card.className = 'col-md-6 col-lg-4 mb-4';
         
@@ -188,8 +190,11 @@ function displayClients(clientsToDisplay) {
             `;
         }
         
+        // Charger les statistiques de ventes
+        let statsHTML = '<div class="text-center"><small class="text-muted">Chargement...</small></div>';
+        
         card.innerHTML = `
-            <div class="card client-card h-100 shadow-sm" onclick="showClientDetails(${client.id})">
+            <div class="card client-card h-100 shadow-sm">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <h5 class="card-title mb-0 fw-bold">${client.prenom} ${client.nom}</h5>
@@ -205,6 +210,12 @@ function displayClients(clientsToDisplay) {
                     </div>
                     ${dernierPaiementHTML}
                     <hr>
+                    
+                    <!-- Statistiques de ventes -->
+                    <div id="stats-${client.id}" class="mb-3">
+                        ${statsHTML}
+                    </div>
+                    
                     <p class="card-text mb-2">
                         <i class="bi bi-telephone-fill text-primary me-2"></i>
                         <strong>${client.telephone}</strong>
@@ -219,16 +230,78 @@ function displayClients(clientsToDisplay) {
                         </p>
                     ` : ''}
                 </div>
-                <div class="card-footer bg-transparent border-top-0">
-                    <small class="text-muted">
-                        <i class="bi bi-calendar3"></i> Inscrit le ${formatDate(client.date_inscription)}
-                    </small>
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <i class="bi bi-calendar3"></i> Inscrit le ${formatDate(client.date_inscription)}
+                        </small>
+                        <button class="btn btn-sm btn-primary" onclick="showCommandesModal(${client.id}); event.stopPropagation();">
+                            <i class="bi bi-list-ul"></i> Commandes
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
         
         container.appendChild(card);
-    });
+        
+        // Charger les statistiques en arrière-plan
+        loadClientStats(client.id);
+    }
+}
+
+// Charger les statistiques de ventes d'un client
+async function loadClientStats(clientId) {
+    try {
+        const response = await fetch(`/api/abonnements/clients/${clientId}/ventes/stats`, {
+            credentials: 'include'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const stats = result.data;
+            const statsContainer = document.getElementById(`stats-${clientId}`);
+            
+            if (statsContainer) {
+                let derniereCommandeHTML = '';
+                if (stats.derniereCommande) {
+                    derniereCommandeHTML = `
+                        <div class="small text-muted mb-1">
+                            <i class="bi bi-calendar-check"></i> Dernière: ${formatDate(stats.derniereCommande.date)}
+                        </div>
+                    `;
+                }
+                
+                statsContainer.innerHTML = `
+                    <div class="alert alert-success py-2 px-2 mb-0">
+                        <div class="fw-bold text-center mb-2">
+                            <i class="bi bi-cart-check"></i> Commandes
+                        </div>
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>Ce mois:</span>
+                            <strong>${formatMontant(stats.totalMois)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>Total:</span>
+                            <strong>${formatMontant(stats.totalGlobal)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>Économisé:</span>
+                            <strong class="text-danger">${formatMontant(stats.totalRabaisEconomise)}</strong>
+                        </div>
+                        ${derniereCommandeHTML}
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error(`Erreur lors du chargement des stats du client ${clientId}:`, error);
+        const statsContainer = document.getElementById(`stats-${clientId}`);
+        if (statsContainer) {
+            statsContainer.innerHTML = '<small class="text-muted">Stats non disponibles</small>';
+        }
+    }
 }
 
 // Filtrer les clients
@@ -568,6 +641,92 @@ function formatMois(moisString) {
         month: 'long',
         year: 'numeric'
     });
+}
+
+// Afficher la modal des commandes
+async function showCommandesModal(clientId) {
+    try {
+        // Trouver le client dans la liste
+        const client = clients.find(c => c.id === clientId);
+        
+        if (!client) {
+            showNotification('Client non trouvé', 'error');
+            return;
+        }
+        
+        // Afficher le nom du client
+        document.getElementById('commandes-client-nom').textContent = `${client.prenom} ${client.nom}`;
+        
+        // Afficher la modal
+        commandesModal.show();
+        
+        // Afficher un message de chargement
+        document.getElementById('commandes-table-body').innerHTML = '<tr><td colspan="7" class="text-center">Chargement...</td></tr>';
+        document.getElementById('no-commandes').style.display = 'none';
+        
+        // Charger les statistiques
+        const statsResponse = await fetch(`/api/abonnements/clients/${clientId}/ventes/stats`, {
+            credentials: 'include'
+        });
+        const statsResult = await statsResponse.json();
+        
+        if (statsResult.success && statsResult.data) {
+            const stats = statsResult.data;
+            document.getElementById('commandes-total-global').textContent = formatMontant(stats.totalGlobal);
+            document.getElementById('commandes-total-mois').textContent = formatMontant(stats.totalMois);
+            document.getElementById('commandes-total-rabais').textContent = formatMontant(stats.totalRabaisEconomise);
+            document.getElementById('commandes-nombre-total').textContent = stats.nombreCommandesTotal;
+        }
+        
+        // Charger l'historique des commandes
+        const ventesResponse = await fetch(`/api/abonnements/clients/${clientId}/ventes`, {
+            credentials: 'include'
+        });
+        const ventesResult = await ventesResponse.json();
+        
+        if (ventesResult.success && ventesResult.data) {
+            const ventes = ventesResult.data.ventes;
+            const tbody = document.getElementById('commandes-table-body');
+            tbody.innerHTML = '';
+            
+            if (ventes.length === 0) {
+                document.getElementById('no-commandes').style.display = 'block';
+                tbody.closest('.table-responsive').style.display = 'none';
+            } else {
+                document.getElementById('no-commandes').style.display = 'none';
+                tbody.closest('.table-responsive').style.display = 'block';
+                
+                ventes.forEach(vente => {
+                    const row = document.createElement('tr');
+                    
+                    // Formater le rabais
+                    let rabaisHTML = '-';
+                    if (vente.rabaisApplique && vente.rabaisApplique > 0) {
+                        rabaisHTML = `<span class="text-danger fw-bold">${formatMontant(vente.rabaisApplique)}</span>`;
+                    }
+                    
+                    row.innerHTML = `
+                        <td>${formatDate(vente.date)}</td>
+                        <td>${vente.pointVente}</td>
+                        <td>
+                            <div><strong>${vente.produit}</strong></div>
+                            <small class="text-muted">${vente.categorie}</small>
+                        </td>
+                        <td>${vente.nombre}</td>
+                        <td class="text-end">${formatMontant(vente.prixUnit)}</td>
+                        <td class="text-end">${rabaisHTML}</td>
+                        <td class="text-end"><strong>${formatMontant(vente.montant)}</strong></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+        } else {
+            showNotification('Erreur lors du chargement des commandes', 'error');
+        }
+    } catch (error) {
+        console.error('Erreur lors de l\'affichage des commandes:', error);
+        showNotification('Erreur lors du chargement des commandes', 'error');
+    }
 }
 
 function showNotification(message, type = 'info') {

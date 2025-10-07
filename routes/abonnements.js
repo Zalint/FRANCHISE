@@ -517,6 +517,179 @@ router.get('/paiements/impayes', async (req, res) => {
     }
 });
 
+// =================== ROUTES STATISTIQUES VENTES ===================
+
+/**
+ * GET /api/abonnements/clients/:id/ventes/stats
+ * Récupérer les statistiques de ventes d'un client abonné
+ * - Total des commandes du mois en cours
+ * - Total des commandes depuis le début
+ * - Date de la dernière commande
+ */
+router.get('/clients/:id/ventes/stats', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { sequelize } = require('../db');
+        
+        // Vérifier que le client existe
+        const client = await ClientAbonne.findByPk(id);
+        if (!client) {
+            return res.status(404).json({
+                success: false,
+                message: 'Client non trouvé'
+            });
+        }
+        
+        // Obtenir le mois actuel au format YYYY-MM
+        const now = new Date();
+        const moisActuel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        
+        // Total du mois en cours
+        const [totalMoisResult] = await sequelize.query(`
+            SELECT COALESCE(SUM(montant), 0) as total, COUNT(*) as nombre_commandes
+            FROM ventes 
+            WHERE client_abonne_id = :clientId 
+            AND mois = :mois
+        `, {
+            replacements: { clientId: id, mois: moisActuel },
+            type: sequelize.QueryTypes.SELECT
+        });
+        
+        // Total depuis le début
+        const [totalGlobalResult] = await sequelize.query(`
+            SELECT COALESCE(SUM(montant), 0) as total, COUNT(*) as nombre_commandes
+            FROM ventes 
+            WHERE client_abonne_id = :clientId
+        `, {
+            replacements: { clientId: id },
+            type: sequelize.QueryTypes.SELECT
+        });
+        
+        // Dernière commande
+        const [derniereCommande] = await sequelize.query(`
+            SELECT date, montant 
+            FROM ventes 
+            WHERE client_abonne_id = :clientId 
+            ORDER BY date DESC, id DESC 
+            LIMIT 1
+        `, {
+            replacements: { clientId: id },
+            type: sequelize.QueryTypes.SELECT
+        });
+        
+        // Total du rabais économisé depuis le début
+        const [totalRabaisResult] = await sequelize.query(`
+            SELECT COALESCE(SUM(rabais_applique), 0) as total_rabais
+            FROM ventes 
+            WHERE client_abonne_id = :clientId 
+            AND rabais_applique IS NOT NULL
+        `, {
+            replacements: { clientId: id },
+            type: sequelize.QueryTypes.SELECT
+        });
+        
+        res.json({
+            success: true,
+            data: {
+                totalMois: parseFloat(totalMoisResult.total) || 0,
+                nombreCommandesMois: parseInt(totalMoisResult.nombre_commandes) || 0,
+                totalGlobal: parseFloat(totalGlobalResult.total) || 0,
+                nombreCommandesTotal: parseInt(totalGlobalResult.nombre_commandes) || 0,
+                derniereCommande: derniereCommande ? {
+                    date: derniereCommande.date,
+                    montant: parseFloat(derniereCommande.montant)
+                } : null,
+                totalRabaisEconomise: parseFloat(totalRabaisResult.total_rabais) || 0,
+                moisActuel
+            }
+        });
+    } catch (error) {
+        console.error('Erreur lors de la récupération des stats de ventes:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur serveur',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/abonnements/clients/:id/ventes
+ * Récupérer l'historique complet des commandes d'un client abonné
+ */
+router.get('/clients/:id/ventes', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { sequelize } = require('../db');
+        
+        // Vérifier que le client existe
+        const client = await ClientAbonne.findByPk(id);
+        if (!client) {
+            return res.status(404).json({
+                success: false,
+                message: 'Client non trouvé'
+            });
+        }
+        
+        // Récupérer toutes les ventes du client
+        const ventes = await sequelize.query(`
+            SELECT 
+                id,
+                date,
+                mois,
+                point_vente,
+                categorie,
+                produit,
+                prix_unit as "prixUnit",
+                nombre,
+                montant,
+                prix_normal as "prixNormal",
+                rabais_applique as "rabaisApplique",
+                created_at as "createdAt"
+            FROM ventes 
+            WHERE client_abonne_id = :clientId 
+            ORDER BY date DESC, id DESC
+        `, {
+            replacements: { clientId: id },
+            type: sequelize.QueryTypes.SELECT
+        });
+        
+        res.json({
+            success: true,
+            data: {
+                client: {
+                    id: client.id,
+                    abonne_id: client.abonne_id,
+                    nom: `${client.prenom} ${client.nom}`,
+                    telephone: client.telephone
+                },
+                ventes: ventes.map(v => ({
+                    id: v.id,
+                    date: v.date,
+                    mois: v.mois,
+                    pointVente: v.point_vente,
+                    categorie: v.categorie,
+                    produit: v.produit,
+                    prixUnit: parseFloat(v.prixUnit),
+                    nombre: parseFloat(v.nombre),
+                    montant: parseFloat(v.montant),
+                    prixNormal: v.prixNormal ? parseFloat(v.prixNormal) : null,
+                    rabaisApplique: v.rabaisApplique ? parseFloat(v.rabaisApplique) : null,
+                    createdAt: v.createdAt
+                })),
+                count: ventes.length
+            }
+        });
+    } catch (error) {
+        console.error('Erreur lors de la récupération des ventes:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur serveur',
+            error: error.message
+        });
+    }
+});
+
 // =================== ROUTES CONFIGURATION ===================
 
 /**
