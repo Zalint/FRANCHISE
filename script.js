@@ -1658,9 +1658,11 @@ document.getElementById('vente-form').addEventListener('submit', async function(
                     if (window.produits && window.produits[categorie] && window.produits[categorie][produit]) {
                         const prixNormal = window.produits.getPrixDefaut(categorie, produit, pointVente);
                         entry.prix_normal = prixNormal;
-                        entry.rabais_applique = prixNormal - parseFloat(prixUnit);
+                        // Calculer le rabais TOTAL appliqué (rabais par unité × quantité)
+                        const rabaisParUnite = prixNormal - parseFloat(prixUnit);
+                        entry.rabais_applique = rabaisParUnite * parseFloat(quantite);
                         
-                        console.log(`💰 Rabais calculé: ${entry.rabais_applique} FCFA (Prix normal: ${prixNormal}, Prix abonné: ${prixUnit})`);
+                        console.log(`💰 Rabais calculé: ${entry.rabais_applique} FCFA (Rabais unitaire: ${rabaisParUnite}, Quantité: ${quantite}, Prix normal: ${prixNormal}, Prix abonné: ${prixUnit})`);
                     }
                 }
             }
