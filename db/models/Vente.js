@@ -71,6 +71,24 @@ const Vente = sequelize.define('Vente', {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: false
+  },
+  client_abonne_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'client_abonne_id',
+    comment: 'ID du client abonné (FK vers clients_abonnes)'
+  },
+  prix_normal: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    field: 'prix_normal',
+    comment: 'Prix normal avant rabais abonné'
+  },
+  rabais_applique: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    field: 'rabais_applique',
+    comment: 'Montant du rabais appliqué pour client abonné'
   }
 }, {
   tableName: 'ventes',

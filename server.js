@@ -1101,7 +1101,7 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
             const prixUnit = parseFloat(parseFloat(entry.prixUnit).toFixed(2)) || 0;
             const montant = parseFloat(parseFloat(entry.total).toFixed(2)) || 0;
             
-            return {
+            const venteData = {
                 mois: entry.mois,
                 date: dateStandardisee,
                 semaine: entry.semaine,
@@ -1117,6 +1117,23 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                 adresseClient: entry.adresseClient || null,
                 creance: entry.creance || false
             };
+            
+            // Ajouter les données d'abonnement si présentes
+            if (entry.client_abonne_id) {
+                venteData.client_abonne_id = entry.client_abonne_id;
+                
+                // Ajouter le prix normal et le rabais si fournis
+                if (entry.prix_normal !== undefined) {
+                    venteData.prix_normal = parseFloat(parseFloat(entry.prix_normal).toFixed(2));
+                }
+                if (entry.rabais_applique !== undefined) {
+                    venteData.rabais_applique = parseFloat(parseFloat(entry.rabais_applique).toFixed(2));
+                }
+                
+                console.log(`✅ Vente avec client abonné détectée: client_abonne_id=${entry.client_abonne_id}, rabais=${entry.rabais_applique}`);
+            }
+            
+            return venteData;
         });
         
         console.log('Données préparées pour insertion:', JSON.stringify(ventesToInsert));
