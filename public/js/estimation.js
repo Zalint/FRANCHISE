@@ -1383,12 +1383,18 @@ function formatDate(dateString) {
         // Handle different date formats
         let date;
         if (dateString.includes('T')) {
-            // ISO format
+            // ISO format with time
             date = new Date(dateString);
         } else if (dateString.includes('-')) {
-            // DD-MM-YYYY format
+            // Determine if YYYY-MM-DD or DD-MM-YYYY
             const parts = dateString.split('-');
-            date = new Date(parts[2], parts[1] - 1, parts[0]);
+            if (parts[0].length === 4) {
+                // YYYY-MM-DD format (ISO date format from database)
+                date = new Date(parts[0], parts[1] - 1, parts[2]);
+            } else {
+                // DD-MM-YYYY format
+                date = new Date(parts[2], parts[1] - 1, parts[0]);
+            }
         } else {
             // Fallback
             date = new Date(dateString);

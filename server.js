@@ -4372,7 +4372,13 @@ app.post('/api/estimations', checkAuth, checkWriteAccess, async (req, res) => {
                 if (!dateStr) return '';
                 const parts = dateStr.split('-');
                 if (parts.length === 3) {
-                    return `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
+                    if (parts[0].length === 4) {
+                        // Already YYYY-MM-DD format
+                        return dateStr;
+                    } else {
+                        // DD-MM-YYYY format, convert to YYYY-MM-DD
+                        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                    }
                 }
                 return dateStr;
             };
@@ -4398,16 +4404,25 @@ app.post('/api/estimations', checkAuth, checkWriteAccess, async (req, res) => {
 });
 
 // Route pour récupérer les estimations
-// Helper function to parse estimation date (DD-MM-YYYY)
+// Helper function to parse estimation date (handles both DD-MM-YYYY and YYYY-MM-DD)
 function parseEstimationDate(dateStr) {
     try {
         if (!dateStr) return null;
         const parts = dateStr.split('-');
         if (parts.length === 3) {
-            const day = parseInt(parts[0]);
-            const month = parseInt(parts[1]) - 1; // Mois de 0 à 11
-            const year = parseInt(parts[2]);
-            return new Date(year, month, day);
+            if (parts[0].length === 4) {
+                // YYYY-MM-DD format
+                const year = parseInt(parts[0]);
+                const month = parseInt(parts[1]) - 1; // Mois de 0 à 11
+                const day = parseInt(parts[2]);
+                return new Date(year, month, day);
+            } else {
+                // DD-MM-YYYY format
+                const day = parseInt(parts[0]);
+                const month = parseInt(parts[1]) - 1; // Mois de 0 à 11
+                const year = parseInt(parts[2]);
+                return new Date(year, month, day);
+            }
         }
         return null;
     } catch (error) {
@@ -4467,7 +4482,13 @@ app.get('/api/estimations', checkAuth, checkEstimationAccess, async (req, res) =
                 if (!dateStr) return '';
                 const parts = dateStr.split('-');
                 if (parts.length === 3) {
-                    return `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
+                    if (parts[0].length === 4) {
+                        // Already YYYY-MM-DD format
+                        return dateStr;
+                    } else {
+                        // DD-MM-YYYY format, convert to YYYY-MM-DD
+                        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                    }
                 }
                 return dateStr;
             };
@@ -7655,23 +7676,8 @@ app.get('/api/external/estimations', validateApiKey, async (req, res) => {
         
         let estimations;
         if (date) {
-            // Normalize date format to DD-MM-YYYY for database queries (database stores dates in DD-MM-YYYY format)
-            let normalizedDate;
-            if (date.includes('-')) {
-                const parts = date.split('-');
-                if (parts[0].length === 4) {
-                    // YYYY-MM-DD format, convert to DD-MM-YYYY
-                    normalizedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                } else {
-                    // Already DD-MM-YYYY format
-                    normalizedDate = date;
-                }
-            } else {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Invalid date format. Use dd-mm-yyyy or yyyy-mm-dd' 
-                });
-            }
+            // Normalize date format to YYYY-MM-DD for database queries (database stores dates in YYYY-MM-DD ISO format)
+            const normalizedDate = standardiserDateFormat(date);
             
             estimations = await Estimation.findAll({
                 where: {
@@ -7697,7 +7703,13 @@ app.get('/api/external/estimations', validateApiKey, async (req, res) => {
                 if (!dateStr) return '';
                 const parts = dateStr.split('-');
                 if (parts.length === 3) {
-                    return `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
+                    if (parts[0].length === 4) {
+                        // Already YYYY-MM-DD format
+                        return dateStr;
+                    } else {
+                        // DD-MM-YYYY format, convert to YYYY-MM-DD
+                        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                    }
                 }
                 return dateStr;
             };
@@ -7780,23 +7792,8 @@ app.get('/api/external/estimation', validateApiKey, async (req, res) => {
         console.log('==== EXTERNAL API - ESTIMATION ====');
         console.log('Computing estimation analysis for date:', date);
         
-        // Normalize date format to DD-MM-YYYY for database queries (database stores dates in DD-MM-YYYY format)
-        let normalizedDate;
-        if (date.includes('-')) {
-            const parts = date.split('-');
-            if (parts[0].length === 4) {
-                // YYYY-MM-DD format, convert to DD-MM-YYYY
-                normalizedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-            } else {
-                // Already DD-MM-YYYY format
-                normalizedDate = date;
-            }
-        } else {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Invalid date format. Use dd-mm-yyyy or yyyy-mm-dd' 
-            });
-        }
+        // Normalize date format to YYYY-MM-DD for database queries (database stores dates in YYYY-MM-DD ISO format)
+        const normalizedDate = standardiserDateFormat(date);
         
         console.log('Normalized date:', normalizedDate);
         

@@ -51,4 +51,10 @@ copy-prod-db*.js
 update-preprod-db.bat
 DATABASE_COPY_README.md
 db_backups/
-temp_db_dumps/ 
+temp_db_dumps/
+
+# Test files (contain API keys)
+test-*.js
+check-*.js
+debug-*.js
+FINAL-TEST-*.js 
