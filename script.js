@@ -5558,13 +5558,15 @@ async function supprimerVente(venteId) {
             credentials: 'include'
         });
         
-            const data = await response.json();
+        const data = await response.json();
         
-        if (data.success) {
+        if (response.ok && data.success) {
             // Recharger les ventes après la suppression
             alert('Vente supprimée avec succès');
             chargerDernieresVentes();
         } else {
+            // Afficher le message d'erreur du serveur
+            console.error('Erreur de suppression:', data);
             alert(data.message || 'Erreur lors de la suppression de la vente');
         }
     } catch (error) {
