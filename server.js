@@ -1051,7 +1051,7 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
     // Vérifier les restrictions temporelles pour chaque vente
     for (const entry of entries) {
 
-        const restriction = checkSaleTimeRestrictions(entry.date, req.session.user.username);
+        const restriction = checkSaleTimeRestrictions(entry.date, req.session.user.username, req.session.user.role);
         if (!restriction.allowed) {
             return res.status(403).json({
                 success: false,
@@ -1184,7 +1184,7 @@ app.put('/api/ventes/:id', checkAuth, checkWriteAccess, async (req, res) => {
         const updatedVente = req.body;
         
         // Vérifier les restrictions temporelles pour la mise à jour
-        const restriction = checkSaleTimeRestrictions(updatedVente.date, req.session.user.username);
+        const restriction = checkSaleTimeRestrictions(updatedVente.date, req.session.user.username, req.session.user.role);
         if (!restriction.allowed) {
             return res.status(403).json({
                 success: false,
@@ -1338,9 +1338,12 @@ app.get('/api/ventes', checkAuth, checkReadAccess, async (req, res) => {
             const userPointVente = req.session.user.pointVente;
             if (userPointVente !== "tous") {
                 if (Array.isArray(userPointVente)) {
-                    whereConditionsDate.pointVente = {
-                        [Op.in]: userPointVente
-                    };
+                    // Si le tableau contient "tous", pas de restriction
+                    if (!userPointVente.includes("tous")) {
+                        whereConditionsDate.pointVente = {
+                            [Op.in]: userPointVente
+                        };
+                    }
                 } else {
                     whereConditionsDate.pointVente = userPointVente;
                 }
@@ -1352,7 +1355,7 @@ app.get('/api/ventes', checkAuth, checkReadAccess, async (req, res) => {
                 if (whereConditionsDate.pointVente) {
                     // Vérifier que le point demandé est dans ses permissions
                     if (Array.isArray(userPointVente)) {
-                        if (userPointVente.includes(pointVente)) {
+                        if (userPointVente.includes("tous") || userPointVente.includes(pointVente)) {
                             whereConditionsDate.pointVente = pointVente;
                         }
                         // Sinon, garder ses restrictions (il n'aura pas accès au point demandé)
@@ -1802,17 +1805,63 @@ function checkStockTimeRestrictionsMiddleware(req, res, next) {
 }
 
 // Fonction pour vérifier les restrictions temporelles pour les ventes
-function checkSaleTimeRestrictions(dateStr, username) {
+function checkSaleTimeRestrictions(dateStr, username, userRole = null) {
     if (!username || !dateStr) return { allowed: false, message: 'Données manquantes' };
     
-    const userRole = username.toUpperCase();
-    const privilegedUsers = ['SALIOU', 'OUSMANE']; // Gardés pour rétrocompatibilité
-    const supervisorUsers = ['NADOU']; // Ajout des superviseurs
-    const limitedAccessUsers = ['PAPI', 'MBA', 'OSF', 'KMS', 'LNG', 'DHR', 'TBM'];
+    const userUppercase = username.toUpperCase();
+    const privilegedUsers = ['SALIOU', 'OUSMANE']; // Superviseurs privilégiés
+    const superUtilisateurs = ['NADOU', 'PAPI']; // SuperUtilisateurs
+    const limitedAccessUsers = ['MBA', 'OSF', 'KMS', 'LNG', 'DHR', 'TBM'];
     
-    // Les utilisateurs privilégiés et superviseurs peuvent ajouter des ventes pour n'importe quelle date
-    if (privilegedUsers.includes(userRole) || supervisorUsers.includes(userRole)) {
+    // Les utilisateurs privilégiés (SALIOU, OUSMANE) peuvent modifier n'importe quelle date
+    if (privilegedUsers.includes(userUppercase)) {
         return { allowed: true };
+    }
+    
+    // SuperUtilisateurs : peuvent modifier/supprimer UNIQUEMENT le jour J
+    if (superUtilisateurs.includes(userUppercase) || userRole === 'superutilisateur') {
+        try {
+            // Parser la date (formats supportés : DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, YYYY/MM/DD)
+            const ddmmyyyyRegex = /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/;
+            const yyyymmddRegex = /^(\d{4})[-\/](\d{2})[-\/](\d{2})$/;
+            
+            let match = dateStr.match(ddmmyyyyRegex);
+            let day, month, year;
+            
+            if (match) {
+                day = parseInt(match[1]);
+                month = parseInt(match[2]) - 1;
+                year = parseInt(match[3]);
+            } else {
+                match = dateStr.match(yyyymmddRegex);
+                if (match) {
+                    year = parseInt(match[1]);
+                    month = parseInt(match[2]) - 1;
+                    day = parseInt(match[3]);
+                } else {
+                    return { allowed: false, message: 'Format de date invalide' };
+                }
+            }
+            
+            const targetDate = new Date(year, month, day);
+            const now = new Date();
+            
+            // Normaliser les dates pour comparer uniquement le jour (ignorer l'heure)
+            targetDate.setHours(0, 0, 0, 0);
+            const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            
+            // SuperUtilisateurs peuvent modifier UNIQUEMENT le jour J
+            if (targetDate.getTime() === todayDate.getTime()) {
+                return { allowed: true };
+            } else {
+                return {
+                    allowed: false,
+                    message: `Les SuperUtilisateurs ne peuvent modifier/supprimer que les ventes du jour même. Date demandée : ${dateStr}.`
+                };
+            }
+        } catch (error) {
+            return { allowed: false, message: 'Erreur lors de la validation de la date' };
+        }
     }
     
     // Tous les utilisateurs non privilégiés ont des restrictions temporelles (4h du matin)
@@ -2369,7 +2418,8 @@ app.delete('/api/ventes/:id', checkAuth, checkWriteAccess, async (req, res) => {
         if (userPointVente === "tous") {
             hasAccess = true;
         } else if (Array.isArray(userPointVente)) {
-            hasAccess = userPointVente.includes(vente.pointVente);
+            // Vérifier si le tableau contient "tous" OU le point de vente spécifique
+            hasAccess = userPointVente.includes("tous") || userPointVente.includes(vente.pointVente);
         } else {
             hasAccess = userPointVente === vente.pointVente;
         }
@@ -2382,7 +2432,7 @@ app.delete('/api/ventes/:id', checkAuth, checkWriteAccess, async (req, res) => {
         }
 
         // Vérifier les restrictions temporelles pour la suppression
-        const restriction = checkSaleTimeRestrictions(vente.date, req.session.user.username);
+        const restriction = checkSaleTimeRestrictions(vente.date, req.session.user.username, req.session.user.role);
         if (!restriction.allowed) {
             return res.status(403).json({
                 success: false,

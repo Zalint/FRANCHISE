@@ -706,35 +706,26 @@ async function showCommandesModal(clientId) {
             if (ventesResponse.ok) {
                 const ventesResult = await ventesResponse.json();
                 
-                console.log('📦 Réponse API ventes:', ventesResult);
-                console.log('📦 Nombre de ventes:', ventesResult.data?.ventes?.length || 0);
-                
                 if (ventesResult.success && ventesResult.data && ventesResult.data.ventes) {
                     ventes = ventesResult.data.ventes;
-                    console.log('✅ Ventes récupérées:', ventes);
                 } else {
-                    console.warn('⚠️ Structure de réponse inattendue:', ventesResult);
+                    console.warn('Structure de réponse inattendue:', ventesResult);
                 }
             } else {
-                console.warn('❌ Erreur lors du chargement des ventes:', ventesResponse.status);
+                console.warn('Erreur lors du chargement des ventes:', ventesResponse.status);
             }
             
             // Afficher les ventes ou le message "aucune commande"
             tbody.innerHTML = '';
             
-            console.log('🔍 Vérification des ventes à afficher:', ventes?.length || 0);
-            
             if (!ventes || ventes.length === 0) {
-                console.log('⚠️ Aucune vente à afficher - affichage du message');
                 document.getElementById('no-commandes').style.display = 'block';
                 tbody.closest('.table-responsive').style.display = 'none';
             } else {
-                console.log('✅ Affichage de', ventes.length, 'vente(s)');
                 document.getElementById('no-commandes').style.display = 'none';
                 tbody.closest('.table-responsive').style.display = 'block';
                 
-                ventes.forEach((vente, index) => {
-                    console.log(`   Vente ${index + 1}:`, vente);
+                ventes.forEach((vente) => {
                     const row = document.createElement('tr');
                     
                     // Formater le rabais
