@@ -720,8 +720,7 @@ router.get('/clients/:id/ventes', async (req, res) => {
                 nombre,
                 montant,
                 prix_normal as "prixNormal",
-                rabais_applique as "rabaisApplique",
-                created_at as "createdAt"
+                rabais_applique as "rabaisApplique"
             FROM ventes 
             WHERE client_abonne_id = :clientId 
             ORDER BY date DESC, id DESC
@@ -750,8 +749,7 @@ router.get('/clients/:id/ventes', async (req, res) => {
                     nombre: parseFloat(v.nombre),
                     montant: parseFloat(v.montant),
                     prixNormal: v.prixNormal ? parseFloat(v.prixNormal) : null,
-                    rabaisApplique: v.rabaisApplique ? parseFloat(v.rabaisApplique) : null,
-                    createdAt: v.createdAt
+                    rabaisApplique: v.rabaisApplique ? parseFloat(v.rabaisApplique) : null
                 })) : [],
                 count: ventes ? ventes.length : 0
             }

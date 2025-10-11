@@ -706,24 +706,35 @@ async function showCommandesModal(clientId) {
             if (ventesResponse.ok) {
                 const ventesResult = await ventesResponse.json();
                 
+                console.log('📦 Réponse API ventes:', ventesResult);
+                console.log('📦 Nombre de ventes:', ventesResult.data?.ventes?.length || 0);
+                
                 if (ventesResult.success && ventesResult.data && ventesResult.data.ventes) {
                     ventes = ventesResult.data.ventes;
+                    console.log('✅ Ventes récupérées:', ventes);
+                } else {
+                    console.warn('⚠️ Structure de réponse inattendue:', ventesResult);
                 }
             } else {
-                console.warn('Erreur lors du chargement des ventes:', ventesResponse.status);
+                console.warn('❌ Erreur lors du chargement des ventes:', ventesResponse.status);
             }
             
             // Afficher les ventes ou le message "aucune commande"
             tbody.innerHTML = '';
             
+            console.log('🔍 Vérification des ventes à afficher:', ventes?.length || 0);
+            
             if (!ventes || ventes.length === 0) {
+                console.log('⚠️ Aucune vente à afficher - affichage du message');
                 document.getElementById('no-commandes').style.display = 'block';
                 tbody.closest('.table-responsive').style.display = 'none';
             } else {
+                console.log('✅ Affichage de', ventes.length, 'vente(s)');
                 document.getElementById('no-commandes').style.display = 'none';
                 tbody.closest('.table-responsive').style.display = 'block';
                 
-                ventes.forEach(vente => {
+                ventes.forEach((vente, index) => {
+                    console.log(`   Vente ${index + 1}:`, vente);
                     const row = document.createElement('tr');
                     
                     // Formater le rabais
@@ -732,17 +743,26 @@ async function showCommandesModal(clientId) {
                         rabaisHTML = `<span class="text-danger fw-bold">${formatMontant(vente.rabaisApplique)}</span>`;
                     }
                     
+                    // Gérer les valeurs potentiellement nulles
+                    const dateFormatted = vente.date ? formatDate(vente.date) : 'N/A';
+                    const pointVente = vente.pointVente || 'N/A';
+                    const produit = vente.produit || 'N/A';
+                    const categorie = vente.categorie || 'N/A';
+                    const nombre = vente.nombre !== null && vente.nombre !== undefined ? vente.nombre : 0;
+                    const prixUnit = vente.prixUnit !== null && vente.prixUnit !== undefined ? formatMontant(vente.prixUnit) : '0 F CFA';
+                    const montant = vente.montant !== null && vente.montant !== undefined ? formatMontant(vente.montant) : '0 F CFA';
+                    
                     row.innerHTML = `
-                        <td>${formatDate(vente.date)}</td>
-                        <td>${vente.pointVente}</td>
+                        <td>${dateFormatted}</td>
+                        <td>${pointVente}</td>
                         <td>
-                            <div><strong>${vente.produit}</strong></div>
-                            <small class="text-muted">${vente.categorie}</small>
+                            <div><strong>${produit}</strong></div>
+                            <small class="text-muted">${categorie}</small>
                         </td>
-                        <td>${vente.nombre}</td>
-                        <td class="text-end">${formatMontant(vente.prixUnit)}</td>
+                        <td>${nombre}</td>
+                        <td class="text-end">${prixUnit}</td>
                         <td class="text-end">${rabaisHTML}</td>
-                        <td class="text-end"><strong>${formatMontant(vente.montant)}</strong></td>
+                        <td class="text-end"><strong>${montant}</strong></td>
                     `;
                     tbody.appendChild(row);
                 });
