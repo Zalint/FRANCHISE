@@ -293,6 +293,9 @@ const {
     checkReconciliationAccess
 } = require('./middlewares/auth');
 
+// Importer les routes
+const paymentsGeneratedRouter = require('./routes/payments-generated');
+
 // Route pour obtenir la liste des points de vente (admin seulement)
 app.get('/api/admin/points-vente', checkAuth, checkAdmin, (req, res) => {
     try {
@@ -302,6 +305,9 @@ app.get('/api/admin/points-vente', checkAuth, checkAdmin, (req, res) => {
         res.status(500).json({ success: false, message: 'Erreur serveur' });
     }
 });
+
+// Routes des paiements générés
+app.use('/api/payments/generated', paymentsGeneratedRouter);
 
 // Route pour gérer les points de vente (admin seulement)
 app.post('/api/admin/points-vente', checkAuth, checkAdmin, async (req, res) => {
@@ -5754,6 +5760,145 @@ app.get('/api/payment-links/status/:paymentLinkId', checkAuth, async (req, res) 
 
     } catch (error) {
         console.error('Erreur lors de la récupération des liens de paiement:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur'
+        });
+    }
+});
+
+// Route pour lister les paiements par date et point de vente
+app.get('/api/payment-links/list-by-date', checkAuth, async (req, res) => {
+    try {
+        const user = req.user;
+        const { date, pointVente } = req.query;
+        
+        // Validation des paramètres requis
+        if (!date || !pointVente) {
+            return res.status(400).json({
+                success: false,
+                message: 'Les paramètres "date" (dd-mm-yyyy) et "pointVente" sont requis'
+            });
+        }
+        
+        // Validation du format de date
+        const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
+        const dateMatch = date.match(dateRegex);
+        if (!dateMatch) {
+            return res.status(400).json({
+                success: false,
+                message: 'Format de date invalide. Utilisez dd-mm-yyyy (ex: 06-10-2025)'
+            });
+        }
+        
+        // Conversion de la date dd-mm-yyyy vers yyyy-mm-dd pour la base de données
+        const [, day, month, year] = dateMatch;
+        const dbDate = `${year}-${month}-${day}`;
+        
+        // Vérifier si l'utilisateur a accès à ce point de vente
+        let hasAccess = false;
+        if (user.canAccessAllPointsVente) {
+            hasAccess = true;
+        } else if (Array.isArray(user.pointVente)) {
+            hasAccess = user.pointVente.includes(pointVente) || user.pointVente.includes('tous');
+        } else {
+            hasAccess = user.pointVente === pointVente || user.pointVente === 'tous';
+        }
+        
+        if (!hasAccess) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'avez pas accès à ce point de vente'
+            });
+        }
+        
+        console.log(`🔍 Recherche des paiements pour ${pointVente} le ${date} (${dbDate})`);
+        
+        // Construire les conditions de requête
+        const whereConditions = {
+            point_vente: pointVente,
+            archived: 0,
+            [Op.and]: [
+                sequelize.where(sequelize.fn('DATE', sequelize.col('created_at')), dbDate)
+            ]
+        };
+        
+        // Récupérer tous les paiements pour cette date et ce point de vente
+        const paymentLinks = await PaymentLink.findAll({
+            where: whereConditions,
+            order: [['created_at', 'DESC']]
+        });
+        
+        console.log(`📊 ${paymentLinks.length} paiement(s) trouvé(s) pour ${pointVente} le ${date}`);
+        
+        // Classer les paiements en payés et non payés
+        const paidPayments = [];
+        const unpaidPayments = [];
+        
+        let totalAmount = 0;
+        let paidAmount = 0;
+        let unpaidAmount = 0;
+        
+        paymentLinks.forEach(link => {
+            const paymentData = {
+                id: link.id,
+                paymentLinkId: link.payment_link_id,
+                clientName: link.client_name,
+                phoneNumber: link.phone_number,
+                address: link.address,
+                amount: parseFloat(link.amount),
+                currency: link.currency,
+                status: link.status,
+                createdAt: link.created_at,
+                createdBy: link.created_by,
+                reference: link.reference,
+                isAbonnement: link.is_abonnement || false,
+                dueDate: link.due_date
+            };
+            
+            totalAmount += paymentData.amount;
+            
+            // Classer selon le statut
+            if (link.status === 'paid') {
+                paidPayments.push(paymentData);
+                paidAmount += paymentData.amount;
+            } else {
+                // Tous les autres statuts sont considérés comme non payés
+                unpaidPayments.push(paymentData);
+                unpaidAmount += paymentData.amount;
+            }
+        });
+        
+        // Préparer le résumé
+        const summary = {
+            totalPayments: paymentLinks.length,
+            totalAmount: totalAmount,
+            paidCount: paidPayments.length,
+            unpaidCount: unpaidPayments.length,
+            paidAmount: paidAmount,
+            unpaidAmount: unpaidAmount
+        };
+        
+        // Réponse structurée
+        const response = {
+            success: true,
+            data: {
+                date: date,
+                pointVente: pointVente,
+                summary: summary,
+                payments: {
+                    paid: paidPayments,
+                    unpaid: unpaidPayments
+                }
+            }
+        };
+        
+        console.log(`✅ Résumé: ${summary.paidCount} payés (${paidAmount} FCFA), ${summary.unpaidCount} non payés (${unpaidAmount} FCFA)`);
+        
+        res.json(response);
+        
+    } catch (error) {
+        console.error('❌ Erreur lors de la récupération des paiements par date:', error);
         res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur'

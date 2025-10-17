@@ -1281,6 +1281,39 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Calculer le total général au chargement de la page
     setTimeout(calculerTotalGeneral, 100);
+    
+    // Initialiser les clients abonnés si un point de vente est déjà sélectionné
+    // Utiliser un MutationObserver pour détecter quand le point de vente est rempli
+    if (pointVenteInput) {
+        const initClientsAbonnes = () => {
+            if (pointVenteInput.value && window.venteAbonnementModule) {
+                console.log('🔄 Initialisation des clients abonnés pour le point de vente:', pointVenteInput.value);
+                window.venteAbonnementModule.chargerClientsAbonnes(pointVenteInput.value);
+            }
+        };
+        
+        // Essayer immédiatement
+        initClientsAbonnes();
+        
+        // Observer les changements sur le select
+        const observer = new MutationObserver((mutations) => {
+            initClientsAbonnes();
+        });
+        
+        observer.observe(pointVenteInput, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['value']
+        });
+        
+        // Initialisations différées multiples pour plus de robustesse
+        [500, 1000, 2000].forEach(delay => {
+            setTimeout(() => {
+                initClientsAbonnes();
+            }, delay);
+        });
+    }
 });
 
 function calculerTotalGeneral() {
