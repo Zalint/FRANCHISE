@@ -278,13 +278,13 @@ router.get('/bictorys/source', checkAuthOrApiKey, async (req, res) => {
         }
 
         // 4. Préparer les dates pour l'API Bictorys (format ISO 8601 avec timezone Dakar UTC+0)
-        // Format attendu: 2025-10-17T00:00:00+00:00
-        const startDate = `${year}-${month}-${day}T00:00:00+00:00`;
+        // Format attendu: 2025-10-17T00:00:00+00
+        const startDate = `${year}-${month}-${day}T00:00:00+00`;
         
         // Calculer end_date = date + 1 jour
         const endDateObj = new Date(year, month - 1, day);
         endDateObj.setDate(endDateObj.getDate() + 1);
-        const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, '0')}-${String(endDateObj.getDate()).padStart(2, '0')}T00:00:00+00:00`;
+        const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, '0')}-${String(endDateObj.getDate()).padStart(2, '0')}T00:00:00+00`;
 
         console.log(`🔍 Recherche des transactions Bictorys pour ${pointVente} du ${startDate} au ${endDate}`);
         console.log(`📌 Références à filtrer: ${references.join(', ')}`);
@@ -308,6 +308,7 @@ router.get('/bictorys/source', checkAuthOrApiKey, async (req, res) => {
             dataType: typeof bictorysResponse.data,
             isArray: Array.isArray(bictorysResponse.data)
         });
+        console.log(`🔍 Réponse Bictorys complète:`, JSON.stringify(bictorysResponse.data, null, 2));
 
         // 6. Filtrer les transactions
         let transactions = [];
@@ -323,11 +324,11 @@ router.get('/bictorys/source', checkAuthOrApiKey, async (req, res) => {
 
         console.log(`📋 Nombre total de transactions reçues: ${transactions.length}`);
 
-        // Filtrer: status = succeeded ET reference commence par V_ ou G_ du point de vente
+        // Filtrer: status = succeeded ET paymentReference commence par V_ ou G_ du point de vente
         const filteredTransactions = transactions.filter(transaction => {
             const hasSucceededStatus = transaction.status === 'succeeded';
             const hasValidReference = references.some(ref => 
-                transaction.reference && transaction.reference.startsWith(ref)
+                transaction.paymentReference && transaction.paymentReference.startsWith(ref)
             );
             
             return hasSucceededStatus && hasValidReference;
@@ -358,13 +359,14 @@ router.get('/bictorys/source', checkAuthOrApiKey, async (req, res) => {
                 },
                 transactions: filteredTransactions.map(transaction => ({
                     id: transaction.id,
-                    reference: transaction.reference,
+                    reference: transaction.paymentReference,
                     amount: parseFloat(transaction.amount),
                     currency: transaction.currency,
                     status: transaction.status,
-                    created_at: transaction.created_at || transaction.createdAt,
-                    customer: transaction.customer || null,
-                    description: transaction.description || null
+                    created_at: transaction.timestamp,
+                    payment_means: transaction.paymentMeans,
+                    psp_name: transaction.pspName,
+                    order_id: transaction.orderId
                 }))
             }
         };
