@@ -544,20 +544,6 @@ router.get('/clients/:id/ventes/stats', async (req, res) => {
         const now = new Date();
         const moisActuel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         
-        console.log('📅 Calcul des stats pour le mois:', moisActuel, 'Client ID:', id);
-        
-        // DEBUG: Voir toutes les ventes d'octobre
-        const [debugVentes] = await sequelize.query(`
-            SELECT id, date, mois, nom_client, numero_client, montant, client_abonne_id
-            FROM ventes 
-            WHERE (date LIKE '%/10/2025%' OR date LIKE '%-10-2025%' OR mois LIKE '2025-10%')
-            LIMIT 10
-        `);
-        console.log('🔍 DEBUG - Ventes d\'octobre trouvées:', debugVentes.length);
-        debugVentes.forEach(v => {
-            console.log(`   ID: ${v.id}, Date: ${v.date}, Mois: ${v.mois}, Client: ${v.nom_client}, client_abonne_id: ${v.client_abonne_id}`);
-        });
-        
         // Vérifier si la colonne client_abonne_id existe
         try {
             const columnCheck = await sequelize.query(`
@@ -605,8 +591,6 @@ router.get('/clients/:id/ventes/stats', async (req, res) => {
             },
             type: sequelize.QueryTypes.SELECT
         });
-        
-        console.log('📊 Total mois résultat:', totalMoisResult);
         
         // Total depuis le début
         const [totalGlobalResult] = await sequelize.query(`

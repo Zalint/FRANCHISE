@@ -782,6 +782,44 @@ function validatePaymentData(data) {
 }
 
 /**
+ * Calculer et afficher le résumé des montants filtrés
+ */
+function updateFilteredAmountsSummary() {
+    // Calculer le total et le nombre de liens filtrés
+    // Convertir les montants en nombres pour éviter les erreurs NaN
+    const totalAmount = filteredPaymentLinks.reduce((sum, link) => {
+        const amount = parseFloat(link.amount) || 0;
+        console.log('🔍 Debug montant:', link.amount, 'converti en:', amount);
+        return sum + amount;
+    }, 0);
+    const totalLinks = filteredPaymentLinks.length;
+    
+    // Mettre à jour l'affichage
+    const totalAmountElement = document.getElementById('total-amount-filtered');
+    const totalLinksElement = document.getElementById('total-links-filtered');
+    
+    if (totalAmountElement) {
+        totalAmountElement.textContent = formatCurrency(totalAmount);
+    }
+    
+    if (totalLinksElement) {
+        totalLinksElement.textContent = totalLinks.toLocaleString('fr-FR');
+    }
+    
+    console.log('📊 Résumé mis à jour:', {
+        totalAmount: formatCurrency(totalAmount),
+        totalLinks: totalLinks,
+        rawTotalAmount: totalAmount,
+        linksData: filteredPaymentLinks.map(link => ({
+            id: link.paymentLinkId,
+            amount: link.amount,
+            amountType: typeof link.amount,
+            parsedAmount: parseFloat(link.amount)
+        }))
+    });
+}
+
+/**
  * Mettre à jour l'affichage des liens de paiement dans le tableau
  */
 function updatePaymentLinksDisplay() {
@@ -803,6 +841,9 @@ function updatePaymentLinksDisplay() {
     
     // Trier par date de création (décroissant)
     filteredPaymentLinks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    // Mettre à jour le résumé des montants filtrés
+    updateFilteredAmountsSummary();
     
     // Mettre à jour le tableau
     updateTable();
@@ -1328,6 +1369,44 @@ function formatCurrency(amount) {
 
 
 /**
+ * Peupler le filtre des points de vente avec les points de vente uniques des liens
+ */
+function populatePointVenteFilter() {
+    const select = document.getElementById('filter-point-vente');
+    if (!select) return;
+    
+    // Extraire les points de vente uniques des liens de paiement
+    const uniquePointsVente = [...new Set(generatedPaymentLinks.map(link => link.pointVente))].filter(Boolean).sort();
+    
+    // Vider le select (garder l'option par défaut)
+    select.innerHTML = '<option value="">Tous les points de vente</option>';
+    
+    // Ajouter les options
+    uniquePointsVente.forEach(pointVente => {
+        const option = document.createElement('option');
+        option.value = pointVente;
+        option.textContent = pointVente;
+        select.appendChild(option);
+    });
+    
+    console.log('✅ Filtre des points de vente peuplé avec', uniquePointsVente.length, 'points de vente');
+}
+
+/**
+ * Extraire la date au format YYYY-MM-DD d'un string datetime
+ */
+function extractDateOnly(dateTimeString) {
+    if (!dateTimeString) return null;
+    try {
+        const date = new Date(dateTimeString);
+        return date.toISOString().split('T')[0]; // Format YYYY-MM-DD
+    } catch (error) {
+        console.error('Erreur lors de l\'extraction de la date:', error);
+        return null;
+    }
+}
+
+/**
  * Charger les liens de paiement existants depuis la base de données
  */
 async function loadExistingPaymentLinks() {
@@ -1357,6 +1436,9 @@ async function loadExistingPaymentLinks() {
                         console.log('  - updatedAt:', firstLink.updatedAt);
                         console.log('  - createdAt:', firstLink.createdAt);
                     }
+            
+            // Peupler le filtre des points de vente après le chargement des données
+            populatePointVenteFilter();
             
             // Forcer l'affichage du tableau
             setTimeout(() => {
@@ -1388,6 +1470,8 @@ function initFilters() {
         document.getElementById('filter-status').value = '';
         document.getElementById('filter-name').value = '';
         document.getElementById('filter-phone').value = '';
+        document.getElementById('filter-point-vente').value = '';
+        document.getElementById('filter-date-creation').value = '';
         currentPage = 1;
         updatePaymentLinksDisplay();
     });
@@ -1407,6 +1491,17 @@ function initFilters() {
         currentPage = 1;
         updatePaymentLinksDisplay();
     });
+    
+    // Filtrage automatique pour les nouveaux filtres
+    document.getElementById('filter-point-vente')?.addEventListener('change', function() {
+        currentPage = 1;
+        updatePaymentLinksDisplay();
+    });
+    
+    document.getElementById('filter-date-creation')?.addEventListener('change', function() {
+        currentPage = 1;
+        updatePaymentLinksDisplay();
+    });
 }
 
 /**
@@ -1416,13 +1511,19 @@ function applyFilters() {
     const statusFilter = document.getElementById('filter-status')?.value || '';
     const nameFilter = document.getElementById('filter-name')?.value.toLowerCase() || '';
     const phoneFilter = document.getElementById('filter-phone')?.value || '';
+    const pointVenteFilter = document.getElementById('filter-point-vente')?.value || '';
+    const dateFilter = document.getElementById('filter-date-creation')?.value || '';
     
     filteredPaymentLinks = generatedPaymentLinks.filter(link => {
         const matchesStatus = !statusFilter || link.status === statusFilter;
         const matchesName = !nameFilter || (link.clientName && link.clientName.toLowerCase().includes(nameFilter));
         const matchesPhone = !phoneFilter || (link.phoneNumber && link.phoneNumber.includes(phoneFilter));
+        const matchesPointVente = !pointVenteFilter || link.pointVente === pointVenteFilter;
         
-        return matchesStatus && matchesName && matchesPhone;
+        // Filtrage par date - comparer seulement la date (ignorer l'heure)
+        const matchesDate = !dateFilter || extractDateOnly(link.createdAt) === dateFilter;
+        
+        return matchesStatus && matchesName && matchesPhone && matchesPointVente && matchesDate;
     });
 }
 
