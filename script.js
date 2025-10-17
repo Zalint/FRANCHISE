@@ -973,6 +973,53 @@ document.getElementById('logout-btn').addEventListener('click', async function(e
 // Vérifier l'authentification au chargement de la page
 checkAuth();
 
+/**
+ * Initialiser les clients abonnés de manière robuste
+ * Attend que le point de vente soit disponible avant de charger les clients
+ */
+function initializerClientsAbonnes(pointVenteInput) {
+    // Fonction d'initialisation
+    const chargerClientsAbonnesSiPossible = () => {
+        const pointVenteValue = pointVenteInput.value;
+        if (pointVenteValue && window.venteAbonnementModule) {
+            console.log('🔄 Initialisation des clients abonnés pour:', pointVenteValue);
+            window.venteAbonnementModule.chargerClientsAbonnes(pointVenteValue);
+            return true; // Succès
+        }
+        return false; // Pas encore prêt
+    };
+    
+    // Essayer immédiatement
+    if (chargerClientsAbonnesSiPossible()) {
+        return; // Déjà chargé, terminé
+    }
+    
+    // Sinon, attendre que le point de vente soit disponible
+    const attendrePointVenteDisponible = () => {
+        return new Promise((resolve) => {
+            // Vérifier périodiquement (max 5 secondes)
+            let tentatives = 0;
+            const maxTentatives = 50; // 50 * 100ms = 5 secondes max
+            
+            const interval = setInterval(() => {
+                tentatives++;
+                
+                if (chargerClientsAbonnesSiPossible()) {
+                    clearInterval(interval);
+                    resolve(true);
+                } else if (tentatives >= maxTentatives) {
+                    clearInterval(interval);
+                    console.warn('⚠️ Timeout: Point de vente non disponible après 5s');
+                    resolve(false);
+                }
+            }, 100);
+        });
+    };
+    
+    // Lancer l'attente asynchrone
+    attendrePointVenteDisponible();
+}
+
 // Configuration des dates
 flatpickr("#date", {
     locale: "fr",
@@ -1282,37 +1329,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Calculer le total général au chargement de la page
     setTimeout(calculerTotalGeneral, 100);
     
-    // Initialiser les clients abonnés si un point de vente est déjà sélectionné
-    // Utiliser un MutationObserver pour détecter quand le point de vente est rempli
+    // Initialiser les clients abonnés de manière robuste
     if (pointVenteInput) {
-        const initClientsAbonnes = () => {
-            if (pointVenteInput.value && window.venteAbonnementModule) {
-                console.log('🔄 Initialisation des clients abonnés pour le point de vente:', pointVenteInput.value);
-                window.venteAbonnementModule.chargerClientsAbonnes(pointVenteInput.value);
-            }
-        };
-        
-        // Essayer immédiatement
-        initClientsAbonnes();
-        
-        // Observer les changements sur le select
-        const observer = new MutationObserver((mutations) => {
-            initClientsAbonnes();
-        });
-        
-        observer.observe(pointVenteInput, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['value']
-        });
-        
-        // Initialisations différées multiples pour plus de robustesse
-        [500, 1000, 2000].forEach(delay => {
-            setTimeout(() => {
-                initClientsAbonnes();
-            }, delay);
-        });
+        initializerClientsAbonnes(pointVenteInput);
     }
 });
 
