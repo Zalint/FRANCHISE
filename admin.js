@@ -2080,6 +2080,264 @@ function supprimerProduitInventaire(produit) {
     }
 }
 
+// Fonctions de modification pour les produits d'abonnement
+function modifierNomProduitAbonnement(categorie, ancienNom, nouveauNom) {
+    if (nouveauNom && nouveauNom !== ancienNom) {
+        const config = currentAbonnementConfig[categorie][ancienNom];
+        delete currentAbonnementConfig[categorie][ancienNom];
+        currentAbonnementConfig[categorie][nouveauNom] = config;
+        afficherAbonnementConfig();
+    }
+}
+
+function modifierPrixAbonnement(categorie, produit, champ, nouveauPrix) {
+    currentAbonnementConfig[categorie][produit][champ] = parseFloat(nouveauPrix) || 0;
+}
+
+function modifierAlternativesAbonnement(categorie, produit, alternativesStr) {
+    if (alternativesStr.trim()) {
+        const alternatives = alternativesStr.split(',').map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
+        currentAbonnementConfig[categorie][produit].alternatives = alternatives;
+    } else {
+        currentAbonnementConfig[categorie][produit].alternatives = [];
+    }
+}
+
+function modifierPrixSpeciauxAbonnement(categorie, produit) {
+    // Fermer tous les modals existants pour éviter les conflits
+    const existingModals = document.querySelectorAll('.modal.show');
+    existingModals.forEach(modal => {
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) {
+            bsModal.hide();
+        }
+    });
+    
+    // Supprimer les modals de prix spéciaux existants
+    const existingPrixModal = document.getElementById('prixSpeciauxAbonnementModal');
+    if (existingPrixModal) {
+        existingPrixModal.remove();
+    }
+    
+    // Récupérer la configuration actuelle du produit
+    const config = currentAbonnementConfig[categorie][produit];
+    const prixSpeciaux = Object.keys(config)
+        .filter(key => !['default', 'alternatives'].includes(key));
+    
+    // Créer le modal dynamiquement
+    let modalHtml = `
+        <div class="modal fade" id="prixSpeciauxAbonnementModal" tabindex="-1" aria-labelledby="prixSpeciauxAbonnementModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="prixSpeciauxAbonnementModalLabel">Prix spéciaux pour "${produit}" (${categorie})</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Point de vente</label>
+                                <select class="form-select" id="nouveauPointVenteAbonnement">
+                                    <option value="">Sélectionner un point de vente</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Prix</label>
+                                <input type="number" class="form-control" id="nouveauPrixSpecialAbonnement" placeholder="0" min="0" step="0.01">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">&nbsp;</label>
+                                <button type="button" class="btn btn-success w-100" onclick="ajouterPrixSpecialAbonnement('${categorie}', '${produit}')">
+                                    <i class="fas fa-plus"></i> Ajouter
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Point de Vente</th>
+                                        <th>Prix</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="prixSpeciauxAbonnementTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    
+    // Ajouter le nouveau modal au DOM
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Afficher le modal
+    const modal = new bootstrap.Modal(document.getElementById('prixSpeciauxAbonnementModal'));
+    modal.show();
+    
+    // Rafraîchir le tableau
+    refreshPrixSpeciauxAbonnementTable(categorie, produit);
+}
+
+function refreshPrixSpeciauxAbonnementTable(categorie, produit) {
+    const tbody = document.getElementById('prixSpeciauxAbonnementTableBody');
+    if (!tbody) return;
+    
+    // Vider le tableau
+    tbody.innerHTML = '';
+    
+    // Récupérer la configuration actuelle
+    const config = currentAbonnementConfig[categorie][produit];
+    const prixSpeciaux = Object.keys(config)
+        .filter(key => !['default', 'alternatives'].includes(key));
+    
+    // Si aucun prix spécial, afficher un message
+    if (prixSpeciaux.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Aucun prix spécial défini</td></tr>';
+        updatePointsVenteDropdownAbonnement([]);
+        return;
+    }
+    
+    // Ajouter chaque prix spécial au tableau
+    prixSpeciaux.forEach(pointVente => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${pointVente}</td>
+            <td>
+                <input type="number" class="form-control form-control-sm" value="${config[pointVente]}" 
+                       onchange="modifierPrixSpecialExistantAbonnement('${categorie}', '${produit}', '${pointVente}', this.value)">
+            </td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="supprimerPrixSpecialAbonnement('${categorie}', '${produit}', '${pointVente}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    // Mettre à jour les options du dropdown pour exclure les points de vente déjà utilisés
+    updatePointsVenteDropdownAbonnement(prixSpeciaux);
+}
+
+async function updatePointsVenteDropdownAbonnement(prixSpeciauxExistants = []) {
+    const dropdown = document.getElementById('nouveauPointVenteAbonnement');
+    if (!dropdown) return;
+    
+    try {
+        const response = await fetch('/api/admin/points-vente', {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            console.error('Erreur lors du chargement des points de vente');
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success || !data.pointsVente) {
+            console.error('Format de réponse invalide pour les points de vente');
+            return;
+        }
+        
+        // Vider le dropdown
+        dropdown.innerHTML = '<option value="">Sélectionner un point de vente</option>';
+        
+        // Filtrer seulement les points de vente actifs
+        const pointsVenteActifs = Object.entries(data.pointsVente)
+            .filter(([nom, config]) => config.active === true)
+            .map(([nom]) => nom)
+            .sort(); // Trier alphabétiquement
+        
+        // Ajouter les options pour les points de vente actifs non encore utilisés
+        pointsVenteActifs.forEach(pointVente => {
+            if (!prixSpeciauxExistants.includes(pointVente)) {
+                const option = document.createElement('option');
+                option.value = pointVente;
+                option.textContent = pointVente === 'Sacre Coeur' ? 'Sacré Coeur' : pointVente;
+                dropdown.appendChild(option);
+            }
+        });
+        
+    } catch (error) {
+        console.error('Erreur lors du chargement des points de vente:', error);
+    }
+}
+
+function ajouterPrixSpecialAbonnement(categorie, produit) {
+    const pointVente = document.getElementById('nouveauPointVenteAbonnement').value;
+    const prix = parseFloat(document.getElementById('nouveauPrixSpecialAbonnement').value);
+    
+    if (!pointVente) {
+        alert('Veuillez sélectionner un point de vente');
+        return;
+    }
+    
+    if (!prix || prix <= 0) {
+        alert('Veuillez saisir un prix valide');
+        return;
+    }
+    
+    // Vérifier si le prix spécial existe déjà
+    if (currentAbonnementConfig[categorie][produit][pointVente]) {
+        alert(`Un prix spécial pour "${pointVente}" existe déjà. Utilisez l'édition pour le modifier.`);
+        return;
+    }
+    
+    // Ajouter le prix spécial
+    currentAbonnementConfig[categorie][produit][pointVente] = prix;
+    
+    // Recharger seulement le tableau dans le modal
+    refreshPrixSpeciauxAbonnementTable(categorie, produit);
+    
+    // Vider les champs
+    document.getElementById('nouveauPointVenteAbonnement').value = '';
+    document.getElementById('nouveauPrixSpecialAbonnement').value = '';
+    
+    // Recharger l'affichage principal
+    afficherAbonnementConfig();
+}
+
+function modifierPrixSpecialExistantAbonnement(categorie, produit, pointVente, nouveauPrix) {
+    const prix = parseFloat(nouveauPrix);
+    if (prix && prix > 0) {
+        currentAbonnementConfig[categorie][produit][pointVente] = prix;
+        afficherAbonnementConfig();
+    }
+}
+
+function supprimerPrixSpecialAbonnement(categorie, produit, pointVente) {
+    if (confirm(`Êtes-vous sûr de vouloir supprimer le prix spécial pour "${pointVente}" ?`)) {
+        if (confirm(`Cette suppression est définitive. Confirmer la suppression du prix spécial pour "${pointVente}" ?`)) {
+            delete currentAbonnementConfig[categorie][produit][pointVente];
+            // Recharger seulement le tableau dans le modal
+            refreshPrixSpeciauxAbonnementTable(categorie, produit);
+            // Recharger l'affichage principal
+            afficherAbonnementConfig();
+        }
+    }
+}
+
+function supprimerProduitAbonnement(categorie, produit) {
+    if (confirm(`Êtes-vous sûr de vouloir supprimer le produit d'abonnement "${produit}" ?`)) {
+        if (confirm(`Cette suppression est définitive et supprimera tous les prix associés. Confirmer la suppression du produit "${produit}" ?`)) {
+            delete currentAbonnementConfig[categorie][produit];
+            afficherAbonnementConfig();
+        }
+    }
+}
+
+function ajouterProduitAbonnementCategorie(categorie) {
+    // À implémenter si besoin d'ajouter de nouveaux produits via un modal
+    alert('Fonctionnalité à implémenter: ajouter un produit à ' + categorie);
+}
+
 // Sauvegarder la configuration des produits
 async function sauvegarderConfigProduits() {
     try {
