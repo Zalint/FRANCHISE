@@ -6440,6 +6440,195 @@ app.get('/api/external/ventes-date', validateApiKey, async (req, res) => {
     }
 });
 
+// External API version for aggregated ventes by date range and category
+app.get('/api/external/ventes-date/aggregated', validateApiKey, async (req, res) => {
+    try {
+        const { start_date, end_date, pointVente } = req.query;
+        
+        // Validate input - both dates are required
+        if (!start_date || !end_date) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Les paramètres start_date et end_date sont requis (format: dd-mm-yyyy ou dd/mm/yyyy)' 
+            });
+        }
+        
+        console.log('==== EXTERNAL API - VENTES DATE AGGREGATED ====');
+        console.log('Paramètres reçus:', { start_date, end_date, pointVente });
+        
+        // Convert dates to DD-MM-YYYY format if needed
+        const formatDateInput = (dateStr) => {
+            if (!dateStr) return null;
+            // Accept DD-MM-YYYY, DD/MM/YYYY
+            return dateStr.replace(/\//g, '-');
+        };
+        
+        const startFormatted = formatDateInput(start_date);
+        const endFormatted = formatDateInput(end_date);
+        
+        console.log('Dates formatées:', { start: startFormatted, end: endFormatted });
+        
+        // Helper function to compare dates (handles DD-MM-YYYY and YYYY-MM-DD formats)
+        const isDateInRange = (dateToCheck, startDate, endDate) => {
+            const convertToComparable = (dateStr) => {
+                if (!dateStr) return '';
+                
+                // If date is in YYYY-MM-DD format, return as is
+                if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    return dateStr;
+                }
+                
+                // Otherwise, assume DD-MM-YYYY format
+                const [day, month, year] = dateStr.split('-');
+                return `${year}-${month}-${day}`;
+            };
+            
+            const comparableDate = convertToComparable(dateToCheck);
+            const comparableStart = convertToComparable(startDate);
+            const comparableEnd = convertToComparable(endDate);
+            
+            return comparableDate >= comparableStart && comparableDate <= comparableEnd;
+        };
+        
+        // Category normalization function
+        function mapToCanonicalCategory(rawCategory) {
+            if (!rawCategory || typeof rawCategory !== 'string') {
+                return 'Non spécifié';
+            }
+            const normalized = rawCategory.trim().toLowerCase();
+
+            if (normalized.includes('boeuf')) return 'Boeuf';
+            if (normalized.includes('veau')) return 'Veau';
+            if (normalized.includes('poulet')) return 'Poulet';
+            if (normalized.includes('volaille')) return 'Volaille';
+            if (normalized.includes('bovin')) return 'Bovin';
+
+            // Default behavior: clean the string (capitalize first letter)
+            return rawCategory.trim().charAt(0).toUpperCase() + rawCategory.trim().slice(1).toLowerCase();
+        }
+        
+        // Prepare Sequelize conditions
+        const whereConditions = {};
+        
+        if (pointVente && pointVente !== 'tous') {
+            whereConditions.pointVente = pointVente;
+        }
+        
+        // Retrieve all sales matching the criteria
+        const allVentes = await Vente.findAll({
+            where: whereConditions,
+            order: [['createdAt', 'DESC']]
+        });
+        
+        // Filter sales by date range
+        const filteredVentes = allVentes.filter(vente => 
+            isDateInRange(vente.date, startFormatted, endFormatted)
+        );
+        
+        console.log(`Nombre total de ventes récupérées: ${allVentes.length}`);
+        console.log(`Nombre de ventes après filtrage par date: ${filteredVentes.length}`);
+        
+        // Aggregate data by point de vente, category, and product
+        const aggregationsByPDV = {};
+        
+        filteredVentes.forEach(vente => {
+            const pdv = vente.pointVente;
+            const category = mapToCanonicalCategory(vente.categorie);
+            const produit = vente.produit || 'Non spécifié';
+            const montant = parseFloat(vente.montant) || 0;
+            const nombre = parseFloat(vente.nombre) || 0;
+            
+            // Initialize point de vente if not exists
+            if (!aggregationsByPDV[pdv]) {
+                aggregationsByPDV[pdv] = {
+                    pointVente: pdv,
+                    categories: {},
+                    totalPointVente: 0
+                };
+            }
+            
+            // Initialize category if not exists
+            if (!aggregationsByPDV[pdv].categories[category]) {
+                aggregationsByPDV[pdv].categories[category] = {
+                    categorie: category,
+                    totalMontant: 0,
+                    totalNombre: 0,
+                    nombreVentes: 0,
+                    produits: {}
+                };
+            }
+            
+            // Initialize product if not exists
+            if (!aggregationsByPDV[pdv].categories[category].produits[produit]) {
+                aggregationsByPDV[pdv].categories[category].produits[produit] = {
+                    produit: produit,
+                    totalMontant: 0,
+                    totalNombre: 0,
+                    nombreVentes: 0
+                };
+            }
+            
+            // Add to product aggregations
+            aggregationsByPDV[pdv].categories[category].produits[produit].totalMontant += montant;
+            aggregationsByPDV[pdv].categories[category].produits[produit].totalNombre += nombre;
+            aggregationsByPDV[pdv].categories[category].produits[produit].nombreVentes += 1;
+            
+            // Add to category aggregations
+            aggregationsByPDV[pdv].categories[category].totalMontant += montant;
+            aggregationsByPDV[pdv].categories[category].totalNombre += nombre;
+            aggregationsByPDV[pdv].categories[category].nombreVentes += 1;
+            aggregationsByPDV[pdv].totalPointVente += montant;
+        });
+        
+        // Convert aggregations to array format
+        const aggregations = Object.values(aggregationsByPDV).map(pdvData => ({
+            pointVente: pdvData.pointVente,
+            categories: Object.values(pdvData.categories).map(catData => ({
+                categorie: catData.categorie,
+                totalMontant: Math.round(catData.totalMontant * 100) / 100,
+                totalNombre: Math.round(catData.totalNombre * 100) / 100,
+                nombreVentes: catData.nombreVentes,
+                produits: Object.values(catData.produits).map(prodData => ({
+                    produit: prodData.produit,
+                    totalMontant: Math.round(prodData.totalMontant * 100) / 100,
+                    totalNombre: Math.round(prodData.totalNombre * 100) / 100,
+                    nombreVentes: prodData.nombreVentes
+                }))
+            })),
+            totalPointVente: Math.round(pdvData.totalPointVente * 100) / 100
+        }));
+        
+        // Calculate global total
+        const totalGeneral = aggregations.reduce((sum, pdv) => sum + pdv.totalPointVente, 0);
+        
+        console.log(`Nombre de points de vente avec des ventes: ${aggregations.length}`);
+        console.log('==== END EXTERNAL API - VENTES DATE AGGREGATED ====');
+        
+        res.json({
+            success: true,
+            periode: {
+                debut: start_date,
+                fin: end_date
+            },
+            aggregations: aggregations,
+            totalGeneral: Math.round(totalGeneral * 100) / 100,
+            metadata: {
+                nombreVentesTotales: filteredVentes.length,
+                nombrePointsVente: aggregations.length,
+                pointVenteFiltre: pointVente || 'tous'
+            }
+        });
+        
+    } catch (error) {
+        console.error('Erreur lors de l\'agrégation des ventes (API externe):', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Erreur lors de l\'agrégation des ventes',
+            error: error.message
+        });
+    }
+});
+
 // External API version for ventes with date range support (OPTIMIZED)
 app.get('/api/external/ventes', validateApiKey, async (req, res) => {
     try {
