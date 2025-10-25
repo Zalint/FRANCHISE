@@ -89,6 +89,12 @@ const Vente = sequelize.define('Vente', {
     allowNull: true,
     field: 'rabais_applique',
     comment: 'Montant du rabais appliqué pour client abonné'
+  },
+  extension: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    field: 'extension',
+    comment: 'Extension JSON pour stocker des données supplémentaires (ex: composition des packs)'
   }
 }, {
   tableName: 'ventes',

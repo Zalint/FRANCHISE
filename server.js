@@ -1139,6 +1139,12 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                 console.log(`✅ Vente avec client abonné détectée: client_abonne_id=${entry.client_abonne_id}, rabais=${entry.rabais_applique}`);
             }
             
+            // Ajouter l'extension (composition des packs) si présente
+            if (entry.extension) {
+                venteData.extension = entry.extension;
+                console.log(`📦 Composition du pack enregistrée pour ${entry.produit}:`, entry.extension);
+            }
+            
             return venteData;
         });
         
@@ -1220,8 +1226,8 @@ app.put('/api/ventes/:id', checkAuth, checkWriteAccess, async (req, res) => {
             });
         }
         
-        // Mettre à jour la vente
-        await vente.update({
+        // Préparer les données de mise à jour
+        const updateData = {
             mois: updatedVente.mois,
             date: dateStandardisee,
             semaine: updatedVente.semaine,
@@ -1236,7 +1242,16 @@ app.put('/api/ventes/:id', checkAuth, checkWriteAccess, async (req, res) => {
             numeroClient: updatedVente.numeroClient || null,
             adresseClient: updatedVente.adresseClient || null,
             creance: updatedVente.creance || false
-        });
+        };
+        
+        // Ajouter l'extension si présente
+        if (updatedVente.extension) {
+            updateData.extension = updatedVente.extension;
+            console.log(`📦 Mise à jour de la composition du pack pour ${updatedVente.produit}:`, updatedVente.extension);
+        }
+        
+        // Mettre à jour la vente
+        await vente.update(updateData);
         
         // Récupérer les 10 dernières ventes pour mise à jour de l'affichage
         const dernieresVentes = await Vente.findAll({
@@ -1499,7 +1514,8 @@ app.get('/api/dernieres-ventes', checkAuth, checkReadAccess, async (req, res) =>
             nomClient: vente.nomClient,
             numeroClient: vente.numeroClient,
             adresseClient: vente.adresseClient,
-            creance: vente.creance
+            creance: vente.creance,
+            extension: vente.extension
         }));
         
         res.json({ success: true, dernieresVentes: formattedVentes });
@@ -6624,6 +6640,463 @@ app.get('/api/external/ventes-date/aggregated', validateApiKey, async (req, res)
         res.status(500).json({ 
             success: false, 
             message: 'Erreur lors de l\'agrégation des ventes',
+            error: error.message
+        });
+    }
+});
+
+// External API for pack sales aggregation with composition breakdown
+app.get('/api/external/ventes-date/pack/aggregated', validateApiKey, async (req, res) => {
+    try {
+        const { start_date, end_date, pointVente } = req.query;
+        
+        console.log('==== EXTERNAL API - PACK AGGREGATION ====');
+        console.log('Paramètres reçus:', { start_date, end_date, pointVente });
+        
+        // Validate input
+        if (!start_date || !end_date) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'start_date et end_date sont requis (format: YYYY-MM-DD)' 
+            });
+        }
+        
+        // Validate date format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(start_date) || !dateRegex.test(end_date)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Format de date invalide. Utilisez YYYY-MM-DD' 
+            });
+        }
+        
+        // Check date range validity
+        const startDate = new Date(start_date);
+        const endDate = new Date(end_date);
+        
+        if (startDate > endDate) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'start_date doit être antérieure ou égale à end_date' 
+            });
+        }
+        
+        // Limit to 365 days
+        const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+        if (daysDiff > 365) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'La période ne peut pas dépasser 365 jours' 
+            });
+        }
+        
+        // Load pack compositions and products
+        const { getPackComposition } = require('./config/pack-compositions');
+        
+        // Load produits for price lookup
+        let produits = null;
+        try {
+            delete require.cache[require.resolve('./data/by-date/produits.js')];
+            produits = require('./data/by-date/produits.js');
+            if (produits && produits.produits) {
+                produits = produits.produits;
+            }
+        } catch (error) {
+            console.warn('Could not load produits.js, will use fallback prices');
+        }
+        
+        // Fallback prices if produits.js is not available
+        const FALLBACK_PRIX = {
+            "Veau": 3900,
+            "Veau en détail": 3900,
+            "Boeuf": 3700,
+            "Boeuf en détail": 3700,
+            "Poulet": 3500,
+            "Poulet en détail": 3500,
+            "Agneau": 4500,
+            "Oeuf": 2800,
+            "Merguez": 4500
+        };
+        
+        // Product name mapping
+        const PRODUIT_MAPPING = {
+            "Veau": "Veau en détail",
+            "Boeuf": "Boeuf en détail",
+            "Poulet": "Poulet en détail",
+            "Mouton": "Agneau"
+        };
+        
+        // Function to get unit price with fallback indicator
+        const getPrixUnitaireAvecFallback = (nomProduit, pointVente) => {
+            let prixUnitaire = null;
+            let fallbackPrix = false;
+            
+            // Try to find in produits.js
+            if (produits) {
+                const mappedName = PRODUIT_MAPPING[nomProduit] || nomProduit;
+                
+                for (const categorie in produits) {
+                    if (typeof produits[categorie] === 'object' && produits[categorie] !== null && typeof produits[categorie] !== 'function') {
+                        if (produits[categorie][mappedName]) {
+                            const prixData = produits[categorie][mappedName];
+                            
+                            // Priority 1: Point de vente specific price
+                            if (prixData[pointVente]) {
+                                prixUnitaire = prixData[pointVente];
+                            }
+                            // Priority 2: Default price
+                            else if (prixData.default) {
+                                prixUnitaire = prixData.default;
+                            }
+                            
+                            if (prixUnitaire !== null) {
+                                return { prix: prixUnitaire, fallback: false };
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Fallback to static mapping
+            if (FALLBACK_PRIX[nomProduit]) {
+                return { 
+                    prix: FALLBACK_PRIX[nomProduit], 
+                    fallback: true 
+                };
+            }
+            
+            // No price found
+            console.warn(`Prix non trouvé pour le produit: ${nomProduit}`);
+            return { 
+                prix: 0, 
+                fallback: true 
+            };
+        };
+        
+        // Helper to convert date to DD-MM-YYYY for comparison
+        const convertToComparableDate = (dateStr) => {
+            if (!dateStr) return null;
+            
+            // Handle YYYY-MM-DD format
+            if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                return dateStr;
+            }
+            
+            // Handle DD-MM-YYYY format
+            if (dateStr.match(/^\d{2}-\d{2}-\d{4}$/)) {
+                const [day, month, year] = dateStr.split('-');
+                return `${year}-${month}-${day}`;
+            }
+            
+            return null;
+        };
+        
+        const isDateInRange = (venteDate, start, end) => {
+            const comparable = convertToComparableDate(venteDate);
+            if (!comparable) return false;
+            return comparable >= start && comparable <= end;
+        };
+        
+        // Build query conditions
+        const whereConditions = {
+            categorie: 'Pack'
+        };
+        
+        if (pointVente && pointVente !== 'tous') {
+            whereConditions.pointVente = pointVente;
+        }
+        
+        // Retrieve pack sales
+        const allPackVentes = await Vente.findAll({
+            where: whereConditions,
+            order: [['date', 'ASC']]
+        });
+        
+        // Filter by date range
+        const filteredPackVentes = allPackVentes.filter(vente => 
+            isDateInRange(vente.date, start_date, end_date)
+        );
+        
+        console.log(`Nombre de ventes de packs récupérées: ${allPackVentes.length}`);
+        console.log(`Nombre de ventes de packs après filtrage: ${filteredPackVentes.length}`);
+        
+        // Aggregation data structures
+        const agregationParPV = {};
+        const statsModifications = {
+            modifiees: 0,
+            defaut: 0
+        };
+        
+        // Process each pack sale
+        filteredPackVentes.forEach(vente => {
+            const pv = vente.pointVente;
+            const packType = vente.produit;
+            const quantitePacks = parseFloat(vente.nombre) || 1;
+            const montant = parseFloat(vente.montant) || 0;
+            let composition;
+            let utiliseMappingDefaut;
+            
+            // Determine composition
+            if (vente.extension && vente.extension.composition) {
+                composition = vente.extension.composition;
+                utiliseMappingDefaut = false;
+                statsModifications.modifiees++;
+            } else {
+                composition = getPackComposition(packType);
+                utiliseMappingDefaut = true;
+                statsModifications.defaut++;
+            }
+            
+            if (!composition) {
+                console.warn(`Composition non trouvée pour ${packType}`);
+                return;
+            }
+            
+            // Initialize point de vente
+            if (!agregationParPV[pv]) {
+                agregationParPV[pv] = {
+                    totalPacks: 0,
+                    montantTotal: 0,
+                    packsVendus: {},
+                    compositionAgregee: {},
+                    statsModifications: {
+                        totalCompositionsModifiees: 0,
+                        totalCompositionsDefaut: 0
+                    }
+                };
+            }
+            
+            // Update pack stats
+            agregationParPV[pv].totalPacks += quantitePacks;
+            agregationParPV[pv].montantTotal += montant;
+            
+            if (utiliseMappingDefaut) {
+                agregationParPV[pv].statsModifications.totalCompositionsDefaut += quantitePacks;
+            } else {
+                agregationParPV[pv].statsModifications.totalCompositionsModifiees += quantitePacks;
+            }
+            
+            // Initialize pack type
+            if (!agregationParPV[pv].packsVendus[packType]) {
+                agregationParPV[pv].packsVendus[packType] = {
+                    quantite: 0,
+                    montantTotal: 0,
+                    detailsParJour: []
+                };
+            }
+            
+            agregationParPV[pv].packsVendus[packType].quantite += quantitePacks;
+            agregationParPV[pv].packsVendus[packType].montantTotal += montant;
+            agregationParPV[pv].packsVendus[packType].detailsParJour.push({
+                date: vente.date,
+                quantite: quantitePacks,
+                utiliseMappingDefaut
+            });
+            
+            // Aggregate composition components
+            composition.forEach(item => {
+                const produit = item.produit;
+                const quantiteTotale = item.quantite * quantitePacks;
+                
+                if (!agregationParPV[pv].compositionAgregee[produit]) {
+                    agregationParPV[pv].compositionAgregee[produit] = {
+                        quantite: 0,
+                        unite: item.unite
+                    };
+                    
+                    if (item.poids_unitaire) {
+                        agregationParPV[pv].compositionAgregee[produit].poids_unitaire = item.poids_unitaire;
+                        agregationParPV[pv].compositionAgregee[produit].poidsTotal = 0;
+                    }
+                }
+                
+                agregationParPV[pv].compositionAgregee[produit].quantite += quantiteTotale;
+                
+                if (item.poids_unitaire) {
+                    agregationParPV[pv].compositionAgregee[produit].poidsTotal += 
+                        quantiteTotale * item.poids_unitaire;
+                }
+            });
+        });
+        
+        // Calculate prices, informative amounts and contributions for each point de vente
+        const avertissementsProduits = new Set();
+        
+        Object.keys(agregationParPV).forEach(pv => {
+            let montantInformatifPV = 0;
+            
+            // Calculate price and informative amount for each product
+            Object.keys(agregationParPV[pv].compositionAgregee).forEach(produit => {
+                const item = agregationParPV[pv].compositionAgregee[produit];
+                const { prix, fallback } = getPrixUnitaireAvecFallback(produit, pv);
+                
+                item.prixUnitaire = prix;
+                item.fallbackPrix = fallback;
+                item.montantInformatif = Math.round(item.quantite * prix);
+                
+                montantInformatifPV += item.montantInformatif;
+                
+                if (fallback && prix === 0) {
+                    avertissementsProduits.add(produit);
+                }
+            });
+            
+            // Add montantInformatif to point de vente
+            agregationParPV[pv].montantInformatif = montantInformatifPV;
+            
+            // Calculate margin
+            const montantTotal = agregationParPV[pv].montantTotal;
+            agregationParPV[pv].margeAbsolue = montantTotal - montantInformatifPV;
+            agregationParPV[pv].margePourcentage = montantInformatifPV > 0
+                ? Math.round((agregationParPV[pv].margeAbsolue / montantInformatifPV) * 100 * 10) / 10
+                : 0;
+            
+            // Calculate contribution percentage for each product
+            Object.keys(agregationParPV[pv].compositionAgregee).forEach(produit => {
+                const item = agregationParPV[pv].compositionAgregee[produit];
+                item.contributionPourcentage = montantInformatifPV > 0
+                    ? Math.round((item.montantInformatif / montantInformatifPV) * 100 * 10) / 10
+                    : 0;
+            });
+            
+            // Calculate stats percentages
+            const stats = agregationParPV[pv].statsModifications;
+            const total = stats.totalCompositionsModifiees + stats.totalCompositionsDefaut;
+            stats.pourcentageModifications = total > 0 
+                ? Math.round((stats.totalCompositionsModifiees / total) * 100 * 10) / 10 
+                : 0;
+        });
+        
+        // Calculate global aggregation
+        const globalAgregation = {
+            totalPacksVendus: 0,
+            montantTotalPacks: 0,
+            repartitionParType: {},
+            compositionTotale: {},
+            statsModifications: {
+                totalCompositionsModifiees: statsModifications.modifiees,
+                totalCompositionsDefaut: statsModifications.defaut,
+                pourcentageModifications: 0
+            }
+        };
+        
+        Object.values(agregationParPV).forEach(pvData => {
+            globalAgregation.totalPacksVendus += pvData.totalPacks;
+            globalAgregation.montantTotalPacks += pvData.montantTotal;
+            
+            // Aggregate by pack type
+            Object.entries(pvData.packsVendus).forEach(([packType, data]) => {
+                if (!globalAgregation.repartitionParType[packType]) {
+                    globalAgregation.repartitionParType[packType] = 0;
+                }
+                globalAgregation.repartitionParType[packType] += data.quantite;
+            });
+            
+            // Aggregate composition
+            Object.entries(pvData.compositionAgregee).forEach(([produit, data]) => {
+                if (!globalAgregation.compositionTotale[produit]) {
+                    globalAgregation.compositionTotale[produit] = {
+                        quantite: 0,
+                        unite: data.unite,
+                        prixUnitaire: data.prixUnitaire,
+                        fallbackPrix: data.fallbackPrix,
+                        montantInformatif: 0
+                    };
+                    
+                    if (data.poidsTotal !== undefined) {
+                        globalAgregation.compositionTotale[produit].poids_unitaire = data.poids_unitaire;
+                        globalAgregation.compositionTotale[produit].poidsTotal = 0;
+                    }
+                }
+                
+                globalAgregation.compositionTotale[produit].quantite += data.quantite;
+                globalAgregation.compositionTotale[produit].montantInformatif += data.montantInformatif;
+                
+                if (data.poidsTotal !== undefined) {
+                    globalAgregation.compositionTotale[produit].poidsTotal += data.poidsTotal;
+                }
+            });
+        });
+        
+        // Calculate global montantInformatif
+        let globalMontantInformatif = 0;
+        Object.values(globalAgregation.compositionTotale).forEach(data => {
+            globalMontantInformatif += data.montantInformatif;
+        });
+        
+        globalAgregation.montantInformatif = globalMontantInformatif;
+        globalAgregation.margeAbsolue = globalAgregation.montantTotalPacks - globalMontantInformatif;
+        globalAgregation.margePourcentage = globalMontantInformatif > 0
+            ? Math.round((globalAgregation.margeAbsolue / globalMontantInformatif) * 100 * 10) / 10
+            : 0;
+        
+        // Calculate global contribution percentages
+        Object.keys(globalAgregation.compositionTotale).forEach(produit => {
+            const item = globalAgregation.compositionTotale[produit];
+            item.contributionPourcentage = globalMontantInformatif > 0
+                ? Math.round((item.montantInformatif / globalMontantInformatif) * 100 * 10) / 10
+                : 0;
+        });
+        
+        // Add warnings if there are products with fallback prices
+        if (avertissementsProduits.size > 0) {
+            globalAgregation.avertissements = [
+                {
+                    type: 'fallback_prix',
+                    message: `${avertissementsProduits.size} produit(s) utilisent des prix par défaut (fallback)`,
+                    produitsConcernes: Array.from(avertissementsProduits),
+                    impact: 'Les montants informatifs peuvent être imprécis pour ces produits'
+                }
+            ];
+        }
+        
+        // Calculate global percentage
+        const totalGlobal = statsModifications.modifiees + statsModifications.defaut;
+        globalAgregation.statsModifications.pourcentageModifications = totalGlobal > 0
+            ? Math.round((statsModifications.modifiees / totalGlobal) * 100 * 10) / 10
+            : 0;
+        
+        // Round numbers for cleaner output
+        Object.keys(agregationParPV).forEach(pv => {
+            agregationParPV[pv].montantTotal = Math.round(agregationParPV[pv].montantTotal);
+            Object.keys(agregationParPV[pv].compositionAgregee).forEach(produit => {
+                const item = agregationParPV[pv].compositionAgregee[produit];
+                item.quantite = Math.round(item.quantite * 100) / 100;
+                if (item.poidsTotal !== undefined) {
+                    item.poidsTotal = Math.round(item.poidsTotal * 100) / 100;
+                }
+            });
+        });
+        
+        globalAgregation.montantTotalPacks = Math.round(globalAgregation.montantTotalPacks);
+        Object.keys(globalAgregation.compositionTotale).forEach(produit => {
+            const item = globalAgregation.compositionTotale[produit];
+            item.quantite = Math.round(item.quantite * 100) / 100;
+            if (item.poidsTotal !== undefined) {
+                item.poidsTotal = Math.round(item.poidsTotal * 100) / 100;
+            }
+        });
+        
+        console.log(`Nombre de points de vente avec des ventes de packs: ${Object.keys(agregationParPV).length}`);
+        console.log(`Total packs vendus: ${globalAgregation.totalPacksVendus}`);
+        console.log('==== END EXTERNAL API - PACK AGGREGATION ====');
+        
+        res.json({
+            success: true,
+            periode: {
+                start: start_date,
+                end: end_date,
+                nbJours: daysDiff + 1
+            },
+            pointsVente: agregationParPV,
+            globalAgregation: globalAgregation
+        });
+        
+    } catch (error) {
+        console.error('Erreur lors de l\'agrégation des packs (API externe):', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Erreur lors de l\'agrégation des packs',
             error: error.message
         });
     }

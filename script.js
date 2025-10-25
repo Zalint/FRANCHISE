@@ -1234,10 +1234,16 @@ document.querySelectorAll('.categorie-select').forEach(select => {
 document.querySelectorAll('.produit-select').forEach(select => {
     select.addEventListener('change', function() {
         const row = this.closest('.row');
+        const produitEntry = this.closest('.produit-entry');
         const categorie = row.querySelector('.categorie-select').value;
         const produit = this.value;
         const prixUnitInput = row.querySelector('.prix-unit');
         const pointVente = document.getElementById('point-vente').value;
+        
+        // Vérifier si c'est un pack et afficher le bouton de détails
+        if (window.PackComposition && produitEntry) {
+            window.PackComposition.checkIfPackAndShowButton(produitEntry);
+        }
         
         if (categorie && produit && produits[categorie] && produits[categorie][produit]) {
             const prix = produits.getPrixDefaut(categorie, produit, pointVente);
@@ -1332,6 +1338,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialiser les clients abonnés de manière robuste
     if (pointVenteInput) {
         initializerClientsAbonnes(pointVenteInput);
+    }
+    
+    // Initialiser le module de gestion des packs
+    if (window.PackComposition) {
+        window.PackComposition.init();
     }
 });
 
@@ -1453,9 +1464,14 @@ function creerNouvelleEntree() {
             </div>
             <div class="col-md-4">
                 <label class="form-label">Produit</label>
-                <select class="form-select produit-select" required>
-                    <option value="">Sélectionner...</option>
-                </select>
+                <div class="d-flex gap-2">
+                    <select class="form-select produit-select" required style="flex: 1;">
+                        <option value="">Sélectionner...</option>
+                    </select>
+                    <button type="button" class="btn btn-info btn-pack-details" style="display: none;" title="Détails du pack">
+                        <i class="bi bi-box-seam"></i>
+                    </button>
+                </div>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Prix Unit.</label>
@@ -1565,7 +1581,14 @@ function creerNouvelleEntree() {
     };
     
     // Déclencher lors du changement (sélection d'un nouveau produit)
-    produitSelect.addEventListener('change', calculerEtAppliquerPrix);
+    produitSelect.addEventListener('change', function() {
+        calculerEtAppliquerPrix();
+        
+        // Vérifier si c'est un pack et afficher le bouton de détails
+        if (window.PackComposition) {
+            window.PackComposition.checkIfPackAndShowButton(div);
+        }
+    });
     
     // UNIQUEMENT pour le mode abonnement : listeners supplémentaires
     // Déclencher lors du focus (clic sur le select) UNIQUEMENT si un client abonné est déjà sélectionné
@@ -1601,6 +1624,10 @@ function creerNouvelleEntree() {
     // Logique de suppression
     const deleteButton = div.querySelector('.supprimer-produit');
     deleteButton.addEventListener('click', function() {
+        // Nettoyer la composition du pack si nécessaire
+        if (window.PackComposition) {
+            window.PackComposition.clearPackComposition(div);
+        }
         div.remove();
         calculerTotalGeneral(); // Recalculer le total général après suppression
     });
@@ -1683,7 +1710,7 @@ document.getElementById('vente-form').addEventListener('submit', async function(
             const mois = new Date(date.split('/').reverse().join('-')).toLocaleString('fr-FR', { month: 'long' });
             const semaine = `S${Math.ceil(new Date(date.split('/').reverse().join('-')).getDate() / 7)}`;
             
-            const entry = {
+            const entryData = {
                 id: venteId,
                 mois,
                 date,
@@ -1700,26 +1727,40 @@ document.getElementById('vente-form').addEventListener('submit', async function(
                 creance
             };
             
+            // Ajouter la composition du pack si c'est un pack
+            if (window.PackComposition && categorie === 'Pack') {
+                const packComposition = window.PackComposition.getPackComposition(entry);
+                if (packComposition) {
+                    entryData.extension = {
+                        pack_type: packComposition.packType,
+                        composition: packComposition.composition,
+                        modifie: packComposition.modifie,
+                        date_composition: new Date().toISOString()
+                    };
+                    console.log('📦 Composition du pack ajoutée:', entryData.extension);
+                }
+            }
+            
             // Ajouter les données d'abonnement si un client abonné est sélectionné
             if (window.venteAbonnementModule) {
                 const clientAbonne = window.venteAbonnementModule.getClientAbonneSelectionne();
                 if (clientAbonne) {
-                    entry.client_abonne_id = clientAbonne.id;
+                    entryData.client_abonne_id = clientAbonne.id;
                     
                     // Calculer le prix normal (sans rabais) depuis produitsAbonnement
                     if (window.produits && window.produits[categorie] && window.produits[categorie][produit]) {
                         const prixNormal = window.produits.getPrixDefaut(categorie, produit, pointVente);
-                        entry.prix_normal = prixNormal;
+                        entryData.prix_normal = prixNormal;
                         // Calculer le rabais TOTAL appliqué (rabais par unité × quantité)
                         const rabaisParUnite = prixNormal - parseFloat(prixUnit);
-                        entry.rabais_applique = rabaisParUnite * parseFloat(quantite);
+                        entryData.rabais_applique = rabaisParUnite * parseFloat(quantite);
                         
-                        console.log(`💰 Rabais calculé: ${entry.rabais_applique} FCFA (Rabais unitaire: ${rabaisParUnite}, Quantité: ${quantite}, Prix normal: ${prixNormal}, Prix abonné: ${prixUnit})`);
+                        console.log(`💰 Rabais calculé: ${entryData.rabais_applique} FCFA (Rabais unitaire: ${rabaisParUnite}, Quantité: ${quantite}, Prix normal: ${prixNormal}, Prix abonné: ${prixUnit})`);
                     }
                 }
             }
             
-            entries.push(entry);
+            entries.push(entryData);
         }
     });
     
@@ -1787,6 +1828,11 @@ document.getElementById('vente-form').addEventListener('submit', async function(
                 pointVenteSelect.disabled = true;
             } else if (currentPointVente) {
                 pointVenteSelect.value = currentPointVente;
+            }
+            
+            // Réinitialiser les compositions de packs
+            if (window.PackComposition) {
+                window.PackComposition.clearAllPackCompositions();
             }
             
             // Réinitialiser les produits
@@ -2208,6 +2254,119 @@ function updateSubmitButtonState() {
 // For example, by moving its definition here or ensuring it's defined earlier in the script.
 // Assuming standardiserDate is defined globally or earlier:
 
+/**
+ * Affiche la composition d'un pack en mode lecture seule
+ */
+function afficherCompositionPackReadOnly(nomPack, extensionData) {
+    // Ouvrir le modal
+    const modal = document.getElementById('packDetailsModal');
+    if (!modal) return;
+    
+    const packModal = new bootstrap.Modal(modal);
+    
+    // Mettre à jour le titre
+    document.getElementById('pack-name').textContent = nomPack;
+    
+    // Afficher la composition
+    const tbody = document.getElementById('pack-composition-body');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (extensionData && extensionData.composition) {
+        extensionData.composition.forEach((item, index) => {
+            const row = document.createElement('tr');
+            
+            // Produit (texte uniquement)
+            const tdProduit = document.createElement('td');
+            tdProduit.textContent = item.produit;
+            row.appendChild(tdProduit);
+            
+            // Quantité (texte uniquement)
+            const tdQuantite = document.createElement('td');
+            tdQuantite.textContent = item.quantite;
+            row.appendChild(tdQuantite);
+            
+            // Unité (texte uniquement)
+            const tdUnite = document.createElement('td');
+            tdUnite.textContent = item.unite;
+            if (item.poids_unitaire) {
+                tdUnite.innerHTML += `<br><small class="text-muted">(${item.poids_unitaire}kg/pièce)</small>`;
+            }
+            row.appendChild(tdUnite);
+            
+            // Prix (informatif)
+            const tdPrix = document.createElement('td');
+            tdPrix.className = 'text-end';
+            if (window.PackComposition) {
+                // Utiliser la fonction du module si disponible
+                const prix = window.produits ? getPrixProduitGlobal(item.produit) : null;
+                tdPrix.textContent = prix ? `${prix.toLocaleString('fr-FR')} FCFA` : '-';
+            } else {
+                tdPrix.textContent = '-';
+            }
+            row.appendChild(tdPrix);
+            
+            // Pas de colonne Action en mode lecture seule
+            const tdAction = document.createElement('td');
+            tdAction.className = 'text-center text-muted';
+            tdAction.innerHTML = '<i class="bi bi-lock"></i>';
+            row.appendChild(tdAction);
+            
+            tbody.appendChild(row);
+        });
+    }
+    
+    // Masquer les boutons d'édition
+    document.getElementById('add-pack-item').style.display = 'none';
+    document.getElementById('reset-pack-composition').style.display = 'none';
+    document.getElementById('save-pack-composition').style.display = 'none';
+    
+    // Afficher seulement le bouton Fermer
+    const closeButton = modal.querySelector('[data-bs-dismiss="modal"]');
+    if (closeButton) {
+        closeButton.textContent = 'Fermer';
+    }
+    
+    // Ajouter un message d'information
+    const alertInfo = modal.querySelector('.alert-info');
+    if (alertInfo) {
+        alertInfo.innerHTML = '<i class="bi bi-info-circle"></i> <strong>Mode consultation</strong> - Cette composition a été enregistrée lors de la vente.';
+        if (extensionData.modifie) {
+            alertInfo.innerHTML += '<br><small class="text-warning"><i class="bi bi-exclamation-triangle"></i> Composition modifiée par rapport au pack standard</small>';
+        }
+    }
+    
+    // Quand le modal se ferme, réactiver les boutons
+    modal.addEventListener('hidden.bs.modal', function () {
+        document.getElementById('add-pack-item').style.display = '';
+        document.getElementById('reset-pack-composition').style.display = '';
+        document.getElementById('save-pack-composition').style.display = '';
+        if (alertInfo) {
+            alertInfo.innerHTML = '<i class="bi bi-info-circle"></i> Vous pouvez modifier les quantités selon les besoins du client.';
+        }
+    }, { once: true });
+    
+    packModal.show();
+}
+
+/**
+ * Fonction helper pour obtenir le prix d'un produit (version globale)
+ */
+function getPrixProduitGlobal(nomProduit) {
+    if (typeof window.produits === 'undefined') return null;
+    
+    for (const categorie in window.produits) {
+        if (typeof window.produits[categorie] === 'object' && window.produits[categorie] !== null) {
+            if (window.produits[categorie][nomProduit]) {
+                const prixData = window.produits[categorie][nomProduit];
+                return prixData.default || null;
+            }
+        }
+    }
+    return null;
+}
+
 function afficherDernieresVentes(ventes) {
     const tbody = document.querySelector("#dernieres-ventes tbody");
     if (!tbody) {
@@ -2261,14 +2420,26 @@ function afficherDernieresVentes(ventes) {
             }
         }
 
+        // Bouton pour afficher la composition du pack (si c'est un pack avec extension)
+        const categorie = vente.Categorie || vente.Catégorie || vente.categorie || '';
+        if (categorie === 'Pack' && vente.extension) {
+            const viewPackButton = document.createElement('button');
+            viewPackButton.className = 'btn btn-info btn-sm me-1';
+            viewPackButton.innerHTML = '<i class="bi bi-eye"></i>';
+            viewPackButton.title = 'Voir composition du pack';
+            viewPackButton.addEventListener('click', () => {
+                afficherCompositionPackReadOnly(vente.Produit, vente.extension);
+            });
+            actionsCell.appendChild(viewPackButton);
+        }
+        
         if (showDeleteButton) {
             const deleteButton = document.createElement('button');
             deleteButton.className = 'btn btn-danger btn-sm delete-vente';
-            deleteButton.setAttribute('data-id', vente.id); // Assurez-vous que vente.id existe et est correct
+            deleteButton.setAttribute('data-id', vente.id);
             deleteButton.innerHTML = '<i class="fas fa-trash"></i>';
             deleteButton.addEventListener('click', async () => {
                 if (confirm('Êtes-vous sûr de vouloir supprimer cette vente ?')) {
-                    // Assurez-vous que supprimerVente est défini et accessible
                     await supprimerVente(vente.id); 
                 }
             });
