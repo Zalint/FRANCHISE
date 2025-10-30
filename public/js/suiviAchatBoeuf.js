@@ -302,9 +302,27 @@ function displayAchatsBoeuf(achats) {
         const prixKgSansAbats = parseFloat(achat.prix_achat_kg_sans_abats || 0);
         const prixKgSansAbatsFormatted = prixKgSansAbats.toFixed(2) + ' FCFA/kg';
 
+        // Check for weight inconsistencies
+        const nbrKg = parseFloat(achat.nbr_kg);
+        const beteType = achat.bete.toLowerCase();
+        let backgroundColor = '';
+        let rowTitle = '';
+        
+        if (beteType === 'boeuf' && nbrKg <= 125) {
+            backgroundColor = 'rgba(255, 165, 0, 0.3)'; // Orange light
+            rowTitle = 'Attention: Poids faible pour un boeuf (≤125 kg). Vérifiez s\'il ne s\'agit pas plutôt d\'un veau.';
+        } else if (beteType === 'veau' && nbrKg >= 125) {
+            backgroundColor = 'rgba(173, 216, 230, 0.5)'; // Blue light
+            rowTitle = 'Attention: Poids élevé pour un veau (≥125 kg). Vérifiez s\'il ne s\'agit pas plutôt d\'un boeuf.';
+        }
+        
+        if (backgroundColor) {
+            row.title = rowTitle;
+            row.style.cursor = 'help';
+        }
+
         // Determine status based on bete and prix_achat_kg
         let statusHtml = '';
-        const beteType = achat.bete.toLowerCase();
         
         if (beteType === 'boeuf') {
             if (prixKg <= 3200) {
@@ -324,17 +342,19 @@ function displayAchatsBoeuf(achats) {
             }
         }
         
+        const cellStyle = backgroundColor ? `style="background-color: ${backgroundColor} !important;"` : '';
+        
         row.innerHTML = `
-            <td>${achat.mois || '-'}</td>
-            <td>${achat.date}</td>
-            <td>${achat.bete}</td>
-            <td class="text-end">${prixFormatted}</td>
-            <td class="text-end">${abatsFormatted}</td>
-            <td class="text-end">${fraisFormatted}</td>
-            <td class="text-end">${achat.nbr_kg} kg</td>
-            <td class="text-end">${prixKgFormatted}</td>
-            <td class="text-end">${prixKgSansAbatsFormatted}</td>
-            <td>
+            <td ${cellStyle}>${achat.mois || '-'}</td>
+            <td ${cellStyle}>${achat.date}</td>
+            <td ${cellStyle}>${achat.bete}</td>
+            <td class="text-end" ${cellStyle}>${prixFormatted}</td>
+            <td class="text-end" ${cellStyle}>${abatsFormatted}</td>
+            <td class="text-end" ${cellStyle}>${fraisFormatted}</td>
+            <td class="text-end" ${cellStyle}>${achat.nbr_kg} kg</td>
+            <td class="text-end" ${cellStyle}>${prixKgFormatted}</td>
+            <td class="text-end" ${cellStyle}>${prixKgSansAbatsFormatted}</td>
+            <td ${cellStyle}>
                 <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${achat.id}">
                     <i class="fas fa-edit"></i>
                 </button>
@@ -342,7 +362,7 @@ function displayAchatsBoeuf(achats) {
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
-            <td>${statusHtml}</td>
+            <td ${cellStyle}>${statusHtml}</td>
         `;
         
         tableBody.appendChild(row);
