@@ -8439,7 +8439,11 @@ app.get('/api/external/reconciliation/aggregated', validateApiKey, async (req, r
                                 stockInitial: 0,
                                 stockFinal: 0,
                                 stockMatinNombre: 0,
-                                stockSoirNombre: 0
+                                stockSoirNombre: 0,
+                                transfertsNombre: 0,
+                                prixMoyenPondere: 0,
+                                perration: 0,
+                                ventesNombreAjustePack: 0
                             };
                         }
                         
@@ -8464,9 +8468,78 @@ app.get('/api/external/reconciliation/aggregated', validateApiKey, async (req, r
                         
                         currentProduct.stockMatinNombre += parseFloat(productData.stockMatinNombre || 0);
                         currentProduct.stockSoirNombre += parseFloat(productData.stockSoirNombre || 0);
+                        currentProduct.transfertsNombre += parseFloat(productData.transfertsNombre || 0);
                     });
                 });
             }
+        });
+        
+        // Fetch pack sales data for the same period to calculate ventesNombreAjustePack
+        let packDataByPointVente = {};
+        try {
+            const packStartDate = dbStartDate.split('/').reverse().join('-'); // Convert DD/MM/YYYY to YYYY-MM-DD
+            const packEndDate = dbEndDate.split('/').reverse().join('-');
+            
+            console.log(`Fetching pack data for period: ${packStartDate} to ${packEndDate}`);
+            
+            const packResponse = await axiosInstance.get('/api/external/ventes-date/pack/aggregated', {
+                params: { 
+                    start_date: packStartDate, 
+                    end_date: packEndDate 
+                }
+            });
+            
+            if (packResponse.data && packResponse.data.success && packResponse.data.pointsVente) {
+                // Extract composition data per point de vente
+                Object.entries(packResponse.data.pointsVente).forEach(([pointVente, pvData]) => {
+                    if (pvData.compositionAgregee) {
+                        packDataByPointVente[pointVente] = pvData.compositionAgregee;
+                    }
+                });
+                console.log(`Pack data retrieved successfully for ${Object.keys(packDataByPointVente).length} points de vente`);
+            }
+        } catch (error) {
+            console.warn('Failed to fetch pack data:', error.message);
+        }
+        
+        // Calculate weighted average prices and perration for each product
+        Object.entries(aggregatedData).forEach(([pointVente, pointData]) => {
+            Object.entries(pointData).forEach(([productName, productData]) => {
+                // Calculate weighted average price
+                if (productData.ventesNombre > 0) {
+                    productData.prixMoyenPondere = parseFloat((productData.ventesValeur / productData.ventesNombre).toFixed(2));
+                } else {
+                    productData.prixMoyenPondere = 0;
+                }
+                
+                // Calculate perration based on point de vente
+                if (pointVente === 'Chambre froide') {
+                    // Special formula for Chambre froide: |transfertsNombre| / |stockMatinNombre - stockSoirNombre| - 1
+                    const stockDiff = Math.abs(productData.stockMatinNombre - productData.stockSoirNombre);
+                    if (stockDiff > 0) {
+                        productData.perration = parseFloat((Math.abs(productData.transfertsNombre) / stockDiff - 1).toFixed(4));
+                    } else {
+                        productData.perration = 0;
+                    }
+                } else {
+                    // Standard formula for other points de vente: (ventesNombre / ventesTheoriquesNombre) - 1
+                    if (productData.ventesTheoriquesNombre > 0) {
+                        productData.perration = parseFloat((productData.ventesNombre / productData.ventesTheoriquesNombre - 1).toFixed(4));
+                    } else {
+                        productData.perration = 0;
+                    }
+                }
+                
+                // Calculate ventesNombreAjustePack for applicable products using point de vente specific pack data
+                const productsToAdjust = ['Boeuf', 'Veau', 'Agneau', 'Poulet', 'Oeuf'];
+                if (productsToAdjust.includes(productName) && packDataByPointVente[pointVente] && packDataByPointVente[pointVente][productName]) {
+                    const packQuantity = parseFloat(packDataByPointVente[pointVente][productName].quantite) || 0;
+                    productData.ventesNombreAjustePack = parseFloat((productData.ventesNombre + packQuantity).toFixed(2));
+                    console.log(`Adjusted ${productName} at ${pointVente}: ${productData.ventesNombre} + ${packQuantity} (from packs at ${pointVente}) = ${productData.ventesNombreAjustePack}`);
+                } else {
+                    productData.ventesNombreAjustePack = productData.ventesNombre;
+                }
+            });
         });
         
         // Generate resume section (summary by point de vente)
