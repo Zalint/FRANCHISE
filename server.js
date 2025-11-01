@@ -10435,6 +10435,162 @@ app.get('/api/external/achats-boeuf', validateApiKey, async (req, res) => {
     }
 });
 
+// Aggregated API endpoint for achats-boeuf (without week/month breakdown)
+app.get('/api/external/achats-boeuf/aggregated', validateApiKey, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        
+        console.log('==== EXTERNAL API - ACHATS BOEUF AGGREGATED ====');
+        
+        // Validate required parameters
+        if (!startDate || !endDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'startDate and endDate are required in YYYY-MM-DD format'
+            });
+        }
+        
+        // Validate date format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Dates must be in YYYY-MM-DD format'
+            });
+        }
+        
+        console.log('Querying beef purchases for date range:', startDate, 'to', endDate);
+        
+        // Query database for date range
+        const achats = await AchatBoeuf.findAll({
+            where: {
+                date: {
+                    [Op.between]: [startDate, endDate]
+                }
+            },
+            order: [['date', 'DESC']],
+        });
+        
+        // Format the data for response
+        const formattedAchats = achats.map(achat => {
+            const prix = parseFloat(achat.prix) || 0;
+            const nbr_kg = parseFloat(achat.nbr_kg) || 0;
+            const prix_achat_kg = parseFloat(achat.prix_achat_kg) || 0;
+            
+            // Calculate prix_achat_kg_sans_abats
+            const prix_achat_kg_sans_abats = nbr_kg > 0 ? prix / nbr_kg : 0;
+            
+            return {
+                id: achat.id,
+                date: achat.date,
+                mois: achat.mois,
+                annee: achat.annee,
+                bete: achat.bete,
+                prix: prix,
+                abats: parseFloat(achat.abats) || 0,
+                frais_abattage: parseFloat(achat.frais_abattage) || 0,
+                nbr_kg: nbr_kg,
+                prix_achat_kg: prix_achat_kg,
+                prix_achat_kg_sans_abats: prix_achat_kg_sans_abats,
+                commentaire: achat.commentaire,
+                nomClient: achat.nomClient,
+                numeroClient: achat.numeroClient,
+                telephoneClient: achat.telephoneClient,
+                adresseClient: achat.adresseClient,
+                creance: achat.creance
+            };
+        });
+        
+        // Calculate aggregated totals
+        const boeufAchats = formattedAchats.filter(achat => achat.bete && achat.bete.toLowerCase() === 'boeuf');
+        const veauAchats = formattedAchats.filter(achat => achat.bete && achat.bete.toLowerCase() === 'veau');
+        
+        const totals = {
+            // Nombres d'animaux
+            nbrBoeuf: boeufAchats.length,
+            nbrVeau: veauAchats.length,
+            
+            // Totaux Bœuf
+            totalPrixBoeuf: boeufAchats.reduce((sum, achat) => sum + (achat.prix_achat_kg * achat.nbr_kg), 0),
+            totalAbatsBoeuf: boeufAchats.reduce((sum, achat) => sum + achat.abats, 0),
+            totalFraisAbattageBoeuf: boeufAchats.reduce((sum, achat) => sum + achat.frais_abattage, 0),
+            totalKgBoeuf: boeufAchats.reduce((sum, achat) => sum + achat.nbr_kg, 0),
+            
+            // Totaux Veau
+            totalPrixVeau: veauAchats.reduce((sum, achat) => sum + (achat.prix_achat_kg * achat.nbr_kg), 0),
+            totalAbatsVeau: veauAchats.reduce((sum, achat) => sum + achat.abats, 0),
+            totalFraisAbattageVeau: veauAchats.reduce((sum, achat) => sum + achat.frais_abattage, 0),
+            totalKgVeau: veauAchats.reduce((sum, achat) => sum + achat.nbr_kg, 0),
+            
+            // Totaux généraux
+            totalPrix: formattedAchats.reduce((sum, achat) => sum + achat.prix, 0),
+            totalAbats: formattedAchats.reduce((sum, achat) => sum + achat.abats, 0),
+            totalFraisAbattage: formattedAchats.reduce((sum, achat) => sum + achat.frais_abattage, 0),
+            totalKg: formattedAchats.reduce((sum, achat) => sum + achat.nbr_kg, 0),
+        };
+        
+        // Calculs moyennes Bœuf
+        if (boeufAchats.length > 0) {
+            totals.avgPrixKgBoeuf = boeufAchats.reduce((sum, achat) => sum + achat.prix_achat_kg, 0) / boeufAchats.length;
+            totals.avgPrixKgSansAbatsBoeuf = totals.avgPrixKgBoeuf;
+        } else {
+            totals.avgPrixKgBoeuf = 0;
+            totals.avgPrixKgSansAbatsBoeuf = 0;
+        }
+        
+        // Calculs moyennes Veau
+        if (veauAchats.length > 0) {
+            totals.avgPrixKgVeau = veauAchats.reduce((sum, achat) => sum + achat.prix_achat_kg, 0) / veauAchats.length;
+            totals.avgPrixKgSansAbatsVeau = totals.avgPrixKgVeau;
+        } else {
+            totals.avgPrixKgVeau = 0;
+            totals.avgPrixKgSansAbatsVeau = 0;
+        }
+        
+        // Calculs moyennes pondérées
+        if (totals.totalKgBoeuf > 0) {
+            totals.avgWeightedPrixKgBoeuf = totals.totalPrixBoeuf / totals.totalKgBoeuf;
+            console.log(`🥩 Boeuf - Moyenne pondérée: ${totals.avgWeightedPrixKgBoeuf.toFixed(2)} FCFA/kg`);
+        } else {
+            totals.avgWeightedPrixKgBoeuf = 0;
+        }
+        
+        if (totals.totalKgVeau > 0) {
+            totals.avgWeightedPrixKgVeau = totals.totalPrixVeau / totals.totalKgVeau;
+            console.log(`🐄 Veau - Moyenne pondérée: ${totals.avgWeightedPrixKgVeau.toFixed(2)} FCFA/kg`);
+        } else {
+            totals.avgWeightedPrixKgVeau = 0;
+        }
+        
+        // Calculs moyennes générales
+        if (totals.totalKg > 0) {
+            totals.avgPrixKg = totals.totalPrix / totals.totalKg;
+            totals.avgPrixKgSansAbats = totals.totalPrix / totals.totalKg;
+        } else {
+            totals.avgPrixKg = 0;
+            totals.avgPrixKgSansAbats = 0;
+        }
+        
+        console.log(`Found ${formattedAchats.length} beef purchase entries`);
+        console.log('==== END EXTERNAL API - ACHATS BOEUF AGGREGATED ====');
+        
+        res.json({
+            success: true,
+            data: {
+                achats: formattedAchats,
+                totals: totals
+            }
+        });
+    } catch (error) {
+        console.error('Error retrieving aggregated beef purchase data:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Error retrieving aggregated beef purchase data',
+            error: error.message
+        });
+    }
+});
+
 // External API version for reconciliation
 // ... existing code ...
 
