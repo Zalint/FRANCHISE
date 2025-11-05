@@ -11387,6 +11387,83 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 const diversData = formatProductFromSalesWithRatios(salesResult.rows, 'divers', 0, 'divers', purchasePrices);
                 const autreData = formatProductFromSalesWithRatios(salesResult.rows, 'autre', 0, 'autre', purchasePrices);
                 
+                // ========== AJUSTEMENT RECLASSIFICATION BOEUF → VEAU ==========
+                // Gérer le cas où du bœuf est vendu comme veau
+                // Détection : veau vendu > veau théorique (écart négatif)
+                if (veauData.quantiteVendue > 0 && reconciliationData.success && reconciliationData.data.details[pointVente]) {
+                    const pointData = reconciliationData.data.details[pointVente];
+                    
+                    if (pointData.Veau) {
+                        const ventesReellesVeau = parseFloat(pointData.Veau.ventesNombre) || 0;
+                        const ventesTheoriquesVeau = parseFloat(pointData.Veau.ventesTheoriquesNombre) || 0;
+                        const ecartVeau = parseFloat(pointData.Veau.ecartNombre) || 0;
+                        
+                        // Si écart négatif = ventes > théorique = veau venu du bœuf
+                        const veauDepuisBoeuf = ecartVeau < 0 ? Math.abs(ecartVeau) : 0;
+                        
+                        if (veauDepuisBoeuf > 0) {
+                            console.log(`🔄 ${pointVente}: Reclassification Bœuf → Veau détectée: ${veauDepuisBoeuf} kg`);
+                            console.log(`   📊 Ventes veau: ${ventesReellesVeau} kg, Théorique veau: ${ventesTheoriquesVeau} kg, Écart: ${ecartVeau} kg`);
+                            
+                            // ========== AJUSTEMENT BOEUF ==========
+                            if (boeufData.quantiteAbattue > 0) {
+                                const ancienneQteAbattueBoeuf = boeufData.quantiteAbattue;
+                                const ancienRatioBoeuf = boeufData.ratioPerte;
+                                
+                                // Réduire la quantité abattue bœuf
+                                boeufData.quantiteAbattue -= veauDepuisBoeuf;
+                                
+                                // Recalculer ratio bœuf
+                                if (boeufData.quantiteAbattue > 0) {
+                                    boeufData.ratioPerte = ((boeufData.quantiteVendue / boeufData.quantiteAbattue) - 1) * 100;
+                                }
+                                
+                                // Recalculer coût bœuf
+                                boeufData.cout = Math.round(boeufData.quantiteAbattue * purchasePrices.avgPrixKgBoeuf);
+                                boeufData.marge = boeufData.chiffreAffaires - boeufData.cout;
+                                
+                                console.log(`   📉 Bœuf ajusté: ${ancienneQteAbattueBoeuf.toFixed(2)} kg → ${boeufData.quantiteAbattue.toFixed(2)} kg`);
+                                console.log(`   📉 Ratio bœuf: ${ancienRatioBoeuf.toFixed(2)}% → ${boeufData.ratioPerte.toFixed(2)}%`);
+                                console.log(`   📉 Coût bœuf: ${Math.round(ancienneQteAbattueBoeuf * purchasePrices.avgPrixKgBoeuf)} → ${boeufData.cout} FCFA`);
+                            }
+                            
+                            // ========== AJUSTEMENT VEAU (CAS MIXTE) ==========
+                            const veauPur = ventesTheoriquesVeau; // Veau provenant du stock/transfert veau
+                            const ratioVeauPur = ratios.veau || 0;
+                            
+                            // Quantité abattue veau pur (avec son propre ratio)
+                            const qteAbattueVeauPur = veauPur > 0 && (1 + ratioVeauPur) !== 0
+                                ? veauPur / (1 + ratioVeauPur)
+                                : veauPur;
+                            
+                            // Quantité totale abattue = veau pur + veau du bœuf
+                            veauData.quantiteAbattue = qteAbattueVeauPur + veauDepuisBoeuf;
+                            
+                            // Coût mixte = (coût veau pur) + (coût veau du bœuf)
+                            const prixVeauUtilise = purchasePrices.avgPrixKgVeau || purchasePrices.avgPrixKgBoeuf;
+                            const coutVeauPur = Math.round(qteAbattueVeauPur * prixVeauUtilise);
+                            const coutVeauDepuisBoeuf = Math.round(veauDepuisBoeuf * purchasePrices.avgPrixKgBoeuf);
+                            veauData.cout = coutVeauPur + coutVeauDepuisBoeuf;
+                            
+                            // Marge
+                            veauData.marge = veauData.chiffreAffaires - veauData.cout;
+                            
+                            // Ratio veau global (recalculé sur le total)
+                            if (veauData.quantiteAbattue > 0) {
+                                veauData.ratioPerte = ((ventesReellesVeau / veauData.quantiteAbattue) - 1) * 100;
+                            }
+                            
+                            console.log(`   📈 Veau pur: ${veauPur.toFixed(2)} kg (ratio: ${(ratioVeauPur * 100).toFixed(2)}%)`);
+                            console.log(`   📈 Veau du bœuf: ${veauDepuisBoeuf.toFixed(2)} kg`);
+                            console.log(`   📈 Veau total abattu: ${veauData.quantiteAbattue.toFixed(2)} kg`);
+                            console.log(`   📈 Coût veau pur: ${coutVeauPur} FCFA, Coût veau du bœuf: ${coutVeauDepuisBoeuf} FCFA`);
+                            console.log(`   📈 Coût total veau: ${veauData.cout} FCFA, Marge: ${veauData.marge} FCFA`);
+                            console.log(`   📈 Ratio veau global: ${veauData.ratioPerte.toFixed(2)}%`);
+                        }
+                    }
+                }
+                // ========== FIN AJUSTEMENT RECLASSIFICATION ==========
+                
                 // Calculate totals INCLUDING stockSoir (original behavior)
                 const totalChiffreAffaires = agneauData.chiffreAffaires + boeufData.chiffreAffaires + veauData.chiffreAffaires + 
                                           pouletData.chiffreAffaires + oeufData.chiffreAffaires + packsData.chiffreAffaires + 
