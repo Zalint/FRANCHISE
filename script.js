@@ -12481,6 +12481,53 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                 // Mettre à jour les champs de ratio éditables avec les nouvelles valeurs calculées
                 mettreAJourRatiosEditables(ratioBoeufDynamique, ratioVeauDynamique);
                 
+                // ========== AJUSTEMENT RECLASSIFICATION BOEUF → VEAU (FRONTEND) ==========
+                // Détecter si du bœuf a été vendu comme veau
+                if (analyticsRegroupeesFiltrees['Veau'] && analyticsRegroupeesFiltrees['Veau'].quantiteTotal > 0 && ratios) {
+                    try {
+                        // Récupérer les données brutes de réconciliation déjà disponibles
+                        const formatDateForApi = (dateStr) => dateStr.replace(/\//g, '-');
+                        const startDateFormatted = formatDateForApi(dateDebut);
+                        const endDateFormatted = formatDateForApi(dateFin);
+                        
+                        const reconResponse = await fetch(`/api/external/reconciliation/aggregated?startDate=${startDateFormatted}&endDate=${endDateFormatted}`, {
+                            headers: { 'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1' }
+                        });
+                        
+                        if (reconResponse.ok) {
+                            const reconData = await reconResponse.json();
+                            
+                            if (reconData.success && reconData.data.details[proxyMargesControls.pointVenteActuel]) {
+                                const pointData = reconData.data.details[proxyMargesControls.pointVenteActuel];
+                                
+                                if (pointData.Veau) {
+                                    const ventesTheoriquesVeau = parseFloat(pointData.Veau.ventesTheoriquesNombre) || 0;
+                                    const ecartVeau = parseFloat(pointData.Veau.ecartNombre) || 0;
+                                    const veauDepuisBoeuf = ecartVeau < 0 ? Math.abs(ecartVeau) : 0;
+                                    
+                                    if (veauDepuisBoeuf > 0) {
+                                        console.log(`🔄 FRONTEND: Reclassification Bœuf → Veau détectée: ${veauDepuisBoeuf} kg`);
+                                        window.reclassificationBoeufVeau = {
+                                            veauDepuisBoeuf: veauDepuisBoeuf,
+                                            veauPur: ventesTheoriquesVeau,
+                                            ratioVeauPur: ratios.veau || 0
+                                        };
+                                        console.log(`   📊 Veau pur: ${ventesTheoriquesVeau} kg, Veau du bœuf: ${veauDepuisBoeuf} kg`);
+                                    } else {
+                                        window.reclassificationBoeufVeau = null;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('⚠️ Erreur récupération reclassification:', err);
+                        window.reclassificationBoeufVeau = null;
+                    }
+                } else {
+                    window.reclassificationBoeufVeau = null;
+                }
+                // ========== FIN AJUSTEMENT RECLASSIFICATION ==========
+                
             } catch (error) {
                 console.error('❌ Erreur calcul ratios dynamiques:', error);
             } finally {
@@ -12546,7 +12593,21 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                         quantiteAbattueBoeuf = poidsTotalBoeuf;
                         coutAchat = prixPondereBoeuf * poidsTotalBoeuf;
                     }
-                    console.log(`💰 CALCUL PROXY MARGE BOEUF:`);
+                    
+                    // Appliquer la reclassification si détectée
+                    if (window.reclassificationBoeufVeau && window.reclassificationBoeufVeau.veauDepuisBoeuf > 0) {
+                        const ancienneQte = quantiteAbattueBoeuf;
+                        const ancienCout = coutAchat;
+                        
+                        quantiteAbattueBoeuf -= window.reclassificationBoeufVeau.veauDepuisBoeuf;
+                        coutAchat = prixPondereBoeuf * quantiteAbattueBoeuf;
+                        ratioCalculeBoeuf = (data.quantiteTotal / quantiteAbattueBoeuf) - 1;
+                        
+                        console.log(`🔄 Bœuf ajusté (reclassification): ${ancienneQte.toFixed(2)} → ${quantiteAbattueBoeuf.toFixed(2)} kg`);
+                        console.log(`   Coût ajusté: ${ancienCout.toFixed(0)} → ${coutAchat.toFixed(0)} FCFA`);
+                    }
+                    
+                    console.log(`💪 CALCUL PROXY MARGE BOEUF:`);
                     console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
                     console.log(`   - Quantité vendue: ${data.quantiteTotal} kg`);
                     console.log(`   - Quantité abattue: ${quantiteAbattueBoeuf.toFixed(2)} kg`);
@@ -12587,7 +12648,38 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                         quantiteAbattueVeau = poidsTotalVeau;
                         coutAchat = prixPondereVeau * poidsTotalVeau;
                     }
-                    console.log(`💰 CALCUL PROXY MARGE VEAU:`);
+                    
+                    // Appliquer la reclassification si détectée (cas mixte)
+                    if (window.reclassificationBoeufVeau && window.reclassificationBoeufVeau.veauDepuisBoeuf > 0) {
+                        const veauPur = window.reclassificationBoeufVeau.veauPur;
+                        const veauDepuisBoeuf = window.reclassificationBoeufVeau.veauDepuisBoeuf;
+                        const ratioVeauPur = window.reclassificationBoeufVeau.ratioVeauPur;
+                        
+                        // Quantité abattue veau pur
+                        const qteAbattueVeauPur = veauPur > 0 && (1 + ratioVeauPur) !== 0
+                            ? veauPur / (1 + ratioVeauPur)
+                            : veauPur;
+                        
+                        // Quantité totale = veau pur + veau du bœuf
+                        quantiteAbattueVeau = qteAbattueVeauPur + veauDepuisBoeuf;
+                        
+                        // Coût mixte
+                        const prixPondereBoeuf = (totals && totals.avgWeightedPrixKgBoeuf) ? totals.avgWeightedPrixKgBoeuf : prixAchatBoeuf;
+                        const coutVeauPur = prixPondereVeau * qteAbattueVeauPur;
+                        const coutVeauDepuisBoeuf = prixPondereBoeuf * veauDepuisBoeuf;
+                        coutAchat = coutVeauPur + coutVeauDepuisBoeuf;
+                        
+                        // Ratio global
+                        ratioCalculeVeau = (data.quantiteTotal / quantiteAbattueVeau) - 1;
+                        
+                        console.log(`🔄 Veau ajusté (reclassification mixte):`);
+                        console.log(`   Veau pur: ${veauPur.toFixed(2)} kg, abattu: ${qteAbattueVeauPur.toFixed(2)} kg`);
+                        console.log(`   Veau du bœuf: ${veauDepuisBoeuf.toFixed(2)} kg`);
+                        console.log(`   Total abattu: ${quantiteAbattueVeau.toFixed(2)} kg`);
+                        console.log(`   Coût veau pur: ${coutVeauPur.toFixed(0)} + Coût bœuf: ${coutVeauDepuisBoeuf.toFixed(0)} = ${coutAchat.toFixed(0)} FCFA`);
+                    }
+                    
+                    console.log(`💪 CALCUL PROXY MARGE VEAU:`);
                     console.log(`   - Prix moyen vente: ${data.prixMoyen.toFixed(0)} FCFA`);
                     console.log(`   - Quantité vendue: ${data.quantiteTotal} kg`);
                     console.log(`   - Quantité abattue: ${quantiteAbattueVeau.toFixed(2)} kg`);
