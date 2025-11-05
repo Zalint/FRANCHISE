@@ -12910,10 +12910,32 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
             if (categorie === 'Boeuf' && proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
                 // Utiliser le ratio dynamique pour Boeuf
                 quantiteAbattue = quantiteVendue / (1 + ratioBoeufDynamique);
+                
+                // Appliquer la reclassification si détectée
+                if (window.reclassificationBoeufVeau && window.reclassificationBoeufVeau.veauDepuisBoeuf > 0) {
+                    quantiteAbattue -= window.reclassificationBoeufVeau.veauDepuisBoeuf;
+                }
+                
                 console.log(`🐄 Boeuf - Qté vendue: ${quantiteVendue} kg, Ratio dynamique: ${(ratioBoeufDynamique * 100).toFixed(2)}%, Qté abattue: ${quantiteAbattue.toFixed(2)} kg`);
             } else if (categorie === 'Veau' && proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
                 // Utiliser le ratio dynamique pour Veau
                 quantiteAbattue = quantiteVendue / (1 + ratioVeauDynamique);
+                
+                // Appliquer la reclassification si détectée (cas mixte)
+                if (window.reclassificationBoeufVeau && window.reclassificationBoeufVeau.veauDepuisBoeuf > 0) {
+                    const veauPur = window.reclassificationBoeufVeau.veauPur;
+                    const veauDepuisBoeuf = window.reclassificationBoeufVeau.veauDepuisBoeuf;
+                    const ratioVeauPur = window.reclassificationBoeufVeau.ratioVeauPur;
+                    
+                    // Quantité abattue veau pur
+                    const qteAbattueVeauPur = veauPur > 0 && (1 + ratioVeauPur) !== 0
+                        ? veauPur / (1 + ratioVeauPur)
+                        : veauPur;
+                    
+                    // Quantité totale = veau pur + veau du bœuf
+                    quantiteAbattue = qteAbattueVeauPur + veauDepuisBoeuf;
+                }
+                
                 console.log(`🐄 Veau - Qté vendue: ${quantiteVendue} kg, Ratio dynamique: ${(ratioVeauDynamique * 100).toFixed(2)}%, Qté abattue: ${quantiteAbattue.toFixed(2)} kg`);
             } else if (categorie === 'Boeuf') {
                 // Mode statique pour Boeuf
@@ -12929,11 +12951,11 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
             
             if (Math.abs(quantiteAbattue) > 0) {
                 if (categorie === 'Boeuf' && proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
-                    // Pour le mode dynamique, utiliser directement le ratio dynamique
-                    ratioPerte = ratioBoeufDynamique * 100;
+                    // Pour le mode dynamique, recalculer le ratio avec la quantité ajustée (après reclassification)
+                    ratioPerte = ((quantiteVendue / quantiteAbattue) - 1) * 100;
                 } else if (categorie === 'Veau' && proxyMargesControls.calculAutoActif && proxyMargesControls.pointVenteActuel !== 'Sélectionner un point de vente') {
-                    // Pour le mode dynamique, utiliser directement le ratio dynamique
-                    ratioPerte = ratioVeauDynamique * 100;
+                    // Pour le mode dynamique, recalculer le ratio avec la quantité ajustée (après reclassification)
+                    ratioPerte = ((quantiteVendue / quantiteAbattue) - 1) * 100;
                 } else {
                     // Pour le mode statique, calculer le ratio à partir des quantités
                     // Si les deux quantités sont négatives (variation de stock), garder le signe négatif correct
