@@ -11106,8 +11106,9 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             });
             
             let ratios = {};
+            let reconciliationData = null; // Declare outside to make it accessible later
             if (reconciliationResponse.ok) {
-                const reconciliationData = await reconciliationResponse.json();
+                reconciliationData = await reconciliationResponse.json();
                 console.log(`🔍 Reconciliation data received:`, reconciliationData.success);
                 
                 if (reconciliationData.success && reconciliationData.data.details[pointVente]) {
