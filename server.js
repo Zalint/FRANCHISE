@@ -11267,18 +11267,30 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 
                 if (achatsResult.success) {
                     purchasePrices.avgPrixKgBoeuf = achatsResult.avgPrixKgBoeuf;
-                    purchasePrices.avgPrixKgVeau = achatsResult.avgPrixKgVeau;
+                    // Si le prix du veau est null, utiliser le prix du bœuf
+                    purchasePrices.avgPrixKgVeau = achatsResult.avgPrixKgVeau || achatsResult.avgPrixKgBoeuf;
                     
                     achatsBoeufDebugInfo.effectiveStartDate = achatsResult.effectiveStartDate;
                     achatsBoeufDebugInfo.attemptsRequired = achatsResult.attempts;
                     achatsBoeufDebugInfo.prixBoeufUtilise = achatsResult.avgPrixKgBoeuf;
-                    achatsBoeufDebugInfo.prixVeauUtilise = achatsResult.avgPrixKgVeau;
+                    // Indiquer si on a utilisé le prix bœuf comme fallback pour le veau
+                    achatsBoeufDebugInfo.prixVeauUtilise = achatsResult.avgPrixKgVeau || achatsResult.avgPrixKgBoeuf;
+                    
+                    // Construire le commentaire avec les informations de fallback
+                    let commentParts = [];
                     
                     if (achatsResult.effectiveStartDate !== startDate) {
-                        achatsBoeufDebugInfo.comment = `Aucune donnée trouvée pour la période initiale. Données trouvées à partir du ${achatsResult.effectiveStartDate} après ${achatsResult.attempts} tentative(s).`;
+                        commentParts.push(`Aucune donnée trouvée pour la période initiale. Données trouvées à partir du ${achatsResult.effectiveStartDate} après ${achatsResult.attempts} tentative(s).`);
                     } else {
-                        achatsBoeufDebugInfo.comment = `Données trouvées pour la période demandée.`;
+                        commentParts.push(`Données trouvées pour la période demandée.`);
                     }
+                    
+                    // Ajouter une note si le prix veau utilise le prix bœuf comme fallback
+                    if (!achatsResult.avgPrixKgVeau && achatsResult.avgPrixKgBoeuf) {
+                        commentParts.push(`Prix veau non disponible, prix bœuf utilisé comme fallback.`);
+                    }
+                    
+                    achatsBoeufDebugInfo.comment = commentParts.join(' ');
                     
                     console.log(`✅ Purchase prices obtained:`, purchasePrices);
                     console.log(`📅 Effective start date: ${achatsResult.effectiveStartDate} (${achatsResult.attempts} attempt(s))`);
