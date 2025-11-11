@@ -16,21 +16,25 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeDatePickers() {
     flatpickr('#date', {
         dateFormat: 'Y-m-d',
-        allowInput: true,
+        allowInput: false,
         defaultDate: 'today',
-        locale: 'fr'
+        locale: 'fr',
+        disableMobile: true,
+        clickOpens: true
     });
 
     flatpickr('#filter-start-date', {
         dateFormat: 'Y-m-d',
-        allowInput: true,
-        locale: 'fr'
+        allowInput: false,
+        locale: 'fr',
+        disableMobile: true
     });
 
     flatpickr('#filter-end-date', {
         dateFormat: 'Y-m-d',
-        allowInput: true,
-        locale: 'fr'
+        allowInput: false,
+        locale: 'fr',
+        disableMobile: true
     });
 }
 
@@ -45,18 +49,27 @@ function setupEventListeners() {
 // Load acheteurs from API
 async function loadAcheteurs() {
     try {
+        console.log('Loading acheteurs...');
         const response = await fetch('/api/acheteurs');
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('Acheteurs data:', data);
         
         if (data.success) {
             allAcheteurs = data.acheteurs;
+            console.log('Acheteurs loaded:', allAcheteurs);
             populateAcheteurDropdowns();
         } else {
-            showNotification('Erreur lors du chargement des acheteurs', 'danger');
+            showNotification('Erreur lors du chargement des acheteurs: ' + (data.error || 'Unknown error'), 'danger');
         }
     } catch (error) {
         console.error('Error loading acheteurs:', error);
-        showNotification('Erreur lors du chargement des acheteurs', 'danger');
+        showNotification('Erreur lors du chargement des acheteurs: ' + error.message, 'danger');
     }
 }
 
@@ -134,19 +147,33 @@ function displayPerformances(performances) {
         beteCell.textContent = perf.bete.charAt(0).toUpperCase() + perf.bete.slice(1);
         row.appendChild(beteCell);
         
-        // Poids Estimé
+        // Poids Estimé avec timestamp visible
         const poidsEstimeCell = document.createElement('td');
-        poidsEstimeCell.textContent = perf.poids_estime ? `${perf.poids_estime.toFixed(2)} kg` : '-';
-        if (perf.poids_estime_timestamp) {
-            poidsEstimeCell.title = `Modifié: ${formatTimestamp(perf.poids_estime_timestamp)} par ${perf.poids_estime_updated_by}`;
+        if (perf.poids_estime) {
+            poidsEstimeCell.innerHTML = `
+                <strong>${perf.poids_estime.toFixed(2)} kg</strong>
+                ${perf.poids_estime_timestamp ? `<br><small class="text-muted"><i class="fas fa-clock"></i> ${formatTimestampShort(perf.poids_estime_timestamp)}</small>` : ''}
+            `;
+            if (perf.poids_estime_timestamp) {
+                poidsEstimeCell.title = `Modifié par ${perf.poids_estime_updated_by || 'Unknown'}`;
+            }
+        } else {
+            poidsEstimeCell.innerHTML = '<span class="text-muted">-</span>';
         }
         row.appendChild(poidsEstimeCell);
         
-        // Poids Réel
+        // Poids Réel avec timestamp visible
         const poidsReelCell = document.createElement('td');
-        poidsReelCell.textContent = perf.poids_reel ? `${perf.poids_reel.toFixed(2)} kg` : '-';
-        if (perf.poids_reel_timestamp) {
-            poidsReelCell.title = `Modifié: ${formatTimestamp(perf.poids_reel_timestamp)} par ${perf.poids_reel_updated_by}`;
+        if (perf.poids_reel) {
+            poidsReelCell.innerHTML = `
+                <strong>${perf.poids_reel.toFixed(2)} kg</strong>
+                ${perf.poids_reel_timestamp ? `<br><small class="text-muted"><i class="fas fa-clock"></i> ${formatTimestampShort(perf.poids_reel_timestamp)}</small>` : ''}
+            `;
+            if (perf.poids_reel_timestamp) {
+                poidsReelCell.title = `Modifié par ${perf.poids_reel_updated_by || 'Unknown'}`;
+            }
+        } else {
+            poidsReelCell.innerHTML = '<span class="text-muted">-</span>';
         }
         row.appendChild(poidsReelCell);
         
@@ -562,11 +589,32 @@ function exportToExcel() {
     showNotification('Export Excel réussi', 'success');
 }
 
-// Format timestamp
+// Format timestamp (long format)
 function formatTimestamp(timestamp) {
     if (!timestamp) return '-';
     const date = new Date(timestamp);
     return date.toLocaleString('fr-FR');
+}
+
+// Format timestamp (short format for table)
+function formatTimestampShort(timestamp) {
+    if (!timestamp) return '-';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+        // Aujourd'hui - afficher l'heure
+        return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays === 1) {
+        return 'Hier ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays < 7) {
+        return `Il y a ${diffDays}j`;
+    } else {
+        // Afficher la date complète
+        return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    }
 }
 
 // Show notification
