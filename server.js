@@ -9205,7 +9205,7 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
         console.log('Total performances found:', performances.length);
         
         // Load acheteurs
-        const acheteursData = await fs.readFile(path.join(__dirname, 'acheteur.json'), 'utf-8');
+        const acheteursData = await fsPromises.readFile(path.join(__dirname, 'acheteur.json'), 'utf-8');
         const acheteurs = JSON.parse(acheteursData);
         
         // ====================
