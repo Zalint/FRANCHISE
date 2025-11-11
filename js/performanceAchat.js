@@ -12,7 +12,16 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         initializeDatePickers();
         loadAcheteurs();
-        loadPerformances();
+        
+        // Load performances with default date range (first day of month to today)
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const defaultFilters = {
+            startDate: firstDayOfMonth.toISOString().split('T')[0],
+            endDate: today.toISOString().split('T')[0]
+        };
+        
+        loadPerformances(defaultFilters);
         loadRankings();
         setupEventListeners();
     }, 100);
@@ -46,23 +55,28 @@ function initializeDatePickers() {
         console.log('Flatpickr instance created:', fp);
     }
 
-    // Filter start date
+    // Filter start date - default to first day of current month
     const filterStartDate = document.getElementById('filter-start-date');
     if (filterStartDate) {
+        const firstDayOfMonth = new Date();
+        firstDayOfMonth.setDate(1); // Set to 1st day of current month
+        
         flatpickr(filterStartDate, {
             dateFormat: 'Y-m-d',
             allowInput: false,
+            defaultDate: firstDayOfMonth,
             locale: window.flatpickr.l10ns.fr || 'fr',
             disableMobile: true
         });
     }
 
-    // Filter end date
+    // Filter end date - default to today
     const filterEndDate = document.getElementById('filter-end-date');
     if (filterEndDate) {
         flatpickr(filterEndDate, {
             dateFormat: 'Y-m-d',
             allowInput: false,
+            defaultDate: new Date(), // Today
             locale: window.flatpickr.l10ns.fr || 'fr',
             disableMobile: true
         });
@@ -341,8 +355,16 @@ function updateQuickStats(performances) {
 // Load rankings
 async function loadRankings() {
     try {
-        const startDate = document.getElementById('filter-start-date').value;
-        const endDate = document.getElementById('filter-end-date').value;
+        let startDate = document.getElementById('filter-start-date').value;
+        let endDate = document.getElementById('filter-end-date').value;
+        
+        // If no dates selected, use default (first day of month to today)
+        if (!startDate || !endDate) {
+            const today = new Date();
+            const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            startDate = firstDayOfMonth.toISOString().split('T')[0];
+            endDate = today.toISOString().split('T')[0];
+        }
         
         const params = new URLSearchParams();
         if (startDate) params.append('startDate', startDate);
@@ -381,16 +403,22 @@ function displayRankings(rankings) {
         const positionClass = position <= 3 ? `ranking-${position}` : '';
         
         rankingDiv.innerHTML = `
-            <div>
-                <span class="ranking-position ${positionClass}">#${position}</span>
-                <strong class="ml-3">${ranking.nom}</strong>
+            <div class="d-flex align-items-center">
+                <span class="ranking-position ${positionClass}" style="font-size: 2.5rem; min-width: 60px;">#${position}</span>
+                <div class="ml-3">
+                    <h5 class="mb-0" style="color: white; font-weight: bold; font-size: 1.3rem;">${ranking.nom}</h5>
+                    <small style="color: rgba(255,255,255,0.8);">
+                        ${ranking.total_estimations} estimation${ranking.total_estimations > 1 ? 's' : ''}
+                    </small>
+                </div>
             </div>
             <div class="text-right">
-                <div><strong>Score: ${ranking.score_moyen.toFixed(2)}</strong></div>
-                <small>
-                    ${ranking.total_estimations} estimations | 
-                    <span class="text-warning">${ranking.total_surestimations} sur</span> | 
-                    <span class="text-info">${ranking.total_sous_estimations} sous</span>
+                <div style="color: white; font-size: 1.5rem; font-weight: bold;">
+                    ${ranking.score_moyen.toFixed(2)}
+                </div>
+                <small style="color: rgba(255,255,255,0.9);">
+                    <span style="color: #ffc107;">${ranking.total_surestimations} sur</span> | 
+                    <span style="color: #17a2b8;">${ranking.total_sous_estimations} sous</span>
                 </small>
             </div>
         `;
