@@ -91,6 +91,7 @@ function setupEventListeners() {
     document.getElementById('filterForm').addEventListener('submit', handleFilterSubmit);
     document.getElementById('cancelEdit').addEventListener('click', cancelEdit);
     document.getElementById('exportExcel').addEventListener('click', exportToExcel);
+    document.getElementById('veilleBetailBtn').addEventListener('click', showVeilleBetail);
 }
 
 // Load acheteurs from API
@@ -810,5 +811,160 @@ function showNotification(message, type = 'info') {
         notification.classList.remove('show');
         setTimeout(() => notification.remove(), 300);
     }, 5000);
+}
+
+// ============================================================================
+// VEILLE ACTUALITÉS BÉTAIL
+// ============================================================================
+
+async function showVeilleBetail() {
+    // Show modal
+    $('#veilleBetailModal').modal('show');
+    
+    // Reset content to loading state
+    document.getElementById('veilleBetailContent').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-info" role="status">
+                <span class="sr-only">Chargement...</span>
+            </div>
+            <p class="mt-2">Analyse des actualités en cours...</p>
+            <small class="text-muted">Scan des sources Mali/Mauritanie + Analyse IA</small>
+        </div>
+    `;
+    document.getElementById('veilleBetailMeta').textContent = '';
+    
+    try {
+        const response = await fetch('/api/veille-betail', {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            displayVeilleBetail(data);
+        } else {
+            throw new Error(data.error || 'Erreur inconnue');
+        }
+    } catch (error) {
+        console.error('Error fetching veille data:', error);
+        document.getElementById('veilleBetailContent').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> 
+                <strong>Erreur:</strong> ${error.message}
+            </div>
+        `;
+    }
+}
+
+function displayVeilleBetail(data) {
+    const content = document.getElementById('veilleBetailContent');
+    const meta = document.getElementById('veilleBetailMeta');
+    
+    // Meta information
+    const timestamp = new Date(data.timestamp).toLocaleString('fr-FR');
+    const cacheInfo = data.cached ? ` (Cache: expire dans ${data.cache_expires_in})` : ' (Données fraîches)';
+    meta.textContent = `Dernière mise à jour: ${timestamp}${cacheInfo} | ${data.articles_count} articles analysés`;
+    
+    let html = '';
+    
+    // Contexte général
+    if (data.contexte) {
+        html += `
+            <div class="alert alert-light border">
+                <h6 class="alert-heading"><i class="fas fa-globe"></i> Contexte Général</h6>
+                <p class="mb-0">${data.contexte}</p>
+            </div>
+        `;
+    }
+    
+    // Alertes
+    if (data.alertes && data.alertes.length > 0) {
+        html += '<h5 class="mt-3 mb-3"><i class="fas fa-exclamation-circle"></i> Alertes</h5>';
+        data.alertes.forEach(alerte => {
+            const alertClass = alerte.niveau === 'critique' ? 'danger' : 
+                             alerte.niveau === 'warning' ? 'warning' : 'info';
+            const icon = alerte.niveau === 'critique' ? 'fa-exclamation-triangle' : 
+                        alerte.niveau === 'warning' ? 'fa-exclamation-circle' : 'fa-info-circle';
+            
+            html += `
+                <div class="alert alert-${alertClass}">
+                    <h6 class="alert-heading"><i class="fas ${icon}"></i> ${alerte.titre}</h6>
+                    <p class="mb-1">${alerte.description}</p>
+                    <small><strong>Impact:</strong> ${alerte.impact}</small>
+                </div>
+            `;
+        });
+    } else {
+        html += `
+            <div class="alert alert-success mt-3">
+                <i class="fas fa-check-circle"></i> Aucune alerte critique identifiée
+            </div>
+        `;
+    }
+    
+    // Tendances
+    if (data.tendances && data.tendances.length > 0) {
+        html += '<h5 class="mt-4 mb-3"><i class="fas fa-chart-line"></i> Tendances du Marché</h5>';
+        html += '<div class="row">';
+        
+        data.tendances.forEach(tendance => {
+            const typeIcon = tendance.type === 'prix' ? 'fa-money-bill-wave' : 
+                           tendance.type === 'climat' ? 'fa-cloud-sun' : 
+                           tendance.type === 'reglementation' ? 'fa-gavel' : 'fa-info';
+            const typeColor = tendance.type === 'prix' ? 'success' : 
+                            tendance.type === 'climat' ? 'warning' : 
+                            tendance.type === 'reglementation' ? 'danger' : 'info';
+            
+            html += `
+                <div class="col-md-6 mb-3">
+                    <div class="card border-${typeColor}">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="fas ${typeIcon} text-${typeColor}"></i> 
+                                ${tendance.type.charAt(0).toUpperCase() + tendance.type.slice(1)}
+                            </h6>
+                            <p class="card-text">${tendance.description}</p>
+                            <small class="text-muted"><strong>Impact prévu:</strong> ${tendance.impact_previsionnel}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+    }
+    
+    // Recommandations
+    if (data.recommandations && data.recommandations.length > 0) {
+        html += '<h5 class="mt-4 mb-3"><i class="fas fa-lightbulb"></i> Recommandations</h5>';
+        html += '<ul class="list-group">';
+        
+        data.recommandations.forEach(rec => {
+            html += `
+                <li class="list-group-item">
+                    <i class="fas fa-arrow-right text-primary"></i> ${rec}
+                </li>
+            `;
+        });
+        
+        html += '</ul>';
+    }
+    
+    // Sources
+    if (data.articles_sources && data.articles_sources.length > 0) {
+        html += `
+            <div class="mt-4">
+                <small class="text-muted">
+                    <i class="fas fa-newspaper"></i> Sources consultées: ${data.articles_sources.join(', ')}
+                </small>
+            </div>
+        `;
+    }
+    
+    content.innerHTML = html;
 }
 

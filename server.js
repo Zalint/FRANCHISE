@@ -4734,6 +4734,191 @@ app.get('/api/performance-achat/stats', checkAuth, checkReadAccess, async (req, 
     }
 });
 
+// ============================================================================
+// VEILLE ACTUALITÉS BÉTAIL - Monitoring Mali/Mauritanie
+// ============================================================================
+
+// Cache pour éviter les appels répétés à l'API OpenAI
+let veilleCache = {
+    data: null,
+    timestamp: null,
+    cacheDuration: 12 * 60 * 60 * 1000 // 12 heures en millisecondes
+};
+
+// GET endpoint pour la veille actualités bétail
+app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
+    try {
+        // Vérifier si on a des données en cache valides
+        const now = Date.now();
+        if (veilleCache.data && veilleCache.timestamp && 
+            (now - veilleCache.timestamp < veilleCache.cacheDuration)) {
+            console.log('Returning cached veille data');
+            return res.json({
+                success: true,
+                ...veilleCache.data,
+                cached: true,
+                cache_expires_in: Math.round((veilleCache.cacheDuration - (now - veilleCache.timestamp)) / 60000) + ' minutes'
+            });
+        }
+
+        // Vérifier que les variables d'environnement OpenAI sont configurées
+        if (!process.env.OPENAI_API_KEY) {
+            return res.status(500).json({
+                success: false,
+                error: 'OpenAI API key not configured'
+            });
+        }
+
+        console.log('Fetching fresh veille data from news sources...');
+
+        // Importer OpenAI et RSSParser
+        const OpenAI = require('openai');
+        const Parser = require('rss-parser');
+        const parser = new Parser();
+        
+        const openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY
+        });
+
+        // Sources RSS Google News pour Mali et Mauritanie + mots-clés bétail
+        const searchQueries = [
+            'Mali bétail',
+            'Mali boeuf élevage',
+            'Mauritanie bétail',
+            'Mauritanie boeuf élevage',
+            'Mali Mauritanie export bétail Sénégal'
+        ];
+
+        // Collecter les actualités
+        const newsArticles = [];
+        
+        for (const query of searchQueries) {
+            try {
+                const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=fr&gl=SN&ceid=SN:fr`;
+                const feed = await parser.parseURL(url);
+                
+                // Prendre les 5 articles les plus récents par requête
+                const recentArticles = feed.items.slice(0, 5).map(item => ({
+                    title: item.title,
+                    link: item.link,
+                    pubDate: item.pubDate,
+                    source: item.source?.title || 'Source inconnue',
+                    contentSnippet: item.contentSnippet || item.content || ''
+                }));
+                
+                newsArticles.push(...recentArticles);
+            } catch (error) {
+                console.error(`Error fetching RSS for query "${query}":`, error.message);
+            }
+        }
+
+        if (newsArticles.length === 0) {
+            return res.json({
+                success: true,
+                data: {
+                    alertes: [],
+                    tendances: [],
+                    contexte: 'Aucune actualité récente disponible.',
+                    articles_count: 0
+                },
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Préparer le contenu pour l'analyse GPT
+        const articlesText = newsArticles.map((article, index) => 
+            `${index + 1}. [${article.pubDate}] ${article.title}\n   Source: ${article.source}\n   ${article.contentSnippet}\n`
+        ).join('\n');
+
+        // Appel à OpenAI pour analyser les actualités
+        const completion = await openai.chat.completions.create({
+            model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+            messages: [
+                {
+                    role: 'system',
+                    content: `Tu es un expert en analyse de marché du bétail en Afrique de l'Ouest. 
+                    Tu dois analyser les actualités du Mali et de la Mauritanie pour identifier les facteurs pouvant affecter l'approvisionnement en bovins au Sénégal.
+                    
+                    Focus sur :
+                    - Prix du bétail sur pied
+                    - Restrictions d'export/import
+                    - Maladies animales (fièvre aphteuse, etc.)
+                    - Sécheresse et conditions climatiques
+                    - Tensions frontalières ou politiques
+                    - Nouvelles réglementations
+                    
+                    Réponds UNIQUEMENT en JSON avec cette structure exacte :
+                    {
+                      "alertes": [
+                        {"niveau": "critique|warning|info", "titre": "...", "description": "...", "impact": "..."}
+                      ],
+                      "tendances": [
+                        {"type": "prix|climat|reglementation|autre", "description": "...", "impact_previsionnel": "..."}
+                      ],
+                      "contexte": "Résumé général de la situation en 2-3 phrases",
+                      "recommandations": ["...", "..."]
+                    }`
+                },
+                {
+                    role: 'user',
+                    content: `Analyse ces actualités récentes sur le bétail au Mali et en Mauritanie :\n\n${articlesText}\n\nRetourne uniquement le JSON structuré.`
+                }
+            ],
+            temperature: 0.3,
+            max_tokens: 1500
+        });
+
+        // Parser la réponse JSON de GPT
+        let analysisData;
+        try {
+            const responseContent = completion.choices[0].message.content.trim();
+            // Extraire le JSON si il est entouré de ```json ... ```
+            const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```/) || 
+                             responseContent.match(/```\s*([\s\S]*?)\s*```/);
+            const jsonStr = jsonMatch ? jsonMatch[1] : responseContent;
+            analysisData = JSON.parse(jsonStr);
+        } catch (parseError) {
+            console.error('Error parsing GPT response:', parseError);
+            analysisData = {
+                alertes: [],
+                tendances: [],
+                contexte: 'Erreur lors de l\'analyse des données.',
+                recommandations: []
+            };
+        }
+
+        // Préparer la réponse finale
+        const responseData = {
+            ...analysisData,
+            articles_count: newsArticles.length,
+            articles_sources: Array.from(new Set(newsArticles.map(a => a.source))),
+            timestamp: new Date().toISOString()
+        };
+
+        // Mettre en cache
+        veilleCache = {
+            data: responseData,
+            timestamp: now
+        };
+
+        console.log(`Veille data fetched: ${newsArticles.length} articles analyzed`);
+
+        res.json({
+            success: true,
+            ...responseData,
+            cached: false
+        });
+
+    } catch (error) {
+        console.error('Error in veille-betail endpoint:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch livestock news',
+            message: error.message
+        });
+    }
+});
+
 // Route pour récupérer les catégories
 app.get('/api/categories', checkAuth, checkReadAccess, async (req, res) => {
     try {
