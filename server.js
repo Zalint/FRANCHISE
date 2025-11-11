@@ -9193,7 +9193,7 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
                 [Op.lte]: dateFin
             },
             poids_estime: { [Op.ne]: null },
-            poids_reel: { [Op.ne]: null }
+            poids_reel: { [Op.ne]: null, [Op.ne]: 0 } // Exclude zero weights
         };
         
         // Filter by bete if provided
@@ -9272,8 +9272,12 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
             // Calculate metrics
             if (perfData.poids_estime && perfData.poids_reel && perfData.poids_reel !== 0) {
                 perfData.ecart = perfData.poids_estime - perfData.poids_reel;
-                perfData.erreur = ((perfData.poids_estime - perfData.poids_reel) / perfData.poids_reel) * 100;
-                perfData.precision = 100 - Math.abs(perfData.erreur);
+                const erreurRaw = ((perfData.poids_estime - perfData.poids_reel) / perfData.poids_reel) * 100;
+                const precisionRaw = 100 - Math.abs(erreurRaw);
+                
+                // Format with 2 decimals
+                perfData.erreur = parseFloat(erreurRaw.toFixed(2));
+                perfData.precision = parseFloat(precisionRaw.toFixed(2));
                 perfData.type_estimation = perfData.erreur > 0 ? 'Surestimation' : (perfData.erreur < 0 ? 'Sous-estimation' : 'Parfait');
                 
                 // Check coherence
@@ -9334,12 +9338,9 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
         }
         
         // ====================
-        // 2. LATEST ESTIMATION - Most recent by type
+        // 2. LATEST ESTIMATION - Most recent entries (by date, not by ID)
         // ====================
-        const latestEstimation = {
-            boeuf: null,
-            veau: null
-        };
+        const latestEstimation = [];
         
         for (const beteType of ['boeuf', 'veau']) {
             const latest = await PerformanceAchat.findOne({
@@ -9347,7 +9348,7 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
                     bete: beteType,
                     date: { [Op.lte]: dateFin },
                     poids_estime: { [Op.ne]: null },
-                    poids_reel: { [Op.ne]: null }
+                    poids_reel: { [Op.ne]: null, [Op.ne]: 0 } // Exclude zero weights
                 },
                 order: [['date', 'DESC'], ['created_at', 'DESC']]
             });
@@ -9358,8 +9359,13 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
                 
                 latestData.acheteur_nom = acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu';
                 latestData.ecart = latestData.poids_estime - latestData.poids_reel;
-                latestData.erreur = ((latestData.poids_estime - latestData.poids_reel) / latestData.poids_reel) * 100;
-                latestData.precision = 100 - Math.abs(latestData.erreur);
+                
+                const erreurRaw = ((latestData.poids_estime - latestData.poids_reel) / latestData.poids_reel) * 100;
+                const precisionRaw = 100 - Math.abs(erreurRaw);
+                
+                // Format with 2 decimals
+                latestData.erreur = parseFloat(erreurRaw.toFixed(2));
+                latestData.precision = parseFloat(precisionRaw.toFixed(2));
                 latestData.type_estimation = latestData.erreur > 0 ? 'Surestimation' : (latestData.erreur < 0 ? 'Sous-estimation' : 'Parfait');
                 
                 // Check coherence
@@ -9375,7 +9381,8 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
                 latestData.coherence_diff = diff.toFixed(2);
                 latestData.somme_achats = sommeAchats || 0;
                 
-                latestEstimation[beteType] = latestData;
+                // Add to array instead of object
+                latestEstimation.push(latestData);
             }
         }
         
