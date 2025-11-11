@@ -8234,6 +8234,117 @@ app.get('/api/external/reconciliation', validateApiKey, async (req, res) => {
                 if (transfertsNombre > 0) {
                     data.transfertsPrixUnitaire = data.transferts / transfertsNombre;
                 }
+                
+                // Calculate prixMoyenPondere (weighted average price)
+                if (data.ventesNombre > 0) {
+                    data.prixMoyenPondere = parseFloat((data.ventesValeur / data.ventesNombre).toFixed(2));
+                } else {
+                    data.prixMoyenPondere = 0;
+                }
+                
+                // Calculate perration based on point de vente
+                if (pdv === 'Chambre froide') {
+                    // Special formula for Chambre froide: |transfertsNombre| / |stockMatinNombre - stockSoirNombre| - 1
+                    const stockDiff = Math.abs(stockMatinNombre - stockSoirNombre);
+                    if (stockDiff > 0) {
+                        data.perration = parseFloat((Math.abs(transfertsNombre) / stockDiff - 1).toFixed(4));
+                    } else {
+                        data.perration = 0;
+                    }
+                } else {
+                    // Standard formula for other points de vente: (ventesNombre / ventesTheoriquesNombre) - 1
+                    if (data.ventesTheoriquesNombre > 0) {
+                        data.perration = parseFloat((data.ventesNombre / data.ventesTheoriquesNombre - 1).toFixed(4));
+                    } else {
+                        data.perration = 0;
+                    }
+                }
+                
+                // Initialize ventesNombreAjustePack (will be calculated after fetching pack data)
+                data.ventesNombreAjustePack = data.ventesNombre;
+                data.perrationAjustePack = data.perration;
+            });
+        });
+        
+        // Fetch pack sales data for the same date to calculate ventesNombreAjustePack
+        let packDataByPointVente = {};
+        try {
+            const packDate = dbDate.split('/').reverse().join('-'); // Convert DD/MM/YYYY to YYYY-MM-DD
+            
+            console.log(`Fetching pack data for date: ${packDate}`);
+            
+            const packResponse = await axiosInstance.get('/api/external/ventes-date/pack/aggregated', {
+                params: { 
+                    start_date: packDate, 
+                    end_date: packDate 
+                }
+            });
+            
+            if (packResponse.data && packResponse.data.success && packResponse.data.pointsVente) {
+                // Extract composition data per point de vente
+                Object.entries(packResponse.data.pointsVente).forEach(([pointVente, pvData]) => {
+                    if (pvData.compositionAgregee) {
+                        packDataByPointVente[pointVente] = pvData.compositionAgregee;
+                    }
+                });
+                console.log(`Pack data retrieved successfully for ${Object.keys(packDataByPointVente).length} points de vente`);
+            }
+        } catch (error) {
+            console.warn('Failed to fetch pack data:', error.message);
+        }
+        
+        // Calculate ventesNombreAjustePack and perrationAjustePack for each product
+        Object.entries(detailsByPDV).forEach(([pointVente, pointData]) => {
+            Object.entries(pointData).forEach(([productName, productData]) => {
+                // Map reconciliation product names to possible pack composition variants
+                const productsToAdjust = ['Boeuf', 'Veau', 'Agneau', 'Poulet', 'Oeuf'];
+                if (productsToAdjust.includes(productName) && packDataByPointVente[pointVente]) {
+                    // Define possible pack product name variants for each product
+                    const packVariants = {
+                        'Boeuf': ['Boeuf en détail', 'Boeuf en gros', 'Boeuf'],
+                        'Veau': ['Veau en détail', 'Veau en gros', 'Veau'],
+                        'Agneau': ['Agneau en détail', 'Agneau en gros', 'Agneau'],
+                        'Poulet': ['Poulet en détail', 'Poulet en gros', 'Poulet'],
+                        'Oeuf': ['Oeuf']
+                    };
+                    
+                    // Sum quantities from all variants for this product
+                    let totalPackQuantity = 0;
+                    const foundVariants = [];
+                    
+                    if (packVariants[productName]) {
+                        packVariants[productName].forEach(variant => {
+                            if (packDataByPointVente[pointVente][variant]) {
+                                const qty = parseFloat(packDataByPointVente[pointVente][variant].quantite) || 0;
+                                totalPackQuantity += qty;
+                                if (qty > 0) {
+                                    foundVariants.push(`${variant}:${qty}`);
+                                }
+                            }
+                        });
+                    }
+                    
+                    productData.ventesNombreAjustePack = parseFloat((productData.ventesNombre + totalPackQuantity).toFixed(2));
+                    
+                    if (foundVariants.length > 0) {
+                        console.log(`Adjusted ${productName} at ${pointVente}: ${productData.ventesNombre} + ${totalPackQuantity} (from ${foundVariants.join(', ')}) = ${productData.ventesNombreAjustePack}`);
+                    }
+                } else {
+                    productData.ventesNombreAjustePack = productData.ventesNombre;
+                }
+                
+                // Calculate perrationAjustePack using ventesNombreAjustePack instead of ventesNombre
+                if (pointVente === 'Chambre froide') {
+                    // For Chambre froide, perrationAjustePack is same as perration (doesn't use ventesNombre)
+                    productData.perrationAjustePack = productData.perration;
+                } else {
+                    // Standard formula: (ventesNombreAjustePack / ventesTheoriquesNombre) - 1
+                    if (productData.ventesTheoriquesNombre > 0) {
+                        productData.perrationAjustePack = parseFloat((productData.ventesNombreAjustePack / productData.ventesTheoriquesNombre - 1).toFixed(4));
+                    } else {
+                        productData.perrationAjustePack = 0;
+                    }
+                }
             });
         });
         
@@ -8443,7 +8554,8 @@ app.get('/api/external/reconciliation/aggregated', validateApiKey, async (req, r
                                 transfertsNombre: 0,
                                 prixMoyenPondere: 0,
                                 perration: 0,
-                                ventesNombreAjustePack: 0
+                                ventesNombreAjustePack: 0,
+                                perrationAjustePack: 0
                             };
                         }
                         
@@ -8531,13 +8643,54 @@ app.get('/api/external/reconciliation/aggregated', validateApiKey, async (req, r
                 }
                 
                 // Calculate ventesNombreAjustePack for applicable products using point de vente specific pack data
+                // Map reconciliation product names to possible pack composition variants
                 const productsToAdjust = ['Boeuf', 'Veau', 'Agneau', 'Poulet', 'Oeuf'];
-                if (productsToAdjust.includes(productName) && packDataByPointVente[pointVente] && packDataByPointVente[pointVente][productName]) {
-                    const packQuantity = parseFloat(packDataByPointVente[pointVente][productName].quantite) || 0;
-                    productData.ventesNombreAjustePack = parseFloat((productData.ventesNombre + packQuantity).toFixed(2));
-                    console.log(`Adjusted ${productName} at ${pointVente}: ${productData.ventesNombre} + ${packQuantity} (from packs at ${pointVente}) = ${productData.ventesNombreAjustePack}`);
+                if (productsToAdjust.includes(productName) && packDataByPointVente[pointVente]) {
+                    // Define possible pack product name variants for each product
+                    const packVariants = {
+                        'Boeuf': ['Boeuf en détail', 'Boeuf en gros', 'Boeuf'],
+                        'Veau': ['Veau en détail', 'Veau en gros', 'Veau'],
+                        'Agneau': ['Agneau en détail', 'Agneau en gros', 'Agneau'],
+                        'Poulet': ['Poulet en détail', 'Poulet en gros', 'Poulet'],
+                        'Oeuf': ['Oeuf']
+                    };
+                    
+                    // Sum quantities from all variants for this product
+                    let totalPackQuantity = 0;
+                    const foundVariants = [];
+                    
+                    if (packVariants[productName]) {
+                        packVariants[productName].forEach(variant => {
+                            if (packDataByPointVente[pointVente][variant]) {
+                                const qty = parseFloat(packDataByPointVente[pointVente][variant].quantite) || 0;
+                                totalPackQuantity += qty;
+                                if (qty > 0) {
+                                    foundVariants.push(`${variant}:${qty}`);
+                                }
+                            }
+                        });
+                    }
+                    
+                    productData.ventesNombreAjustePack = parseFloat((productData.ventesNombre + totalPackQuantity).toFixed(2));
+                    
+                    if (foundVariants.length > 0) {
+                        console.log(`Adjusted ${productName} at ${pointVente}: ${productData.ventesNombre} + ${totalPackQuantity} (from ${foundVariants.join(', ')}) = ${productData.ventesNombreAjustePack}`);
+                    }
                 } else {
                     productData.ventesNombreAjustePack = productData.ventesNombre;
+                }
+                
+                // Calculate perrationAjustePack using ventesNombreAjustePack instead of ventesNombre
+                if (pointVente === 'Chambre froide') {
+                    // For Chambre froide, perrationAjustePack is same as perration (doesn't use ventesNombre)
+                    productData.perrationAjustePack = productData.perration;
+                } else {
+                    // Standard formula: (ventesNombreAjustePack / ventesTheoriquesNombre) - 1
+                    if (productData.ventesTheoriquesNombre > 0) {
+                        productData.perrationAjustePack = parseFloat((productData.ventesNombreAjustePack / productData.ventesTheoriquesNombre - 1).toFixed(4));
+                    } else {
+                        productData.perrationAjustePack = 0;
+                    }
                 }
             });
         });
