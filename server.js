@@ -4450,6 +4450,7 @@ app.post('/api/performance-achat', checkAuth, checkWriteAccess, async (req, res)
             date,
             id_acheteur,
             bete,
+            prix,
             poids_estime,
             poids_reel,
             commentaire
@@ -4483,6 +4484,7 @@ app.post('/api/performance-achat', checkAuth, checkWriteAccess, async (req, res)
             date,
             id_acheteur,
             bete: bete.toLowerCase(),
+            prix: prix || null,
             poids_estime: poids_estime || null,
             poids_estime_timestamp: poids_estime ? new Date() : null,
             poids_estime_updated_by: poids_estime ? username : null,
@@ -4516,6 +4518,7 @@ app.put('/api/performance-achat/:id', checkAuth, checkWriteAccess, async (req, r
             date,
             id_acheteur,
             bete,
+            prix,
             poids_estime,
             poids_reel,
             commentaire
@@ -4565,6 +4568,7 @@ app.put('/api/performance-achat/:id', checkAuth, checkWriteAccess, async (req, r
         if (date !== undefined) updateData.date = date;
         if (id_acheteur !== undefined) updateData.id_acheteur = id_acheteur;
         if (bete !== undefined) updateData.bete = bete.toLowerCase();
+        if (prix !== undefined) updateData.prix = prix;
         if (commentaire !== undefined) updateData.commentaire = commentaire;
         
         if (poids_estime !== undefined) {
