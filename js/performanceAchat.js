@@ -828,7 +828,9 @@ async function showVeilleBetail() {
                 <span class="sr-only">Chargement...</span>
             </div>
             <p class="mt-2">Analyse des actualités en cours...</p>
-            <small class="text-muted">Scan des sources Mali/Mauritanie + Analyse IA</small>
+            <small class="text-muted">
+                Scan des sources Mali, Mauritanie & Sénégal (7 derniers jours) + Analyse IA
+            </small>
         </div>
     `;
     document.getElementById('veilleBetailMeta').textContent = '';
@@ -871,6 +873,38 @@ function displayVeilleBetail(data) {
     
     let html = '';
     
+    // Date statistics (if available)
+    if (data.date_stats) {
+        const dateStats = data.date_stats;
+        const freshnessClass = dateStats.average_article_age_days <= 2 ? 'success' : 
+                              dateStats.average_article_age_days <= 5 ? 'info' : 'warning';
+        
+        html += `
+            <div class="alert alert-${freshnessClass} border-${freshnessClass}">
+                <h6 class="alert-heading">
+                    <i class="fas fa-calendar-check"></i> Période d'Analyse
+                </h6>
+                <div class="row text-center">
+                    <div class="col-4">
+                        <strong>${dateStats.newest_article_age_days}</strong><br>
+                        <small>Plus récent (jours)</small>
+                    </div>
+                    <div class="col-4">
+                        <strong>${dateStats.average_article_age_days}</strong><br>
+                        <small>Moyenne (jours)</small>
+                    </div>
+                    <div class="col-4">
+                        <strong>${dateStats.oldest_article_age_days}</strong><br>
+                        <small>Plus ancien (jours)</small>
+                    </div>
+                </div>
+                <small class="d-block mt-2 text-center">
+                    <i class="fas fa-filter"></i> ${dateStats.coverage_period}
+                </small>
+            </div>
+        `;
+    }
+    
     // Contexte général
     if (data.contexte) {
         html += `
@@ -892,7 +926,10 @@ function displayVeilleBetail(data) {
             
             html += `
                 <div class="alert alert-${alertClass}">
-                    <h6 class="alert-heading"><i class="fas ${icon}"></i> ${alerte.titre}</h6>
+                    <h6 class="alert-heading">
+                        <i class="fas ${icon}"></i> ${alerte.titre}
+                        ${alerte.date_relative ? `<span class="badge badge-light float-right"><i class="fas fa-clock"></i> ${alerte.date_relative}</span>` : ''}
+                    </h6>
                     <p class="mb-1">${alerte.description}</p>
                     <small><strong>Impact:</strong> ${alerte.impact}</small>
                 </div>

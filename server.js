@@ -4780,31 +4780,48 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
             apiKey: process.env.OPENAI_API_KEY
         });
 
-        // Sources RSS Google News pour Mali et Mauritanie + mots-clés bétail
+        // Sources RSS Google News pour Mali, Mauritanie (90% du bétail) et Sénégal
         const searchQueries = [
+            // Mali & Mauritanie (PRIORITAIRES - 90% de l'approvisionnement)
             'Mali bétail',
             'Mali boeuf élevage',
             'Mauritanie bétail',
             'Mauritanie boeuf élevage',
-            'Mali Mauritanie export bétail Sénégal'
+            'Mali Mauritanie export bétail Sénégal',
+            // Sénégal (marché local & réglementations)
+            'Sénégal bétail prix',
+            'Sénégal élevage bovin',
+            'Sénégal import bétail'
         ];
 
         // Collecter les actualités
         const newsArticles = [];
+        const maxArticleAgeDays = 7; // Ignorer les articles de plus de 7 jours (1 semaine)
+        // 'now' is already declared at the top of the function
         
         for (const query of searchQueries) {
             try {
                 const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=fr&gl=SN&ceid=SN:fr`;
                 const feed = await parser.parseURL(url);
                 
-                // Prendre les 5 articles les plus récents par requête
-                const recentArticles = feed.items.slice(0, 5).map(item => ({
-                    title: item.title,
-                    link: item.link,
-                    pubDate: item.pubDate,
-                    source: item.source?.title || 'Source inconnue',
-                    contentSnippet: item.contentSnippet || item.content || ''
-                }));
+                // Prendre les 5 articles les plus récents par requête, filtrer par date
+                const recentArticles = feed.items
+                    .slice(0, 8) // Prendre plus d'articles pour compenser le filtrage
+                    .map(item => {
+                        const pubDate = new Date(item.pubDate);
+                        const ageInDays = Math.floor((now - pubDate.getTime()) / (1000 * 60 * 60 * 24));
+                        return {
+                            title: item.title,
+                            link: item.link,
+                            pubDate: item.pubDate,
+                            pubDateISO: pubDate.toISOString(),
+                            ageInDays: ageInDays,
+                            source: item.source?.title || 'Source inconnue',
+                            contentSnippet: item.contentSnippet || item.content || ''
+                        };
+                    })
+                    .filter(item => item.ageInDays <= maxArticleAgeDays) // Filtrer les articles trop anciens
+                    .slice(0, 5); // Garder les 5 plus récents après filtrage
                 
                 newsArticles.push(...recentArticles);
             } catch (error) {
@@ -4825,10 +4842,18 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
             });
         }
 
-        // Préparer le contenu pour l'analyse GPT
+        // Trier les articles par date (plus récents d'abord)
+        newsArticles.sort((a, b) => a.ageInDays - b.ageInDays);
+        
+        // Préparer le contenu pour l'analyse GPT avec date mise en évidence
         const articlesText = newsArticles.map((article, index) => 
-            `${index + 1}. [${article.pubDate}] ${article.title}\n   Source: ${article.source}\n   ${article.contentSnippet}\n`
+            `${index + 1}. [${article.pubDate}] ⏰ Il y a ${article.ageInDays} jour${article.ageInDays > 1 ? 's' : ''}\n   📰 ${article.title}\n   🔗 Source: ${article.source}\n   ${article.contentSnippet}\n`
         ).join('\n');
+        
+        // Calculer la moyenne d'âge des articles
+        const avgAge = Math.round(newsArticles.reduce((sum, a) => sum + a.ageInDays, 0) / newsArticles.length);
+        const oldestArticle = Math.max(...newsArticles.map(a => a.ageInDays));
+        const newestArticle = Math.min(...newsArticles.map(a => a.ageInDays));
 
         // Appel à OpenAI pour analyser les actualités
         const completion = await openai.chat.completions.create({
@@ -4837,31 +4862,50 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
                 {
                     role: 'system',
                     content: `Tu es un expert en analyse de marché du bétail en Afrique de l'Ouest. 
-                    Tu dois analyser les actualités du Mali et de la Mauritanie pour identifier les facteurs pouvant affecter l'approvisionnement en bovins au Sénégal.
+                    Tu dois analyser les actualités du Mali, de la Mauritanie et du Sénégal pour identifier les facteurs pouvant affecter l'approvisionnement en bovins.
+                    
+                    CONTEXTE CRITIQUE : 
+                    - 90% du bétail provient du Mali et de la Mauritanie. PRIORISE l'analyse de ces deux pays.
+                    - Le Sénégal est surveillé pour les réglementations locales, prix de marché et conditions de transport.
+                    - ATTENTION À LA DATE : Les articles ont maximum 7 jours. Priorise les événements les plus récents (0-2 jours) dans tes alertes.
                     
                     Focus sur :
-                    - Prix du bétail sur pied
-                    - Restrictions d'export/import
-                    - Maladies animales (fièvre aphteuse, etc.)
-                    - Sécheresse et conditions climatiques
-                    - Tensions frontalières ou politiques
-                    - Nouvelles réglementations
+                    - Prix du bétail sur pied (Mali/Mauritanie = PRIORITÉ ABSOLUE)
+                    - Restrictions d'export/import (frontières Mali-Sénégal, Mauritanie-Sénégal)
+                    - Maladies animales (fièvre aphteuse, peste bovine, etc.)
+                    - Sécheresse et conditions climatiques (impact sur disponibilité du cheptel)
+                    - Tensions frontalières ou politiques (fermetures de frontières)
+                    - Nouvelles réglementations (douanes, quarantaine, taxes)
+                    - Conditions de transport et logistique
+                    
+                    IMPORTANT : Dans tes alertes et tendances, MENTIONNE l'âge de l'information (ex: "Il y a 2 jours", "Hier") pour contextualiser l'urgence.
                     
                     Réponds UNIQUEMENT en JSON avec cette structure exacte :
                     {
                       "alertes": [
-                        {"niveau": "critique|warning|info", "titre": "...", "description": "...", "impact": "..."}
+                        {"niveau": "critique|warning|info", "titre": "...", "description": "...", "impact": "...", "date_relative": "Il y a X jour(s)"}
                       ],
                       "tendances": [
                         {"type": "prix|climat|reglementation|autre", "description": "...", "impact_previsionnel": "..."}
                       ],
-                      "contexte": "Résumé général de la situation en 2-3 phrases",
+                      "contexte": "Résumé général de la situation en 2-3 phrases (mentionne la période couverte)",
                       "recommandations": ["...", "..."]
                     }`
                 },
                 {
                     role: 'user',
-                    content: `Analyse ces actualités récentes sur le bétail au Mali et en Mauritanie :\n\n${articlesText}\n\nRetourne uniquement le JSON structuré.`
+                    content: `Analyse ces actualités récentes sur le bétail (Mali, Mauritanie, Sénégal) :
+                    
+PÉRIODE COUVERTE : Articles publiés dans les 7 derniers jours
+- Article le plus récent : Il y a ${newestArticle} jour(s)
+- Article le plus ancien : Il y a ${oldestArticle} jour(s)  
+- Âge moyen des articles : ${avgAge} jour(s)
+
+ARTICLES (${newsArticles.length} au total, triés du plus récent au plus ancien) :
+
+${articlesText}
+
+Retourne uniquement le JSON structuré avec une attention particulière aux dates et à la pertinence temporelle des informations.`
                 }
             ],
             temperature: 0.3,
@@ -4892,6 +4936,13 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
             ...analysisData,
             articles_count: newsArticles.length,
             articles_sources: Array.from(new Set(newsArticles.map(a => a.source))),
+            date_stats: {
+                newest_article_age_days: newestArticle,
+                oldest_article_age_days: oldestArticle,
+                average_article_age_days: avgAge,
+                max_age_filter_days: maxArticleAgeDays,
+                coverage_period: `Articles publiés dans les ${maxArticleAgeDays} derniers jours`
+            },
             timestamp: new Date().toISOString()
         };
 
