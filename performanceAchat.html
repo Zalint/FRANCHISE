@@ -251,7 +251,7 @@
                                         <th>P. Estimé (kg)<br><small class="text-muted">Modifié le</small></th>
                                         <th>P. Réel (kg)<br><small class="text-muted">Modifié le</small></th>
                                         <th>Prix/kg<br><small class="text-muted">Sans abats</small></th>
-                                        <th>Statut Achat</th>
+                                        <th title="Statut Achat Estimé">SAE</th>
                                         <th>Écart (kg)</th>
                                         <th>Erreur (%)</th>
                                         <th>Précision (%)</th>
@@ -304,6 +304,27 @@
                                     • Erreur 10% surestimation → Précision 90% → Score <strong>0/20</strong>
                                 </div>
                                 <em class="text-muted mt-2 d-block"><strong>Plus le score est élevé, meilleur est l'acheteur.</strong></em>
+                                
+                                <hr class="my-3">
+                                
+                                <h6 class="mb-2"><i class="fas fa-shopping-cart"></i> Statut Achat Estimé (SAE)</h6>
+                                <strong>Prix/kg sans abats</strong> = <code>Prix / Poids Estimé</code>
+                                <br>
+                                <div class="mt-2">
+                                    <strong>🐄 BOEUF :</strong>
+                                    <ul class="mb-1 mt-1" style="padding-left: 20px;">
+                                        <li><span class="badge bg-success">Bon</span> : Prix/kg ≤ 3200 FCFA/kg</li>
+                                        <li><span class="badge bg-warning">Acceptable</span> : 3201 - 3350 FCFA/kg</li>
+                                        <li><span class="badge bg-danger">Mauvais</span> : > 3350 FCFA/kg</li>
+                                    </ul>
+                                    <strong>🐮 VEAU :</strong>
+                                    <ul class="mb-0 mt-1" style="padding-left: 20px;">
+                                        <li><span class="badge bg-success">Bon</span> : Prix/kg ≤ 3400 FCFA/kg</li>
+                                        <li><span class="badge bg-warning">Acceptable</span> : 3401 - 3550 FCFA/kg</li>
+                                        <li><span class="badge bg-danger">Mauvais</span> : > 3550 FCFA/kg</li>
+                                    </ul>
+                                </div>
+                                <em class="text-muted mt-2 d-block"><small>SAE est calculé sur le poids estimé, comme indicateur initial de la qualité d'achat.</small></em>
                             </small>
                         </div>
                     </div>
