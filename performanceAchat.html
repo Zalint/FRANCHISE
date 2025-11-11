@@ -173,6 +173,11 @@
                             </div>
 
                             <div class="form-group">
+                                <label for="prix">Prix (FCFA)</label>
+                                <input type="number" step="0.01" class="form-control" id="prix" placeholder="Prix total d'achat">
+                            </div>
+
+                            <div class="form-group">
                                 <label for="poids-estime">Poids Estimé (kg)</label>
                                 <input type="number" step="0.01" class="form-control" id="poids-estime">
                                 <small class="timestamp-info" id="poids-estime-timestamp"></small>
@@ -242,8 +247,11 @@
                                         <th>Date</th>
                                         <th>Acheteur</th>
                                         <th>Type</th>
+                                        <th>Prix (FCFA)</th>
                                         <th>P. Estimé (kg)<br><small class="text-muted">Modifié le</small></th>
                                         <th>P. Réel (kg)<br><small class="text-muted">Modifié le</small></th>
+                                        <th>Prix/kg<br><small class="text-muted">Sans abats</small></th>
+                                        <th>Statut Achat</th>
                                         <th>Écart (kg)</th>
                                         <th>Erreur (%)</th>
                                         <th>Précision (%)</th>
@@ -254,7 +262,7 @@
                                 </thead>
                                 <tbody id="performanceTableBody">
                                     <tr>
-                                        <td colspan="11" class="text-center">Chargement...</td>
+                                        <td colspan="14" class="text-center">Chargement...</td>
                                     </tr>
                                 </tbody>
                             </table>

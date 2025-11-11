@@ -63,6 +63,11 @@ const PerformanceAchat = sequelize.define('performance_achat', {
     defaultValue: false,
     comment: 'Verrouillé pour empêcher modifications (nécessite déverrouillage Admin)'
   },
+  prix: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+    comment: 'Prix total d\'achat en FCFA'
+  },
   commentaire: {
     type: DataTypes.TEXT,
     allowNull: true,

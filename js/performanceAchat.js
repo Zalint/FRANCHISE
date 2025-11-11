@@ -174,7 +174,7 @@ function displayPerformances(performances) {
     const tbody = document.getElementById('performanceTableBody');
     
     if (performances.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center">Aucune donnée disponible</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" class="text-center">Aucune donnée disponible</td></tr>';
         return;
     }
     
@@ -197,6 +197,15 @@ function displayPerformances(performances) {
         const beteCell = document.createElement('td');
         beteCell.textContent = perf.bete.charAt(0).toUpperCase() + perf.bete.slice(1);
         row.appendChild(beteCell);
+        
+        // Prix
+        const prixCell = document.createElement('td');
+        if (perf.prix) {
+            prixCell.innerHTML = `<strong>${perf.prix.toLocaleString('fr-FR')} FCFA</strong>`;
+        } else {
+            prixCell.innerHTML = '<span class="text-muted">-</span>';
+        }
+        row.appendChild(prixCell);
         
         // Poids Estimé avec timestamp et date visible
         const poidsEstimeCell = document.createElement('td');
@@ -229,6 +238,54 @@ function displayPerformances(performances) {
             poidsReelCell.innerHTML = '<span class="text-muted">-</span>';
         }
         row.appendChild(poidsReelCell);
+        
+        // Prix/kg sans abats
+        const prixKgCell = document.createElement('td');
+        if (perf.prix && perf.poids_estime && perf.poids_estime !== 0) {
+            const prixKg = perf.prix / perf.poids_estime;
+            prixKgCell.innerHTML = `<strong>${prixKg.toFixed(2)} FCFA/kg</strong>`;
+        } else {
+            prixKgCell.innerHTML = '<span class="text-muted">-</span>';
+        }
+        row.appendChild(prixKgCell);
+        
+        // Statut Achat (Bon/Acceptable/Mauvais)
+        const statutAchatCell = document.createElement('td');
+        if (perf.prix && perf.poids_estime && perf.poids_estime !== 0) {
+            const prixKg = perf.prix / perf.poids_estime;
+            const bete = perf.bete.toLowerCase();
+            let statutBadge = document.createElement('span');
+            statutBadge.className = 'badge';
+            
+            if (bete === 'boeuf') {
+                if (prixKg <= 3200) {
+                    statutBadge.classList.add('bg-success');
+                    statutBadge.textContent = 'Bon';
+                } else if (prixKg <= 3350) {
+                    statutBadge.classList.add('bg-warning');
+                    statutBadge.textContent = 'Acceptable';
+                } else {
+                    statutBadge.classList.add('bg-danger');
+                    statutBadge.textContent = 'Mauvais';
+                }
+            } else if (bete === 'veau') {
+                if (prixKg <= 3400) {
+                    statutBadge.classList.add('bg-success');
+                    statutBadge.textContent = 'Bon';
+                } else if (prixKg <= 3550) {
+                    statutBadge.classList.add('bg-warning');
+                    statutBadge.textContent = 'Acceptable';
+                } else {
+                    statutBadge.classList.add('bg-danger');
+                    statutBadge.textContent = 'Mauvais';
+                }
+            }
+            
+            statutAchatCell.appendChild(statutBadge);
+        } else {
+            statutAchatCell.innerHTML = '<span class="text-muted">-</span>';
+        }
+        row.appendChild(statutAchatCell);
         
         // Écart
         const ecartCell = document.createElement('td');
@@ -448,6 +505,7 @@ async function handleFormSubmit(e) {
         date: document.getElementById('date').value,
         id_acheteur: document.getElementById('acheteur').value,
         bete: document.getElementById('bete').value,
+        prix: parseFloat(document.getElementById('prix').value) || null,
         poids_estime: parseFloat(document.getElementById('poids-estime').value) || null,
         poids_reel: parseFloat(document.getElementById('poids-reel').value) || null,
         commentaire: document.getElementById('commentaire').value || null
@@ -511,6 +569,7 @@ function editPerformance(perf) {
     document.getElementById('date').value = perf.date;
     document.getElementById('acheteur').value = perf.id_acheteur;
     document.getElementById('bete').value = perf.bete;
+    document.getElementById('prix').value = perf.prix || '';
     document.getElementById('poids-estime').value = perf.poids_estime || '';
     document.getElementById('poids-reel').value = perf.poids_reel || '';
     document.getElementById('commentaire').value = perf.commentaire || '';

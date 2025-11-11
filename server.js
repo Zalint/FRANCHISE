@@ -9269,6 +9269,33 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
             const acheteur = acheteurs.find(a => a.id === perfData.id_acheteur);
             perfData.acheteur_nom = acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu';
             
+            // Calculate prix/kg sans abats (based on estimation)
+            if (perfData.prix && perfData.poids_estime && perfData.poids_estime !== 0) {
+                perfData.prix_achat_kg_sans_abats_estime = parseFloat((perfData.prix / perfData.poids_estime).toFixed(2));
+                
+                // Determine statut_achat based on prix/kg and animal type
+                const prixKg = perfData.prix_achat_kg_sans_abats_estime;
+                const bete = perfData.bete.toLowerCase();
+                
+                if (bete === 'boeuf') {
+                    if (prixKg <= 3200) {
+                        perfData.statut_achat = 'Bon';
+                    } else if (prixKg <= 3350) {
+                        perfData.statut_achat = 'Acceptable';
+                    } else {
+                        perfData.statut_achat = 'Mauvais';
+                    }
+                } else if (bete === 'veau') {
+                    if (prixKg <= 3400) {
+                        perfData.statut_achat = 'Bon';
+                    } else if (prixKg <= 3550) {
+                        perfData.statut_achat = 'Acceptable';
+                    } else {
+                        perfData.statut_achat = 'Mauvais';
+                    }
+                }
+            }
+            
             // Calculate metrics
             if (perfData.poids_estime && perfData.poids_reel && perfData.poids_reel !== 0) {
                 perfData.ecart = perfData.poids_estime - perfData.poids_reel;
@@ -9372,16 +9399,44 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
                     const latestData = latest.toJSON();
                     const acheteur = acheteurs.find(a => a.id === latestData.id_acheteur);
                     
-                    latestData.acheteur_nom = acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu';
-                    latestData.ecart = latestData.poids_estime - latestData.poids_reel;
+                latestData.acheteur_nom = acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu';
+                
+                // Calculate prix/kg sans abats (based on estimation)
+                if (latestData.prix && latestData.poids_estime && latestData.poids_estime !== 0) {
+                    latestData.prix_achat_kg_sans_abats_estime = parseFloat((latestData.prix / latestData.poids_estime).toFixed(2));
                     
-                    const erreurRaw = ((latestData.poids_estime - latestData.poids_reel) / latestData.poids_reel) * 100;
-                    const precisionRaw = 100 - Math.abs(erreurRaw);
+                    // Determine statut_achat
+                    const prixKg = latestData.prix_achat_kg_sans_abats_estime;
+                    const bete = latestData.bete.toLowerCase();
                     
-                    // Format with 2 decimals
-                    latestData.erreur = parseFloat(erreurRaw.toFixed(2));
-                    latestData.precision = parseFloat(precisionRaw.toFixed(2));
-                    latestData.type_estimation = latestData.erreur > 0 ? 'Surestimation' : (latestData.erreur < 0 ? 'Sous-estimation' : 'Parfait');
+                    if (bete === 'boeuf') {
+                        if (prixKg <= 3200) {
+                            latestData.statut_achat = 'Bon';
+                        } else if (prixKg <= 3350) {
+                            latestData.statut_achat = 'Acceptable';
+                        } else {
+                            latestData.statut_achat = 'Mauvais';
+                        }
+                    } else if (bete === 'veau') {
+                        if (prixKg <= 3400) {
+                            latestData.statut_achat = 'Bon';
+                        } else if (prixKg <= 3550) {
+                            latestData.statut_achat = 'Acceptable';
+                        } else {
+                            latestData.statut_achat = 'Mauvais';
+                        }
+                    }
+                }
+                
+                latestData.ecart = latestData.poids_estime - latestData.poids_reel;
+                
+                const erreurRaw = ((latestData.poids_estime - latestData.poids_reel) / latestData.poids_reel) * 100;
+                const precisionRaw = 100 - Math.abs(erreurRaw);
+                
+                // Format with 2 decimals
+                latestData.erreur = parseFloat(erreurRaw.toFixed(2));
+                latestData.precision = parseFloat(precisionRaw.toFixed(2));
+                latestData.type_estimation = latestData.erreur > 0 ? 'Surestimation' : (latestData.erreur < 0 ? 'Sous-estimation' : 'Parfait');
                     
                     // Check coherence
                     const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
