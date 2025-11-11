@@ -265,7 +265,7 @@
                 <div class="card ranking-card">
                     <div class="card-header">
                         <h5 class="mb-0"><i class="fas fa-trophy"></i> Classement des Acheteurs</h5>
-                        <small>Score moyen (plus bas = meilleur)</small>
+                        <small>Score moyen sur 20 (plus haut = meilleur)</small>
                     </div>
                     <div class="card-body">
                         <div id="rankingContainer">
@@ -276,14 +276,23 @@
                         <div class="alert alert-info mt-3 mb-0" style="background-color: rgba(255,255,255,0.9); border: none;">
                             <h6 class="mb-2"><i class="fas fa-info-circle"></i> Formule du Score</h6>
                             <small>
-                                <strong>Performance (%)</strong> = <code>((Poids Estimé - Poids Réel) / Poids Réel) × 100</code>
+                                <strong>1. Performance (%)</strong> = <code>((Poids Estimé - Poids Réel) / Poids Réel) × 100</code>
                                 <br>
-                                <strong>Score Pénalisé</strong> = 
-                                <ul class="mb-0 mt-1" style="padding-left: 20px;">
-                                    <li><strong class="text-warning">Surestimation</strong> : |Performance| × <strong>2</strong> <em>(pénalisée)</em></li>
+                                <strong>2. Pénalité</strong> = 
+                                <ul class="mb-1 mt-1" style="padding-left: 20px;">
+                                    <li><strong class="text-warning">Surestimation</strong> : |Performance| × <strong>2</strong> <em>(doublement pénalisée)</em></li>
                                     <li><strong class="text-info">Sous-estimation</strong> : |Performance| × 1</li>
                                 </ul>
-                                <em class="text-muted">Le score moyen est calculé sur toutes les estimations. Plus le score est bas, meilleur est l'acheteur.</em>
+                                <strong>3. Score Final</strong> = <code>max(0, 20 - Pénalité)</code>
+                                <br>
+                                <div class="mt-2 p-2" style="background-color: #e8f4f8; border-left: 3px solid #17a2b8;">
+                                    <strong>Exemples :</strong><br>
+                                    • Performance 0% (parfait) → Score = <strong>20/20</strong> ✅<br>
+                                    • Performance 3% sous-estimation → Pénalité 3 → Score = <strong>17/20</strong><br>
+                                    • Performance 3% surestimation → Pénalité 6 → Score = <strong>14/20</strong><br>
+                                    • Performance 10% surestimation → Pénalité 20 → Score = <strong>0/20</strong>
+                                </div>
+                                <em class="text-muted mt-2 d-block"><strong>Plus le score est élevé, meilleur est l'acheteur.</strong></em>
                             </small>
                         </div>
                     </div>

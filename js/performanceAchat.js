@@ -198,12 +198,13 @@ function displayPerformances(performances) {
         beteCell.textContent = perf.bete.charAt(0).toUpperCase() + perf.bete.slice(1);
         row.appendChild(beteCell);
         
-        // Poids Estimé avec timestamp visible
+        // Poids Estimé avec timestamp et date visible
         const poidsEstimeCell = document.createElement('td');
         if (perf.poids_estime) {
+            const timestampDate = perf.poids_estime_timestamp ? formatTimestampWithDate(perf.poids_estime_timestamp) : null;
             poidsEstimeCell.innerHTML = `
                 <strong>${perf.poids_estime.toFixed(2)} kg</strong>
-                ${perf.poids_estime_timestamp ? `<br><small class="text-muted"><i class="fas fa-clock"></i> ${formatTimestampShort(perf.poids_estime_timestamp)}</small>` : ''}
+                ${timestampDate ? `<br><small class="text-muted"><i class="fas fa-clock"></i> ${timestampDate.time}<br>${timestampDate.date}</small>` : ''}
             `;
             if (perf.poids_estime_timestamp) {
                 poidsEstimeCell.title = `Modifié par ${perf.poids_estime_updated_by || 'Unknown'}`;
@@ -213,12 +214,13 @@ function displayPerformances(performances) {
         }
         row.appendChild(poidsEstimeCell);
         
-        // Poids Réel avec timestamp visible
+        // Poids Réel avec timestamp et date visible
         const poidsReelCell = document.createElement('td');
         if (perf.poids_reel) {
+            const timestampDate = perf.poids_reel_timestamp ? formatTimestampWithDate(perf.poids_reel_timestamp) : null;
             poidsReelCell.innerHTML = `
                 <strong>${perf.poids_reel.toFixed(2)} kg</strong>
-                ${perf.poids_reel_timestamp ? `<br><small class="text-muted"><i class="fas fa-clock"></i> ${formatTimestampShort(perf.poids_reel_timestamp)}</small>` : ''}
+                ${timestampDate ? `<br><small class="text-muted"><i class="fas fa-clock"></i> ${timestampDate.time}<br>${timestampDate.date}</small>` : ''}
             `;
             if (perf.poids_reel_timestamp) {
                 poidsReelCell.title = `Modifié par ${perf.poids_reel_updated_by || 'Unknown'}`;
@@ -414,7 +416,7 @@ function displayRankings(rankings) {
             </div>
             <div class="text-right">
                 <div style="color: #000; font-size: 1.5rem; font-weight: bold;">
-                    ${ranking.score_moyen.toFixed(2)}
+                    ${ranking.score_moyen.toFixed(2)}/20
                 </div>
                 <small style="color: #333;">
                     <span style="color: #ffc107; font-weight: 600;">${ranking.total_surestimations} sur</span> | 
@@ -685,6 +687,38 @@ function formatTimestampShort(timestamp) {
         // Afficher la date complète
         return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
     }
+}
+
+// Format timestamp with date in YYYY-MM-DD format
+function formatTimestampWithDate(timestamp) {
+    if (!timestamp) return null;
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Format date as YYYY-MM-DD
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    let timeStr;
+    if (diffDays === 0) {
+        // Aujourd'hui - afficher l'heure
+        timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays === 1) {
+        timeStr = 'Hier ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays < 7) {
+        timeStr = `Il y a ${diffDays}j - ` + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } else {
+        timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+    
+    return {
+        time: timeStr,
+        date: dateStr
+    };
 }
 
 // Show notification

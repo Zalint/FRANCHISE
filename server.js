@@ -4668,6 +4668,10 @@ app.get('/api/performance-achat/stats', checkAuth, checkReadAccess, async (req, 
                 ? Math.abs(performance) * 2  // Surestimation pénalisée x2
                 : Math.abs(performance);     // Sous-estimation normale
             
+            // Convert to score out of 20 (20 = perfect, 0 = worst)
+            // Score = max(0, 20 - scorePenalite)
+            const scoreSur20 = Math.max(0, Math.min(20, 20 - scorePenalite));
+            
             if (!statsMap[perf.id_acheteur]) {
                 const acheteur = acheteurs.find(a => a.id === perf.id_acheteur);
                 statsMap[perf.id_acheteur] = {
@@ -4683,7 +4687,7 @@ app.get('/api/performance-achat/stats', checkAuth, checkReadAccess, async (req, 
             }
             
             statsMap[perf.id_acheteur].total_estimations++;
-            statsMap[perf.id_acheteur].scores.push(scorePenalite);
+            statsMap[perf.id_acheteur].scores.push(scoreSur20);
             
             if (performance > 0) {
                 statsMap[perf.id_acheteur].total_surestimations++;
@@ -4701,8 +4705,8 @@ app.get('/api/performance-achat/stats', checkAuth, checkReadAccess, async (req, 
             return stat;
         });
         
-        // Sort by score (lower is better)
-        rankings.sort((a, b) => a.score_moyen - b.score_moyen);
+        // Sort by score (higher is better)
+        rankings.sort((a, b) => b.score_moyen - a.score_moyen);
         
         res.json({ 
             success: true, 
