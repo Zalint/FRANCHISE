@@ -5,37 +5,70 @@ let currentEditId = null;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    initializeDatePickers();
-    loadAcheteurs();
-    loadPerformances();
-    loadRankings();
-    setupEventListeners();
+    console.log('DOM loaded');
+    console.log('Flatpickr available:', typeof flatpickr !== 'undefined');
+    
+    // Delay initialization slightly to ensure all scripts are loaded
+    setTimeout(() => {
+        initializeDatePickers();
+        loadAcheteurs();
+        loadPerformances();
+        loadRankings();
+        setupEventListeners();
+    }, 100);
 });
 
 // Initialize Flatpickr date pickers
 function initializeDatePickers() {
-    flatpickr('#date', {
-        dateFormat: 'Y-m-d',
-        allowInput: false,
-        defaultDate: 'today',
-        locale: 'fr',
-        disableMobile: true,
-        clickOpens: true
-    });
+    console.log('Initializing date pickers...');
+    
+    if (typeof flatpickr === 'undefined') {
+        console.error('Flatpickr not loaded!');
+        return;
+    }
+    
+    // Main form date picker
+    const dateInput = document.getElementById('date');
+    console.log('Date input found:', dateInput);
+    
+    if (dateInput) {
+        const fp = flatpickr(dateInput, {
+            dateFormat: 'Y-m-d',
+            allowInput: false,
+            defaultDate: new Date(),
+            locale: window.flatpickr.l10ns.fr || 'fr',
+            disableMobile: true,
+            clickOpens: true,
+            onChange: function(selectedDates, dateStr, instance) {
+                console.log('Date selected:', dateStr);
+            }
+        });
+        console.log('Flatpickr instance created:', fp);
+    }
 
-    flatpickr('#filter-start-date', {
-        dateFormat: 'Y-m-d',
-        allowInput: false,
-        locale: 'fr',
-        disableMobile: true
-    });
+    // Filter start date
+    const filterStartDate = document.getElementById('filter-start-date');
+    if (filterStartDate) {
+        flatpickr(filterStartDate, {
+            dateFormat: 'Y-m-d',
+            allowInput: false,
+            locale: window.flatpickr.l10ns.fr || 'fr',
+            disableMobile: true
+        });
+    }
 
-    flatpickr('#filter-end-date', {
-        dateFormat: 'Y-m-d',
-        allowInput: false,
-        locale: 'fr',
-        disableMobile: true
-    });
+    // Filter end date
+    const filterEndDate = document.getElementById('filter-end-date');
+    if (filterEndDate) {
+        flatpickr(filterEndDate, {
+            dateFormat: 'Y-m-d',
+            allowInput: false,
+            locale: window.flatpickr.l10ns.fr || 'fr',
+            disableMobile: true
+        });
+    }
+    
+    console.log('Date pickers initialized');
 }
 
 // Setup event listeners
