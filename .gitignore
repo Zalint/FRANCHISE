@@ -53,8 +53,10 @@ DATABASE_COPY_README.md
 db_backups/
 temp_db_dumps/
 
-# Test files (contain API keys)
+# Test files (contain API keys or sensitive data)
 test-*.js
 check-*.js
 debug-*.js
-FINAL-TEST-*.js 
+FINAL-TEST-*.js
+test-*.json
+api-performance-achat-*.json 
