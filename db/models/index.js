@@ -8,6 +8,7 @@ const WeightParams = require('./WeightParams');
 const Precommande = require('./Precommande');
 const ClientAbonne = require('./ClientAbonne');
 const PaiementAbonnement = require('./PaiementAbonnement');
+const PerformanceAchat = require('./PerformanceAchat');
 const { sequelize } = require('../index');
 
 // Définir les relations entre les modèles si nécessaire
@@ -46,5 +47,6 @@ module.exports = {
   Precommande,
   ClientAbonne,
   PaiementAbonnement,
+  PerformanceAchat,
   syncDatabase
 }; 

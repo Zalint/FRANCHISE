@@ -1,0 +1,21 @@
+[
+  {
+    "id": "ACH001",
+    "nom": "DIOP",
+    "prenom": "Massata",
+    "actif": true
+  },
+  {
+    "id": "ACH002",
+    "nom": "KA",
+    "prenom": "Aly",
+    "actif": true
+  },
+  {
+    "id": "ACH003",
+    "nom": "SECK",
+    "prenom": "Madieye",
+    "actif": true
+  }
+]
+

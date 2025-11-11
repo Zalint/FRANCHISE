@@ -92,7 +92,7 @@ let produits = require('./data/by-date/produits');
 let produitsInventaire = require('./data/by-date/produitsInventaire');
 const bcrypt = require('bcrypt');
 const fsPromises = require('fs').promises;
-const { Vente, Stock, Transfert, Reconciliation, CashPayment, AchatBoeuf, Depense, WeightParams, Precommande, ClientAbonne, PaiementAbonnement } = require('./db/models');
+const { Vente, Stock, Transfert, Reconciliation, CashPayment, AchatBoeuf, Depense, WeightParams, Precommande, ClientAbonne, PaiementAbonnement, PerformanceAchat } = require('./db/models');
 const { testConnection, sequelize } = require('./db');
 const { Op, fn, col, literal } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
@@ -4313,6 +4313,408 @@ app.get('/api/achats-boeuf/stats/monthly', checkAuth, async (req, res) => {
     } catch (err) {
         console.error('Error fetching monthly stats:', err);
         res.status(500).json({ error: 'Failed to fetch monthly statistics' });
+    }
+});
+
+// ===========================================================================
+// PERFORMANCE ACHAT - PostgreSQL Implementation
+// ===========================================================================
+
+// GET endpoint to retrieve all acheteurs from acheteur.json
+app.get('/api/acheteurs', checkAuth, checkReadAccess, async (req, res) => {
+    try {
+        const acheteursPath = path.join(__dirname, 'acheteur.json');
+        const acheteursData = await fsPromises.readFile(acheteursPath, 'utf8');
+        const acheteurs = JSON.parse(acheteursData);
+        
+        // Filter only active buyers
+        const activeAcheteurs = acheteurs.filter(a => a.actif !== false);
+        
+        res.json({ success: true, acheteurs: activeAcheteurs });
+    } catch (err) {
+        console.error('Error loading acheteurs:', err);
+        res.status(500).json({ success: false, error: 'Failed to load acheteurs' });
+    }
+});
+
+// GET endpoint to retrieve performance achat data with filters
+app.get('/api/performance-achat', checkAuth, checkReadAccess, async (req, res) => {
+    try {
+        const { startDate, endDate, idAcheteur, bete } = req.query;
+        
+        let whereConditions = {};
+        
+        // Filter by date range
+        if (startDate && endDate) {
+            whereConditions.date = {
+                [Op.between]: [startDate, endDate]
+            };
+        } else if (startDate) {
+            whereConditions.date = {
+                [Op.gte]: startDate
+            };
+        } else if (endDate) {
+            whereConditions.date = {
+                [Op.lte]: endDate
+            };
+        }
+        
+        // Filter by acheteur
+        if (idAcheteur) {
+            whereConditions.id_acheteur = idAcheteur;
+        }
+        
+        // Filter by bete type
+        if (bete) {
+            whereConditions.bete = bete;
+        }
+        
+        const performances = await PerformanceAchat.findAll({
+            where: whereConditions,
+            order: [['date', 'DESC'], ['id', 'DESC']]
+        });
+        
+        // Load acheteurs for reference
+        const acheteursPath = path.join(__dirname, 'acheteur.json');
+        const acheteursData = await fsPromises.readFile(acheteursPath, 'utf8');
+        const acheteurs = JSON.parse(acheteursData);
+        
+        // Enrich performance data with calculations and coherence check
+        const enrichedPerformances = await Promise.all(performances.map(async (perf) => {
+            const perfData = perf.toJSON();
+            
+            // Find acheteur info
+            const acheteur = acheteurs.find(a => a.id === perfData.id_acheteur);
+            perfData.acheteur_nom = acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu';
+            
+            // Calculate performance metrics
+            if (perfData.poids_estime && perfData.poids_reel && perfData.poids_reel !== 0) {
+                perfData.ecart = perfData.poids_estime - perfData.poids_reel;
+                perfData.performance = ((perfData.poids_estime - perfData.poids_reel) / perfData.poids_reel) * 100;
+                
+                // Determine estimation type
+                if (perfData.performance > 0) {
+                    perfData.type_estimation = 'Surestimation';
+                } else if (perfData.performance < 0) {
+                    perfData.type_estimation = 'Sous-estimation';
+                } else {
+                    perfData.type_estimation = 'Parfait';
+                }
+                
+                // Calculate penalized score (surestimation x2)
+                perfData.score_penalite = perfData.performance > 0 
+                    ? Math.abs(perfData.performance) * 2 
+                    : Math.abs(perfData.performance);
+            } else {
+                perfData.ecart = null;
+                perfData.performance = null;
+                perfData.type_estimation = null;
+                perfData.score_penalite = null;
+            }
+            
+            // Check coherence with achats_boeuf
+            if (perfData.poids_reel && perfData.date) {
+                const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
+                    where: {
+                        date: perfData.date,
+                        bete: perfData.bete
+                    }
+                });
+                
+                perfData.somme_achats_kg = sommeAchats || 0;
+                const difference = Math.abs(perfData.poids_reel - perfData.somme_achats_kg);
+                perfData.coherence = difference <= 0.5 ? 'COHÉRENT' : 'INCOHÉRENT';
+                perfData.coherence_difference = perfData.poids_reel - perfData.somme_achats_kg;
+            } else {
+                perfData.somme_achats_kg = null;
+                perfData.coherence = null;
+                perfData.coherence_difference = null;
+            }
+            
+            return perfData;
+        }));
+        
+        res.json({ success: true, performances: enrichedPerformances });
+    } catch (err) {
+        console.error('Error fetching performance achat:', err);
+        res.status(500).json({ success: false, error: 'Failed to fetch performance data' });
+    }
+});
+
+// POST endpoint to create new performance achat entry
+app.post('/api/performance-achat', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const {
+            date,
+            id_acheteur,
+            bete,
+            poids_estime,
+            poids_reel,
+            commentaire
+        } = req.body;
+        
+        // Validation
+        if (!date || !id_acheteur || !bete) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Champs requis manquants (date, id_acheteur, bete)' 
+            });
+        }
+        
+        // Verify acheteur exists
+        const acheteursPath = path.join(__dirname, 'acheteur.json');
+        const acheteursData = await fsPromises.readFile(acheteursPath, 'utf8');
+        const acheteurs = JSON.parse(acheteursData);
+        const acheteurExists = acheteurs.find(a => a.id === id_acheteur);
+        
+        if (!acheteurExists) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Acheteur non trouvé' 
+            });
+        }
+        
+        // Get user info from session
+        const username = req.session?.user?.username || 'Unknown';
+        
+        const newPerformance = await PerformanceAchat.create({
+            date,
+            id_acheteur,
+            bete: bete.toLowerCase(),
+            poids_estime: poids_estime || null,
+            poids_estime_timestamp: poids_estime ? new Date() : null,
+            poids_estime_updated_by: poids_estime ? username : null,
+            poids_reel: poids_reel || null,
+            poids_reel_timestamp: poids_reel ? new Date() : null,
+            poids_reel_updated_by: poids_reel ? username : null,
+            commentaire: commentaire || null,
+            locked: false,
+            created_by: username
+        });
+        
+        res.status(201).json({ 
+            success: true, 
+            message: 'Performance créée avec succès',
+            performance: newPerformance 
+        });
+    } catch (err) {
+        console.error('Error creating performance achat:', err);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to create performance entry' 
+        });
+    }
+});
+
+// PUT endpoint to update performance achat entry
+app.put('/api/performance-achat/:id', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            date,
+            id_acheteur,
+            bete,
+            poids_estime,
+            poids_reel,
+            commentaire
+        } = req.body;
+        
+        const performance = await PerformanceAchat.findByPk(id);
+        
+        if (!performance) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Performance entry not found' 
+            });
+        }
+        
+        // Check if locked
+        if (performance.locked) {
+            // Only admins can modify locked entries
+            if (req.session?.user?.role !== 'administrateur') {
+                return res.status(403).json({ 
+                    success: false, 
+                    error: 'Entrée verrouillée. Seul un administrateur peut la modifier.' 
+                });
+            }
+        }
+        
+        // Check 24h rule for poids_estime modification
+        if (poids_estime !== undefined && performance.poids_estime_timestamp) {
+            const now = new Date();
+            const timestampDate = new Date(performance.poids_estime_timestamp);
+            const hoursDifference = (now - timestampDate) / (1000 * 60 * 60);
+            
+            // If more than 24h, only admin can modify
+            if (hoursDifference > 24 && req.session?.user?.role !== 'administrateur') {
+                return res.status(403).json({ 
+                    success: false, 
+                    error: 'Impossible de modifier le poids estimé après 24h. Contactez un administrateur.' 
+                });
+            }
+        }
+        
+        // Get user info
+        const username = req.session?.user?.username || 'Unknown';
+        
+        // Update fields
+        const updateData = {};
+        
+        if (date !== undefined) updateData.date = date;
+        if (id_acheteur !== undefined) updateData.id_acheteur = id_acheteur;
+        if (bete !== undefined) updateData.bete = bete.toLowerCase();
+        if (commentaire !== undefined) updateData.commentaire = commentaire;
+        
+        if (poids_estime !== undefined) {
+            updateData.poids_estime = poids_estime;
+            updateData.poids_estime_timestamp = new Date();
+            updateData.poids_estime_updated_by = username;
+        }
+        
+        if (poids_reel !== undefined) {
+            updateData.poids_reel = poids_reel;
+            updateData.poids_reel_timestamp = new Date();
+            updateData.poids_reel_updated_by = username;
+        }
+        
+        await performance.update(updateData);
+        
+        res.json({ 
+            success: true, 
+            message: 'Performance mise à jour avec succès',
+            performance 
+        });
+    } catch (err) {
+        console.error('Error updating performance achat:', err);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to update performance entry' 
+        });
+    }
+});
+
+// DELETE endpoint to delete performance achat entry
+app.delete('/api/performance-achat/:id', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const performance = await PerformanceAchat.findByPk(id);
+        
+        if (!performance) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Performance entry not found' 
+            });
+        }
+        
+        // Check if locked - only admin can delete locked entries
+        if (performance.locked && req.session?.user?.role !== 'administrateur') {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Entrée verrouillée. Seul un administrateur peut la supprimer.' 
+            });
+        }
+        
+        await performance.destroy();
+        
+        res.json({ 
+            success: true, 
+            message: 'Performance supprimée avec succès' 
+        });
+    } catch (err) {
+        console.error('Error deleting performance achat:', err);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to delete performance entry' 
+        });
+    }
+});
+
+// GET endpoint for statistics and rankings
+app.get('/api/performance-achat/stats', checkAuth, checkReadAccess, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        
+        let whereConditions = {};
+        
+        if (startDate && endDate) {
+            whereConditions.date = {
+                [Op.between]: [startDate, endDate]
+            };
+        }
+        
+        // Get all performances with both poids_estime and poids_reel
+        const performances = await PerformanceAchat.findAll({
+            where: {
+                ...whereConditions,
+                poids_estime: { [Op.ne]: null },
+                poids_reel: { [Op.ne]: null }
+            }
+        });
+        
+        // Load acheteurs
+        const acheteursPath = path.join(__dirname, 'acheteur.json');
+        const acheteursData = await fsPromises.readFile(acheteursPath, 'utf8');
+        const acheteurs = JSON.parse(acheteursData);
+        
+        // Calculate stats by acheteur
+        const statsMap = {};
+        
+        performances.forEach(perf => {
+            if (perf.poids_reel === 0) return; // Skip division by zero
+            
+            const performance = ((perf.poids_estime - perf.poids_reel) / perf.poids_reel) * 100;
+            const scorePenalite = performance > 0 
+                ? Math.abs(performance) * 2  // Surestimation pénalisée x2
+                : Math.abs(performance);     // Sous-estimation normale
+            
+            if (!statsMap[perf.id_acheteur]) {
+                const acheteur = acheteurs.find(a => a.id === perf.id_acheteur);
+                statsMap[perf.id_acheteur] = {
+                    id_acheteur: perf.id_acheteur,
+                    nom: acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu',
+                    total_estimations: 0,
+                    total_surestimations: 0,
+                    total_sous_estimations: 0,
+                    total_parfait: 0,
+                    score_moyen: 0,
+                    scores: []
+                };
+            }
+            
+            statsMap[perf.id_acheteur].total_estimations++;
+            statsMap[perf.id_acheteur].scores.push(scorePenalite);
+            
+            if (performance > 0) {
+                statsMap[perf.id_acheteur].total_surestimations++;
+            } else if (performance < 0) {
+                statsMap[perf.id_acheteur].total_sous_estimations++;
+            } else {
+                statsMap[perf.id_acheteur].total_parfait++;
+            }
+        });
+        
+        // Calculate average scores
+        const rankings = Object.values(statsMap).map(stat => {
+            stat.score_moyen = stat.scores.reduce((a, b) => a + b, 0) / stat.scores.length;
+            delete stat.scores; // Remove raw scores from response
+            return stat;
+        });
+        
+        // Sort by score (lower is better)
+        rankings.sort((a, b) => a.score_moyen - b.score_moyen);
+        
+        res.json({ 
+            success: true, 
+            rankings,
+            total_performances: performances.length
+        });
+    } catch (err) {
+        console.error('Error fetching performance stats:', err);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to fetch performance statistics' 
+        });
     }
 });
 
