@@ -9338,51 +9338,67 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
         }
         
         // ====================
-        // 2. LATEST ESTIMATION - Most recent entries (by date, not by ID)
+        // 2. LATEST ESTIMATION - All entries from the most recent date (by animal type)
         // ====================
         const latestEstimation = [];
         
         for (const beteType of ['boeuf', 'veau']) {
-            const latest = await PerformanceAchat.findOne({
+            // First, find the most recent date for this animal type
+            const mostRecent = await PerformanceAchat.findOne({
                 where: {
                     bete: beteType,
                     date: { [Op.lte]: dateFin },
                     poids_estime: { [Op.ne]: null },
                     poids_reel: { [Op.ne]: null, [Op.ne]: 0 } // Exclude zero weights
                 },
-                order: [['date', 'DESC'], ['created_at', 'DESC']]
+                order: [['date', 'DESC'], ['created_at', 'DESC']],
+                attributes: ['date']
             });
             
-            if (latest) {
-                const latestData = latest.toJSON();
-                const acheteur = acheteurs.find(a => a.id === latestData.id_acheteur);
-                
-                latestData.acheteur_nom = acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu';
-                latestData.ecart = latestData.poids_estime - latestData.poids_reel;
-                
-                const erreurRaw = ((latestData.poids_estime - latestData.poids_reel) / latestData.poids_reel) * 100;
-                const precisionRaw = 100 - Math.abs(erreurRaw);
-                
-                // Format with 2 decimals
-                latestData.erreur = parseFloat(erreurRaw.toFixed(2));
-                latestData.precision = parseFloat(precisionRaw.toFixed(2));
-                latestData.type_estimation = latestData.erreur > 0 ? 'Surestimation' : (latestData.erreur < 0 ? 'Sous-estimation' : 'Parfait');
-                
-                // Check coherence
-                const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
+            if (mostRecent) {
+                // Then, get ALL estimations from that date
+                const latestDate = mostRecent.date;
+                const allFromLatestDate = await PerformanceAchat.findAll({
                     where: {
-                        date: latestData.date,
-                        bete: latestData.bete
-                    }
+                        bete: beteType,
+                        date: latestDate,
+                        poids_estime: { [Op.ne]: null },
+                        poids_reel: { [Op.ne]: null, [Op.ne]: 0 }
+                    },
+                    order: [['created_at', 'DESC']]
                 });
                 
-                const diff = Math.abs((sommeAchats || 0) - latestData.poids_reel);
-                latestData.coherence = diff <= 0.5 ? 'COHÉRENT' : 'INCOHÉRENT';
-                latestData.coherence_diff = diff.toFixed(2);
-                latestData.somme_achats = sommeAchats || 0;
-                
-                // Add to array instead of object
-                latestEstimation.push(latestData);
+                for (const latest of allFromLatestDate) {
+                    const latestData = latest.toJSON();
+                    const acheteur = acheteurs.find(a => a.id === latestData.id_acheteur);
+                    
+                    latestData.acheteur_nom = acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu';
+                    latestData.ecart = latestData.poids_estime - latestData.poids_reel;
+                    
+                    const erreurRaw = ((latestData.poids_estime - latestData.poids_reel) / latestData.poids_reel) * 100;
+                    const precisionRaw = 100 - Math.abs(erreurRaw);
+                    
+                    // Format with 2 decimals
+                    latestData.erreur = parseFloat(erreurRaw.toFixed(2));
+                    latestData.precision = parseFloat(precisionRaw.toFixed(2));
+                    latestData.type_estimation = latestData.erreur > 0 ? 'Surestimation' : (latestData.erreur < 0 ? 'Sous-estimation' : 'Parfait');
+                    
+                    // Check coherence
+                    const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
+                        where: {
+                            date: latestData.date,
+                            bete: latestData.bete
+                        }
+                    });
+                    
+                    const diff = Math.abs((sommeAchats || 0) - latestData.poids_reel);
+                    latestData.coherence = diff <= 0.5 ? 'COHÉRENT' : 'INCOHÉRENT';
+                    latestData.coherence_diff = diff.toFixed(2);
+                    latestData.somme_achats = sommeAchats || 0;
+                    
+                    // Add to array
+                    latestEstimation.push(latestData);
+                }
             }
         }
         
