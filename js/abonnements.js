@@ -194,7 +194,7 @@ async function displayClients(clientsToDisplay) {
         let statsHTML = '<div class="text-center"><small class="text-muted">Chargement...</small></div>';
         
         card.innerHTML = `
-            <div class="card client-card h-100 shadow-sm">
+            <div class="card client-card h-100 shadow-sm" onclick="showClientDetails(${client.id})">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <h5 class="card-title mb-0 fw-bold">${client.prenom} ${client.nom}</h5>
