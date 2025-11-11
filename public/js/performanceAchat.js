@@ -50,7 +50,9 @@ function setupEventListeners() {
 async function loadAcheteurs() {
     try {
         console.log('Loading acheteurs...');
-        const response = await fetch('/api/acheteurs');
+        const response = await fetch('/api/acheteurs', {
+            credentials: 'include' // Include session cookies
+        });
         console.log('Response status:', response.status);
         
         if (!response.ok) {
@@ -102,7 +104,9 @@ async function loadPerformances(filters = {}) {
         if (filters.idAcheteur) params.append('idAcheteur', filters.idAcheteur);
         if (filters.bete) params.append('bete', filters.bete);
         
-        const response = await fetch(`/api/performance-achat?${params.toString()}`);
+        const response = await fetch(`/api/performance-achat?${params.toString()}`, {
+            credentials: 'include' // Include session cookies
+        });
         const data = await response.json();
         
         if (data.success) {
@@ -311,7 +315,9 @@ async function loadRankings() {
         if (startDate) params.append('startDate', startDate);
         if (endDate) params.append('endDate', endDate);
         
-        const response = await fetch(`/api/performance-achat/stats?${params.toString()}`);
+        const response = await fetch(`/api/performance-achat/stats?${params.toString()}`, {
+            credentials: 'include' // Include session cookies
+        });
         const data = await response.json();
         
         if (data.success) {
@@ -380,6 +386,7 @@ async function handleFormSubmit(e) {
             response = await fetch(`/api/performance-achat/${currentEditId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', // Include session cookies
                 body: JSON.stringify(formData)
             });
         } else {
@@ -387,6 +394,7 @@ async function handleFormSubmit(e) {
             response = await fetch('/api/performance-achat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', // Include session cookies
                 body: JSON.stringify(formData)
             });
         }
@@ -482,7 +490,8 @@ async function deletePerformance(id) {
     
     try {
         const response = await fetch(`/api/performance-achat/${id}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            credentials: 'include' // Include session cookies
         });
         
         const result = await response.json();
