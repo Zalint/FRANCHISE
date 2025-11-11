@@ -9165,6 +9165,306 @@ app.get('/api/external/reconciliation/aggregated', validateApiKey, async (req, r
     }
 });
 
+// External API for Performance Achat (Buyer estimation performance tracking)
+app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
+    try {
+        const { startDate, endDate, bete } = req.query;
+        
+        // Default dates: first day of current month to today
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        const dateDebut = startDate || firstDayOfMonth.toISOString().split('T')[0];
+        const dateFin = endDate || today.toISOString().split('T')[0];
+        
+        console.log('==== EXTERNAL API - PERFORMANCE ACHAT ====');
+        console.log('Period:', dateDebut, 'to', dateFin);
+        console.log('Bete filter:', bete || 'all');
+        
+        // Build where clause
+        const whereClause = {
+            date: {
+                [Op.gte]: dateDebut,
+                [Op.lte]: dateFin
+            },
+            poids_estime: { [Op.ne]: null },
+            poids_reel: { [Op.ne]: null }
+        };
+        
+        // Filter by bete if provided
+        if (bete && ['boeuf', 'veau'].includes(bete.toLowerCase())) {
+            whereClause.bete = bete.toLowerCase();
+        }
+        
+        // Fetch all performances
+        const performances = await PerformanceAchat.findAll({
+            where: whereClause,
+            order: [['date', 'DESC'], ['created_at', 'DESC']]
+        });
+        
+        console.log('Total performances found:', performances.length);
+        
+        // Load acheteurs
+        const acheteursData = await fs.readFile(path.join(__dirname, 'acheteur.json'), 'utf-8');
+        const acheteurs = JSON.parse(acheteursData);
+        
+        // ====================
+        // 1. RESUME - Agrégat par type de bétail
+        // ====================
+        const resume = {
+            boeuf: {
+                total_poids_estime: 0,
+                total_poids_reel: 0,
+                sous_estimation: {
+                    count: 0,
+                    total_ecart: 0,
+                    moyenne_erreur: 0,
+                    moyenne_precision: 0
+                },
+                surestimation: {
+                    count: 0,
+                    total_ecart: 0,
+                    moyenne_erreur: 0,
+                    moyenne_precision: 0
+                }
+            },
+            veau: {
+                total_poids_estime: 0,
+                total_poids_reel: 0,
+                sous_estimation: {
+                    count: 0,
+                    total_ecart: 0,
+                    moyenne_erreur: 0,
+                    moyenne_precision: 0
+                },
+                surestimation: {
+                    count: 0,
+                    total_ecart: 0,
+                    moyenne_erreur: 0,
+                    moyenne_precision: 0
+                }
+            }
+        };
+        
+        // Temporary arrays for calculations
+        const tempStats = {
+            boeuf: { sous_erreurs: [], sous_precisions: [], sur_erreurs: [], sur_precisions: [] },
+            veau: { sous_erreurs: [], sous_precisions: [], sur_erreurs: [], sur_precisions: [] }
+        };
+        
+        // ====================
+        // 3. PERFORMANCES - Enriched list
+        // ====================
+        const performancesList = [];
+        
+        for (const perf of performances) {
+            const perfData = perf.toJSON();
+            
+            // Find acheteur info
+            const acheteur = acheteurs.find(a => a.id === perfData.id_acheteur);
+            perfData.acheteur_nom = acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu';
+            
+            // Calculate metrics
+            if (perfData.poids_estime && perfData.poids_reel && perfData.poids_reel !== 0) {
+                perfData.ecart = perfData.poids_estime - perfData.poids_reel;
+                perfData.erreur = ((perfData.poids_estime - perfData.poids_reel) / perfData.poids_reel) * 100;
+                perfData.precision = 100 - Math.abs(perfData.erreur);
+                perfData.type_estimation = perfData.erreur > 0 ? 'Surestimation' : (perfData.erreur < 0 ? 'Sous-estimation' : 'Parfait');
+                
+                // Check coherence
+                const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
+                    where: {
+                        date: perfData.date,
+                        bete: perfData.bete
+                    }
+                });
+                
+                const diff = Math.abs((sommeAchats || 0) - perfData.poids_reel);
+                perfData.coherence = diff <= 0.5 ? 'COHÉRENT' : 'INCOHÉRENT';
+                perfData.coherence_diff = diff.toFixed(2);
+                perfData.somme_achats = sommeAchats || 0;
+                
+                // Aggregate for resume
+                const beteType = perfData.bete.toLowerCase();
+                if (resume[beteType]) {
+                    resume[beteType].total_poids_estime += perfData.poids_estime;
+                    resume[beteType].total_poids_reel += perfData.poids_reel;
+                    
+                    if (perfData.erreur < 0) {
+                        // Sous-estimation
+                        resume[beteType].sous_estimation.count++;
+                        resume[beteType].sous_estimation.total_ecart += perfData.ecart;
+                        tempStats[beteType].sous_erreurs.push(perfData.erreur);
+                        tempStats[beteType].sous_precisions.push(perfData.precision);
+                    } else if (perfData.erreur > 0) {
+                        // Surestimation
+                        resume[beteType].surestimation.count++;
+                        resume[beteType].surestimation.total_ecart += perfData.ecart;
+                        tempStats[beteType].sur_erreurs.push(perfData.erreur);
+                        tempStats[beteType].sur_precisions.push(perfData.precision);
+                    }
+                }
+            }
+            
+            performancesList.push(perfData);
+        }
+        
+        // Calculate averages for resume
+        for (const beteType of ['boeuf', 'veau']) {
+            const stats = tempStats[beteType];
+            
+            if (stats.sous_erreurs.length > 0) {
+                resume[beteType].sous_estimation.moyenne_erreur = 
+                    stats.sous_erreurs.reduce((a, b) => a + b, 0) / stats.sous_erreurs.length;
+                resume[beteType].sous_estimation.moyenne_precision = 
+                    stats.sous_precisions.reduce((a, b) => a + b, 0) / stats.sous_precisions.length;
+            }
+            
+            if (stats.sur_erreurs.length > 0) {
+                resume[beteType].surestimation.moyenne_erreur = 
+                    stats.sur_erreurs.reduce((a, b) => a + b, 0) / stats.sur_erreurs.length;
+                resume[beteType].surestimation.moyenne_precision = 
+                    stats.sur_precisions.reduce((a, b) => a + b, 0) / stats.sur_precisions.length;
+            }
+        }
+        
+        // ====================
+        // 2. LATEST ESTIMATION - Most recent by type
+        // ====================
+        const latestEstimation = {
+            boeuf: null,
+            veau: null
+        };
+        
+        for (const beteType of ['boeuf', 'veau']) {
+            const latest = await PerformanceAchat.findOne({
+                where: {
+                    bete: beteType,
+                    date: { [Op.lte]: dateFin },
+                    poids_estime: { [Op.ne]: null },
+                    poids_reel: { [Op.ne]: null }
+                },
+                order: [['date', 'DESC'], ['created_at', 'DESC']]
+            });
+            
+            if (latest) {
+                const latestData = latest.toJSON();
+                const acheteur = acheteurs.find(a => a.id === latestData.id_acheteur);
+                
+                latestData.acheteur_nom = acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu';
+                latestData.ecart = latestData.poids_estime - latestData.poids_reel;
+                latestData.erreur = ((latestData.poids_estime - latestData.poids_reel) / latestData.poids_reel) * 100;
+                latestData.precision = 100 - Math.abs(latestData.erreur);
+                latestData.type_estimation = latestData.erreur > 0 ? 'Surestimation' : (latestData.erreur < 0 ? 'Sous-estimation' : 'Parfait');
+                
+                // Check coherence
+                const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
+                    where: {
+                        date: latestData.date,
+                        bete: latestData.bete
+                    }
+                });
+                
+                const diff = Math.abs((sommeAchats || 0) - latestData.poids_reel);
+                latestData.coherence = diff <= 0.5 ? 'COHÉRENT' : 'INCOHÉRENT';
+                latestData.coherence_diff = diff.toFixed(2);
+                latestData.somme_achats = sommeAchats || 0;
+                
+                latestEstimation[beteType] = latestData;
+            }
+        }
+        
+        // ====================
+        // 4. RANKINGS - Buyer performance ranking
+        // ====================
+        const statsMap = {};
+        
+        for (const perf of performances) {
+            if (perf.poids_reel === 0) continue;
+            
+            const erreur = ((perf.poids_estime - perf.poids_reel) / perf.poids_reel) * 100;
+            const precision = 100 - Math.abs(erreur);
+            const scorePenalite = erreur > 0 
+                ? Math.abs(erreur) * 2 
+                : Math.abs(erreur);
+            const scoreSur20 = Math.max(0, Math.min(20, 20 - scorePenalite));
+            
+            if (!statsMap[perf.id_acheteur]) {
+                const acheteur = acheteurs.find(a => a.id === perf.id_acheteur);
+                statsMap[perf.id_acheteur] = {
+                    id_acheteur: perf.id_acheteur,
+                    nom: acheteur ? `${acheteur.prenom} ${acheteur.nom}` : 'Inconnu',
+                    total_estimations: 0,
+                    total_surestimations: 0,
+                    total_sous_estimations: 0,
+                    total_parfait: 0,
+                    score_moyen: 0,
+                    precision_moyenne: 0,
+                    scores: [],
+                    precisions: []
+                };
+            }
+            
+            statsMap[perf.id_acheteur].total_estimations++;
+            statsMap[perf.id_acheteur].scores.push(scoreSur20);
+            statsMap[perf.id_acheteur].precisions.push(precision);
+            
+            if (erreur > 0) {
+                statsMap[perf.id_acheteur].total_surestimations++;
+            } else if (erreur < 0) {
+                statsMap[perf.id_acheteur].total_sous_estimations++;
+            } else {
+                statsMap[perf.id_acheteur].total_parfait++;
+            }
+        }
+        
+        const rankings = Object.values(statsMap).map(stat => {
+            stat.score_moyen = stat.scores.reduce((a, b) => a + b, 0) / stat.scores.length;
+            stat.precision_moyenne = stat.precisions.reduce((a, b) => a + b, 0) / stat.precisions.length;
+            delete stat.scores;
+            delete stat.precisions;
+            return stat;
+        });
+        
+        rankings.sort((a, b) => b.score_moyen - a.score_moyen);
+        
+        console.log('Resume computed:', {
+            boeuf_total: resume.boeuf.total_poids_reel,
+            veau_total: resume.veau.total_poids_reel,
+            total_rankings: rankings.length
+        });
+        
+        // ====================
+        // RESPONSE
+        // ====================
+        res.json({
+            success: true,
+            periode: {
+                startDate: dateDebut,
+                endDate: dateFin,
+                bete: bete || 'all'
+            },
+            resume,
+            latestEstimation,
+            performances: performancesList,
+            rankings,
+            metadata: {
+                total_performances: performancesList.length,
+                total_acheteurs: rankings.length,
+                generated_at: new Date().toISOString()
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error in external performance-achat API:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Internal server error',
+            message: error.message 
+        });
+    }
+});
+
 // External API for estimation analysis
 // External API endpoint for estimations (no session auth required)
 app.get('/api/external/estimations', validateApiKey, async (req, res) => {
