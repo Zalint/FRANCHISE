@@ -9431,8 +9431,13 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
         }
         
         const rankings = Object.values(statsMap).map(stat => {
-            stat.score_moyen = stat.scores.reduce((a, b) => a + b, 0) / stat.scores.length;
-            stat.precision_moyenne = stat.precisions.reduce((a, b) => a + b, 0) / stat.precisions.length;
+            const scoreMoyen = stat.scores.reduce((a, b) => a + b, 0) / stat.scores.length;
+            const precisionMoyenne = stat.precisions.reduce((a, b) => a + b, 0) / stat.precisions.length;
+            
+            // Format with 2 decimals
+            stat.score_moyen = parseFloat(scoreMoyen.toFixed(2));
+            stat.precision_moyenne = parseFloat(precisionMoyenne.toFixed(2));
+            
             delete stat.scores;
             delete stat.precisions;
             return stat;
