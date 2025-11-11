@@ -9712,6 +9712,168 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
         });
         
         // ====================
+        // 5. ACTUALITE - Résumé de la veille bétail (généré par LLM)
+        // ====================
+        let actualite = null;
+        
+        try {
+            // Auto-fetch veille data if needed
+            const now = Date.now();
+            const needsRefresh = !veilleCache.data || !veilleCache.timestamp || 
+                                (now - veilleCache.timestamp >= veilleCache.cacheDuration);
+            
+            if (needsRefresh && process.env.OPENAI_API_KEY) {
+                console.log('Auto-fetching veille data for external API...');
+                
+                // Import required modules
+                const OpenAI = require('openai');
+                const Parser = require('rss-parser');
+                const parser = new Parser();
+                const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+                
+                // Collect news
+                const searchQueries = [
+                    'Mali bétail',
+                    'Mali boeuf élevage',
+                    'Mauritanie bétail',
+                    'Mauritanie boeuf élevage',
+                    'Mali Mauritanie export bétail Sénégal'
+                ];
+                
+                const newsArticles = [];
+                for (const query of searchQueries) {
+                    try {
+                        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=fr&gl=SN&ceid=SN:fr`;
+                        const feed = await parser.parseURL(url);
+                        const recentArticles = feed.items.slice(0, 5).map(item => ({
+                            title: item.title,
+                            pubDate: item.pubDate,
+                            source: item.source?.title || 'Source inconnue',
+                            contentSnippet: item.contentSnippet || item.content || ''
+                        }));
+                        newsArticles.push(...recentArticles);
+                    } catch (error) {
+                        console.error(`Error fetching RSS for "${query}":`, error.message);
+                    }
+                }
+                
+                if (newsArticles.length > 0) {
+                    // Analyze with OpenAI
+                    const articlesText = newsArticles.map((article, index) => 
+                        `${index + 1}. [${article.pubDate}] ${article.title}\n   Source: ${article.source}\n   ${article.contentSnippet}\n`
+                    ).join('\n');
+                    
+                    const completion = await openai.chat.completions.create({
+                        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: `Tu es un expert en analyse de marché du bétail en Afrique de l'Ouest. 
+                                Tu dois analyser les actualités du Mali et de la Mauritanie pour identifier les facteurs pouvant affecter l'approvisionnement en bovins au Sénégal.
+                                
+                                Réponds UNIQUEMENT en JSON avec cette structure exacte :
+                                {
+                                  "alertes": [
+                                    {"niveau": "critique|warning|info", "titre": "...", "description": "...", "impact": "..."}
+                                  ],
+                                  "tendances": [
+                                    {"type": "prix|climat|reglementation|autre", "description": "...", "impact_previsionnel": "..."}
+                                  ],
+                                  "contexte": "Résumé général de la situation en 2-3 phrases",
+                                  "recommandations": ["...", "..."]
+                                }`
+                            },
+                            {
+                                role: 'user',
+                                content: `Analyse ces actualités récentes sur le bétail au Mali et en Mauritanie :\n\n${articlesText}\n\nRetourne uniquement le JSON structuré.`
+                            }
+                        ],
+                        temperature: 0.3,
+                        max_tokens: 1500
+                    });
+                    
+                    // Parse response
+                    let analysisData;
+                    try {
+                        const responseContent = completion.choices[0].message.content.trim();
+                        const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```/) || 
+                                         responseContent.match(/```\s*([\s\S]*?)\s*```/);
+                        const jsonStr = jsonMatch ? jsonMatch[1] : responseContent;
+                        analysisData = JSON.parse(jsonStr);
+                    } catch (parseError) {
+                        analysisData = {
+                            alertes: [],
+                            tendances: [],
+                            contexte: 'Erreur lors de l\'analyse des données.',
+                            recommandations: []
+                        };
+                    }
+                    
+                    // Update cache
+                    veilleCache = {
+                        data: {
+                            ...analysisData,
+                            articles_count: newsArticles.length,
+                            timestamp: new Date().toISOString()
+                        },
+                        timestamp: now
+                    };
+                    
+                    console.log(`Veille auto-fetched: ${newsArticles.length} articles analyzed`);
+                }
+            }
+            
+            // Generate 2-sentence summary from veille data
+            if (veilleCache.data && veilleCache.data.contexte && process.env.OPENAI_API_KEY) {
+                try {
+                    const OpenAI = require('openai');
+                    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+                    
+                    const summaryPrompt = `Résume en MAXIMUM 2 phrases courtes cette situation du marché du bétail Mali/Mauritanie pour le Sénégal:
+
+Contexte: ${veilleCache.data.contexte}
+
+Alertes: ${veilleCache.data.alertes?.map(a => a.titre).join(', ') || 'Aucune'}
+
+Réponds UNIQUEMENT avec 2 phrases maximum, concises et informatives.`;
+                    
+                    const summaryCompletion = await openai.chat.completions.create({
+                        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: 'Tu es un assistant qui résume les actualités du bétail de manière très concise.'
+                            },
+                            {
+                                role: 'user',
+                                content: summaryPrompt
+                            }
+                        ],
+                        temperature: 0.3,
+                        max_tokens: 150
+                    });
+                    
+                    actualite = {
+                        resume: summaryCompletion.choices[0].message.content.trim(),
+                        timestamp: veilleCache.data.timestamp,
+                        source: 'Veille automatique Mali/Mauritanie'
+                    };
+                } catch (llmError) {
+                    console.error('Error generating actualite summary:', llmError.message);
+                    // Fallback to contexte if LLM fails
+                    actualite = {
+                        resume: veilleCache.data.contexte,
+                        timestamp: veilleCache.data.timestamp,
+                        source: 'Veille automatique Mali/Mauritanie'
+                    };
+                }
+            }
+        } catch (actualiteError) {
+            console.error('Error fetching actualite:', actualiteError.message);
+            // Continue without actualite if there's an error
+        }
+        
+        // ====================
         // RESPONSE
         // ====================
         res.json({
@@ -9725,6 +9887,7 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
             latestEstimation,
             performances: performancesList,
             rankings,
+            actualite,
             metadata: {
                 total_performances: performancesList.length,
                 total_acheteurs: rankings.length,
