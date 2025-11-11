@@ -406,19 +406,19 @@ function displayRankings(rankings) {
             <div class="d-flex align-items-center">
                 <span class="ranking-position ${positionClass}" style="font-size: 2.5rem; min-width: 60px;">#${position}</span>
                 <div class="ml-3">
-                    <h5 class="mb-0" style="color: white; font-weight: bold; font-size: 1.3rem;">${ranking.nom}</h5>
-                    <small style="color: rgba(255,255,255,0.8);">
+                    <h5 class="mb-0" style="color: #000; font-weight: bold; font-size: 1.3rem;">${ranking.nom}</h5>
+                    <small style="color: #333;">
                         ${ranking.total_estimations} estimation${ranking.total_estimations > 1 ? 's' : ''}
                     </small>
                 </div>
             </div>
             <div class="text-right">
-                <div style="color: white; font-size: 1.5rem; font-weight: bold;">
+                <div style="color: #000; font-size: 1.5rem; font-weight: bold;">
                     ${ranking.score_moyen.toFixed(2)}
                 </div>
-                <small style="color: rgba(255,255,255,0.9);">
-                    <span style="color: #ffc107;">${ranking.total_surestimations} sur</span> | 
-                    <span style="color: #17a2b8;">${ranking.total_sous_estimations} sous</span>
+                <small style="color: #333;">
+                    <span style="color: #ffc107; font-weight: 600;">${ranking.total_surestimations} sur</span> | 
+                    <span style="color: #17a2b8; font-weight: 600;">${ranking.total_sous_estimations} sous</span>
                 </small>
             </div>
         `;
