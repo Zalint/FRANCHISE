@@ -9172,10 +9172,15 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
         
         // Default dates: first day of current month to today
         const today = new Date();
-        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
         
-        const dateDebut = startDate || firstDayOfMonth.toISOString().split('T')[0];
-        const dateFin = endDate || today.toISOString().split('T')[0];
+        const defaultStartDate = `${year}-${month}-01`; // First day of current month
+        const defaultEndDate = `${year}-${month}-${day}`; // Today
+        
+        const dateDebut = startDate || defaultStartDate;
+        const dateFin = endDate || defaultEndDate;
         
         console.log('==== EXTERNAL API - PERFORMANCE ACHAT ====');
         console.log('Period:', dateDebut, 'to', dateFin);
