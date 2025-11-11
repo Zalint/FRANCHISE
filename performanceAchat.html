@@ -73,9 +73,9 @@
             font-size: 2rem;
             font-weight: bold;
         }
-        .ranking-1 { color: #FFD700; } /* Or */
-        .ranking-2 { color: #C0C0C0; } /* Argent */
-        .ranking-3 { color: #CD7F32; } /* Bronze */
+        .ranking-1 { color: #000; font-weight: 900; } /* Noir */
+        .ranking-2 { color: #000; font-weight: 900; } /* Noir */
+        .ranking-3 { color: #000; font-weight: 900; } /* Noir */
         .stats-card {
             border-left: 4px solid #007bff;
         }
@@ -270,6 +270,21 @@
                     <div class="card-body">
                         <div id="rankingContainer">
                             <p class="text-center">Chargement du classement...</p>
+                        </div>
+                        
+                        <!-- Légende de la formule -->
+                        <div class="alert alert-info mt-3 mb-0" style="background-color: rgba(255,255,255,0.9); border: none;">
+                            <h6 class="mb-2"><i class="fas fa-info-circle"></i> Formule du Score</h6>
+                            <small>
+                                <strong>Performance (%)</strong> = <code>((Poids Estimé - Poids Réel) / Poids Réel) × 100</code>
+                                <br>
+                                <strong>Score Pénalisé</strong> = 
+                                <ul class="mb-0 mt-1" style="padding-left: 20px;">
+                                    <li><strong class="text-warning">Surestimation</strong> : |Performance| × <strong>2</strong> <em>(pénalisée)</em></li>
+                                    <li><strong class="text-info">Sous-estimation</strong> : |Performance| × 1</li>
+                                </ul>
+                                <em class="text-muted">Le score moyen est calculé sur toutes les estimations. Plus le score est bas, meilleur est l'acheteur.</em>
+                            </small>
                         </div>
                     </div>
                 </div>
