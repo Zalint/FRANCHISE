@@ -234,31 +234,38 @@ function displayPerformances(performances) {
         const ecartCell = document.createElement('td');
         if (perf.ecart !== null) {
             ecartCell.textContent = `${perf.ecart >= 0 ? '+' : ''}${perf.ecart.toFixed(2)} kg`;
-            ecartCell.className = perf.ecart > 0 ? 'text-warning' : 'text-info';
+            ecartCell.className = perf.ecart > 0 ? 'text-danger' : (perf.ecart < 0 ? 'text-info' : 'text-success');
         } else {
-            ecartCell.textContent = '-';
+            ecartCell.innerHTML = '<span class="text-muted">-</span>';
         }
         row.appendChild(ecartCell);
         
-        // Performance (%)
-        const performanceCell = document.createElement('td');
-        if (perf.performance !== null) {
-            const perfValue = perf.performance.toFixed(2);
-            performanceCell.textContent = `${perf.performance >= 0 ? '+' : ''}${perfValue}%`;
-            
-            // Color coding
-            const absPerf = Math.abs(perf.performance);
-            if (absPerf <= 2) {
-                performanceCell.className = 'performance-good';
-            } else if (absPerf <= 5) {
-                performanceCell.className = 'performance-acceptable';
+        // Erreur (%) - anciennement Performance
+        const erreurCell = document.createElement('td');
+        if (perf.erreur !== null && perf.erreur !== undefined) {
+            erreurCell.innerHTML = `<strong>${perf.erreur >= 0 ? '+' : ''}${perf.erreur.toFixed(2)}%</strong>`;
+            erreurCell.className = perf.erreur > 0 ? 'text-danger' : (perf.erreur < 0 ? 'text-info' : 'text-success');
+        } else {
+            erreurCell.innerHTML = '<span class="text-muted">-</span>';
+        }
+        row.appendChild(erreurCell);
+        
+        // Précision (%)
+        const precisionCell = document.createElement('td');
+        if (perf.precision !== null && perf.precision !== undefined) {
+            precisionCell.innerHTML = `<strong>${perf.precision.toFixed(2)}%</strong>`;
+            // Color code: green for high precision, yellow for medium, red for low
+            if (perf.precision >= 95) {
+                precisionCell.className = 'text-success';
+            } else if (perf.precision >= 90) {
+                precisionCell.className = 'text-warning';
             } else {
-                performanceCell.className = 'performance-bad';
+                precisionCell.className = 'text-danger';
             }
         } else {
-            performanceCell.textContent = '-';
+            precisionCell.innerHTML = '<span class="text-muted">-</span>';
         }
-        row.appendChild(performanceCell);
+        row.appendChild(precisionCell);
         
         // Type d'estimation
         const typeEstimationCell = document.createElement('td');
@@ -418,6 +425,10 @@ function displayRankings(rankings) {
                 <div style="color: #000; font-size: 1.5rem; font-weight: bold;">
                     ${ranking.score_moyen.toFixed(2)}/20
                 </div>
+                <small style="color: #28a745; font-weight: 600;">
+                    Précision: ${ranking.precision_moyenne.toFixed(1)}%
+                </small>
+                <br>
                 <small style="color: #333;">
                     <span style="color: #ffc107; font-weight: 600;">${ranking.total_surestimations} sur</span> | 
                     <span style="color: #17a2b8; font-weight: 600;">${ranking.total_sous_estimations} sous</span>

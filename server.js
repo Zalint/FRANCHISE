@@ -4390,24 +4390,26 @@ app.get('/api/performance-achat', checkAuth, checkReadAccess, async (req, res) =
             // Calculate performance metrics
             if (perfData.poids_estime && perfData.poids_reel && perfData.poids_reel !== 0) {
                 perfData.ecart = perfData.poids_estime - perfData.poids_reel;
-                perfData.performance = ((perfData.poids_estime - perfData.poids_reel) / perfData.poids_reel) * 100;
+                perfData.erreur = ((perfData.poids_estime - perfData.poids_reel) / perfData.poids_reel) * 100;
+                perfData.precision = 100 - Math.abs(perfData.erreur);
                 
                 // Determine estimation type
-                if (perfData.performance > 0) {
+                if (perfData.erreur > 0) {
                     perfData.type_estimation = 'Surestimation';
-                } else if (perfData.performance < 0) {
+                } else if (perfData.erreur < 0) {
                     perfData.type_estimation = 'Sous-estimation';
                 } else {
                     perfData.type_estimation = 'Parfait';
                 }
                 
                 // Calculate penalized score (surestimation x2)
-                perfData.score_penalite = perfData.performance > 0 
-                    ? Math.abs(perfData.performance) * 2 
-                    : Math.abs(perfData.performance);
+                perfData.score_penalite = perfData.erreur > 0 
+                    ? Math.abs(perfData.erreur) * 2 
+                    : Math.abs(perfData.erreur);
             } else {
                 perfData.ecart = null;
-                perfData.performance = null;
+                perfData.erreur = null;
+                perfData.precision = null;
                 perfData.type_estimation = null;
                 perfData.score_penalite = null;
             }
@@ -4663,10 +4665,11 @@ app.get('/api/performance-achat/stats', checkAuth, checkReadAccess, async (req, 
         performances.forEach(perf => {
             if (perf.poids_reel === 0) return; // Skip division by zero
             
-            const performance = ((perf.poids_estime - perf.poids_reel) / perf.poids_reel) * 100;
-            const scorePenalite = performance > 0 
-                ? Math.abs(performance) * 2  // Surestimation pénalisée x2
-                : Math.abs(performance);     // Sous-estimation normale
+            const erreur = ((perf.poids_estime - perf.poids_reel) / perf.poids_reel) * 100;
+            const precision = 100 - Math.abs(erreur);
+            const scorePenalite = erreur > 0 
+                ? Math.abs(erreur) * 2  // Surestimation pénalisée x2
+                : Math.abs(erreur);     // Sous-estimation normale
             
             // Convert to score out of 20 (20 = perfect, 0 = worst)
             // Score = max(0, 20 - scorePenalite)
@@ -4682,26 +4685,31 @@ app.get('/api/performance-achat/stats', checkAuth, checkReadAccess, async (req, 
                     total_sous_estimations: 0,
                     total_parfait: 0,
                     score_moyen: 0,
-                    scores: []
+                    precision_moyenne: 0,
+                    scores: [],
+                    precisions: []
                 };
             }
             
             statsMap[perf.id_acheteur].total_estimations++;
             statsMap[perf.id_acheteur].scores.push(scoreSur20);
+            statsMap[perf.id_acheteur].precisions.push(precision);
             
-            if (performance > 0) {
+            if (erreur > 0) {
                 statsMap[perf.id_acheteur].total_surestimations++;
-            } else if (performance < 0) {
+            } else if (erreur < 0) {
                 statsMap[perf.id_acheteur].total_sous_estimations++;
             } else {
                 statsMap[perf.id_acheteur].total_parfait++;
             }
         });
         
-        // Calculate average scores
+        // Calculate average scores and precision
         const rankings = Object.values(statsMap).map(stat => {
             stat.score_moyen = stat.scores.reduce((a, b) => a + b, 0) / stat.scores.length;
+            stat.precision_moyenne = stat.precisions.reduce((a, b) => a + b, 0) / stat.precisions.length;
             delete stat.scores; // Remove raw scores from response
+            delete stat.precisions; // Remove raw precisions from response
             return stat;
         });
         

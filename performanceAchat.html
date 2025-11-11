@@ -242,10 +242,11 @@
                                         <th>Date</th>
                                         <th>Acheteur</th>
                                         <th>Type</th>
-                                        <th>P. Estimé<br><small class="text-muted">Modifié le</small></th>
-                                        <th>P. Réel<br><small class="text-muted">Modifié le</small></th>
-                                        <th>Écart</th>
-                                        <th>Performance</th>
+                                        <th>P. Estimé (kg)<br><small class="text-muted">Modifié le</small></th>
+                                        <th>P. Réel (kg)<br><small class="text-muted">Modifié le</small></th>
+                                        <th>Écart (kg)</th>
+                                        <th>Erreur (%)</th>
+                                        <th>Précision (%)</th>
                                         <th>Type</th>
                                         <th>Cohérence</th>
                                         <th>Actions</th>
@@ -253,7 +254,7 @@
                                 </thead>
                                 <tbody id="performanceTableBody">
                                     <tr>
-                                        <td colspan="10" class="text-center">Chargement...</td>
+                                        <td colspan="11" class="text-center">Chargement...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -276,21 +277,23 @@
                         <div class="alert alert-info mt-3 mb-0" style="background-color: rgba(255,255,255,0.9); border: none;">
                             <h6 class="mb-2"><i class="fas fa-info-circle"></i> Formule du Score</h6>
                             <small>
-                                <strong>1. Performance (%)</strong> = <code>((Poids Estimé - Poids Réel) / Poids Réel) × 100</code>
+                                <strong>1. Erreur (%)</strong> = <code>((Poids Estimé - Poids Réel) / Poids Réel) × 100</code>
+                                <br>
+                                <strong>Précision (%)</strong> = <code>100 - |Erreur|</code>
                                 <br>
                                 <strong>2. Pénalité</strong> = 
                                 <ul class="mb-1 mt-1" style="padding-left: 20px;">
-                                    <li><strong class="text-warning">Surestimation</strong> : |Performance| × <strong>2</strong> <em>(doublement pénalisée)</em></li>
-                                    <li><strong class="text-info">Sous-estimation</strong> : |Performance| × 1</li>
+                                    <li><strong class="text-warning">Surestimation</strong> : |Erreur| × <strong>2</strong> <em>(doublement pénalisée)</em></li>
+                                    <li><strong class="text-info">Sous-estimation</strong> : |Erreur| × 1</li>
                                 </ul>
                                 <strong>3. Score Final</strong> = <code>max(0, 20 - Pénalité)</code>
                                 <br>
                                 <div class="mt-2 p-2" style="background-color: #e8f4f8; border-left: 3px solid #17a2b8;">
                                     <strong>Exemples :</strong><br>
-                                    • Performance 0% (parfait) → Score = <strong>20/20</strong> ✅<br>
-                                    • Performance 3% sous-estimation → Pénalité 3 → Score = <strong>17/20</strong><br>
-                                    • Performance 3% surestimation → Pénalité 6 → Score = <strong>14/20</strong><br>
-                                    • Performance 10% surestimation → Pénalité 20 → Score = <strong>0/20</strong>
+                                    • Erreur 0% (parfait) → Précision 100% → Score <strong>20/20</strong> ✅<br>
+                                    • Erreur 3% sous-estimation → Précision 97% → Score <strong>17/20</strong><br>
+                                    • Erreur 3% surestimation → Précision 97% → Score <strong>14/20</strong><br>
+                                    • Erreur 10% surestimation → Précision 90% → Score <strong>0/20</strong>
                                 </div>
                                 <em class="text-muted mt-2 d-block"><strong>Plus le score est élevé, meilleur est l'acheteur.</strong></em>
                             </small>
