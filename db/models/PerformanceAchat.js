@@ -76,6 +76,7 @@ const PerformanceAchat = sequelize.define('performance_achat', {
 }, {
   timestamps: true,
   tableName: 'performance_achat',
+  underscored: true, // Use snake_case for timestamps (created_at, updated_at)
   indexes: [
     {
       fields: ['date', 'bete']
