@@ -4379,8 +4379,49 @@ app.get('/api/performance-achat', checkAuth, checkReadAccess, async (req, res) =
         const acheteursData = await fsPromises.readFile(acheteursPath, 'utf8');
         const acheteurs = JSON.parse(acheteursData);
         
-        // Enrich performance data with calculations and coherence check
-        const enrichedPerformances = await Promise.all(performances.map(async (perf) => {
+        // First, calculate coherence by date+bete (global check per date)
+        const coherenceByDate = new Map();
+        
+        // Group performances by date+bete to calculate total poids_reel
+        const dateGroups = {};
+        performances.forEach(perf => {
+            const perfData = perf.toJSON();
+            const key = `${perfData.date}_${perfData.bete}`;
+            if (!dateGroups[key]) {
+                dateGroups[key] = {
+                    date: perfData.date,
+                    bete: perfData.bete,
+                    totalPoidsReel: 0
+                };
+            }
+            if (perfData.poids_reel) {
+                dateGroups[key].totalPoidsReel += perfData.poids_reel;
+            }
+        });
+        
+        // Calculate coherence for each date+bete group
+        for (const [key, group] of Object.entries(dateGroups)) {
+            const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
+                where: {
+                    date: group.date,
+                    bete: group.bete
+                }
+            });
+            
+            const sommeAchatsKg = sommeAchats || 0;
+            const difference = Math.abs(group.totalPoidsReel - sommeAchatsKg);
+            const isCoherent = difference <= 0.5;
+            
+            coherenceByDate.set(key, {
+                coherence: isCoherent ? 'COHÉRENT' : 'INCOHÉRENT',
+                somme_achats_kg: sommeAchatsKg,
+                somme_poids_reel: group.totalPoidsReel,
+                coherence_difference: group.totalPoidsReel - sommeAchatsKg
+            });
+        }
+        
+        // Enrich performance data with calculations
+        const enrichedPerformances = performances.map((perf) => {
             const perfData = perf.toJSON();
             
             // Find acheteur info
@@ -4414,27 +4455,31 @@ app.get('/api/performance-achat', checkAuth, checkReadAccess, async (req, res) =
                 perfData.score_penalite = null;
             }
             
-            // Check coherence with achats_boeuf
-            if (perfData.poids_reel && perfData.date) {
-                const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
-                    where: {
-                        date: perfData.date,
-                        bete: perfData.bete
-                    }
-                });
+            // Apply coherence from global calculation by date
+            if (perfData.date && perfData.bete) {
+                const key = `${perfData.date}_${perfData.bete}`;
+                const coherenceData = coherenceByDate.get(key);
                 
-                perfData.somme_achats_kg = sommeAchats || 0;
-                const difference = Math.abs(perfData.poids_reel - perfData.somme_achats_kg);
-                perfData.coherence = difference <= 0.5 ? 'COHÉRENT' : 'INCOHÉRENT';
-                perfData.coherence_difference = perfData.poids_reel - perfData.somme_achats_kg;
+                if (coherenceData) {
+                    perfData.coherence = coherenceData.coherence;
+                    perfData.somme_achats_kg = coherenceData.somme_achats_kg;
+                    perfData.somme_poids_reel = coherenceData.somme_poids_reel;
+                    perfData.coherence_difference = coherenceData.coherence_difference;
+                } else {
+                    perfData.coherence = null;
+                    perfData.somme_achats_kg = null;
+                    perfData.somme_poids_reel = null;
+                    perfData.coherence_difference = null;
+                }
             } else {
-                perfData.somme_achats_kg = null;
                 perfData.coherence = null;
+                perfData.somme_achats_kg = null;
+                perfData.somme_poids_reel = null;
                 perfData.coherence_difference = null;
             }
             
             return perfData;
-        }));
+        });
         
         res.json({ success: true, performances: enrichedPerformances });
     } catch (err) {
@@ -9498,6 +9543,49 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
         };
         
         // ====================
+        // CALCULATE COHERENCE BY DATE (GLOBAL CHECK)
+        // ====================
+        const coherenceByDate = new Map();
+        
+        // Group performances by date+bete to calculate total poids_reel
+        const dateGroups = {};
+        performances.forEach(perf => {
+            const perfData = perf.toJSON();
+            const key = `${perfData.date}_${perfData.bete}`;
+            if (!dateGroups[key]) {
+                dateGroups[key] = {
+                    date: perfData.date,
+                    bete: perfData.bete,
+                    totalPoidsReel: 0
+                };
+            }
+            if (perfData.poids_reel) {
+                dateGroups[key].totalPoidsReel += perfData.poids_reel;
+            }
+        });
+        
+        // Calculate coherence for each date+bete group
+        for (const [key, group] of Object.entries(dateGroups)) {
+            const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
+                where: {
+                    date: group.date,
+                    bete: group.bete
+                }
+            });
+            
+            const sommeAchatsKg = sommeAchats || 0;
+            const difference = Math.abs(group.totalPoidsReel - sommeAchatsKg);
+            const isCoherent = difference <= 0.5;
+            
+            coherenceByDate.set(key, {
+                coherence: isCoherent ? 'COHÉRENT' : 'INCOHÉRENT',
+                somme_achats: sommeAchatsKg,
+                somme_poids_reel: group.totalPoidsReel,
+                coherence_diff: difference.toFixed(2)
+            });
+        }
+        
+        // ====================
         // 3. PERFORMANCES - Enriched list
         // ====================
         const performancesList = [];
@@ -9547,18 +9635,19 @@ app.get('/api/external/performance-achat', validateApiKey, async (req, res) => {
                 perfData.precision = parseFloat(precisionRaw.toFixed(2));
                 perfData.type_estimation = perfData.erreur > 0 ? 'Surestimation' : (perfData.erreur < 0 ? 'Sous-estimation' : 'Parfait');
                 
-                // Check coherence
-                const sommeAchats = await AchatBoeuf.sum('nbr_kg', {
-                    where: {
-                        date: perfData.date,
-                        bete: perfData.bete
-                    }
-                });
+                // Apply coherence from global calculation by date
+                const key = `${perfData.date}_${perfData.bete}`;
+                const coherenceData = coherenceByDate.get(key);
                 
-                const diff = Math.abs((sommeAchats || 0) - perfData.poids_reel);
-                perfData.coherence = diff <= 0.5 ? 'COHÉRENT' : 'INCOHÉRENT';
-                perfData.coherence_diff = diff.toFixed(2);
-                perfData.somme_achats = sommeAchats || 0;
+                if (coherenceData) {
+                    perfData.coherence = coherenceData.coherence;
+                    perfData.coherence_diff = coherenceData.coherence_diff;
+                    perfData.somme_achats = coherenceData.somme_achats;
+                } else {
+                    perfData.coherence = null;
+                    perfData.coherence_diff = '0.00';
+                    perfData.somme_achats = 0;
+                }
                 
                 // Aggregate for resume
                 const beteType = perfData.bete.toLowerCase();
