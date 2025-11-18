@@ -7076,6 +7076,112 @@ app.use('/api/abonnements', checkAuth, abonnementsRoutes);
 
 console.log('✅ Routes d\'abonnement chargées');
 
+// =================== ROUTES AUDIT CLIENT ===================
+// Routes pour l'Audit Client et ses logs
+const auditLogsRoutes = require('./routes/auditLogs');
+app.use('/api/audit-logs', checkAuth, auditLogsRoutes);
+
+console.log('✅ Routes d\'audit logs chargées');
+
+// Route proxy pour éviter les problèmes CORS avec l'API externe
+// + Logging automatique des recherches
+app.get('/api/audit-client', checkAuth, async (req, res) => {
+    const { AuditClientLog } = require('./db/models');
+    const startTime = new Date();
+    
+    try {
+        const { phone_number } = req.query;
+        
+        if (!phone_number) {
+            return res.status(400).json({
+                success: false,
+                error: 'Le numéro de téléphone est requis'
+            });
+        }
+        
+        console.log(`📞 Requête audit client pour: ${phone_number} par ${req.session.user.username}`);
+        
+        // Appel à l'API externe
+        const externalApiUrl = `https://matix-livreur-backend.onrender.com/api/external/mata/audit/client?phone_number=${encodeURIComponent(phone_number)}`;
+        const apiKey = process.env.EXTERNAL_API_KEY || 'b326e72b67a9b508c88270b9954c5ca1';
+        
+        const response = await axios.get(externalApiUrl, {
+            headers: {
+                'x-api-key': apiKey
+            }
+        });
+        
+        console.log(`✅ Données récupérées pour ${phone_number}`);
+        
+        // Logger la recherche dans la base de données
+        try {
+            await AuditClientLog.create({
+                user_id: req.session.user.id,
+                username: req.session.user.username,
+                point_de_vente: req.session.user.pointVente || null,
+                phone_number_searched: phone_number,
+                client_name: response.data.client_info?.name || null,
+                search_timestamp: startTime,
+                consultation_start: startTime,
+                search_success: true,
+                total_orders_found: response.data.client_info?.total_orders || 0,
+                ip_address: req.ip || req.connection.remoteAddress,
+                user_agent: req.get('user-agent')
+            });
+            console.log(`📝 Log enregistré pour ${phone_number}`);
+        } catch (logError) {
+            console.error('⚠️ Erreur lors de l\'enregistrement du log:', logError.message);
+            // Ne pas bloquer la réponse si le logging échoue
+        }
+        
+        // Retourner les données au client
+        res.json(response.data);
+        
+    } catch (error) {
+        console.error('❌ Erreur lors de l\'appel API audit client:', error.message);
+        
+        // Logger l'échec
+        try {
+            await AuditClientLog.create({
+                user_id: req.session.user.id,
+                username: req.session.user.username,
+                point_de_vente: req.session.user.pointVente || null,
+                phone_number_searched: req.query.phone_number,
+                search_timestamp: startTime,
+                consultation_start: startTime,
+                search_success: false,
+                error_message: error.message,
+                ip_address: req.ip || req.connection.remoteAddress,
+                user_agent: req.get('user-agent')
+            });
+        } catch (logError) {
+            console.error('⚠️ Erreur lors de l\'enregistrement du log d\'échec:', logError.message);
+        }
+        
+        if (error.response) {
+            // L'API a répondu avec un code d'erreur
+            res.status(error.response.status).json({
+                success: false,
+                error: error.response.data?.error || 'Erreur lors de la récupération des données'
+            });
+        } else if (error.request) {
+            // La requête a été envoyée mais pas de réponse
+            res.status(503).json({
+                success: false,
+                error: 'Le service d\'audit client est temporairement indisponible'
+            });
+        } else {
+            // Erreur lors de la configuration de la requête
+            res.status(500).json({
+                success: false,
+                error: 'Erreur interne du serveur'
+            });
+        }
+    }
+});
+
+console.log('✅ Route proxy audit client chargée');
+
 // Démarrage du serveur
 app.listen(PORT, () => {
     console.log(`Serveur démarré sur le port ${PORT}`);

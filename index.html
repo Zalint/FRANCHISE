@@ -320,7 +320,7 @@
                             <a class="nav-link" href="#" id="reconciliation-mois-tab">Réconciliation du mois</a>
                         </li>
                         <li class="nav-item" id="stock-alerte-item">
-                            <a class="nav-link" href="#" id="stock-alerte-tab">Accumulation de stock alerte</a>
+                            <a class="nav-link" href="#" id="stock-alerte-tab">Audit</a>
                         </li>
                         <li class="nav-item" id="cash-payment-item">
                             <a class="nav-link" href="#" id="cash-payment-tab">Cash Paiement</a>
@@ -363,8 +363,11 @@
             <!-- Formulaire de saisie -->
             <div id="saisie-section">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">Saisie des ventes</h5>
+                        <a href="/auditClient.html" class="btn btn-info" target="_blank">
+                            <i class="bi bi-person-check"></i> Audit Client
+                        </a>
                     </div>
                     <div class="card-body">
                         <form id="vente-form">
@@ -1517,10 +1520,13 @@
                 </div>
             </div>
 
-            <!-- Section Alertes de stock -->
+            <!-- Section Audit -->
             <div class="card mb-4" id="stock-alerte-section" style="display: none;">
-                <div class="card-header">
-                    <h2>Alertes d'accumulation de stock</h2>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2>Audit</h2>
+                    <a href="/auditLogs.html" class="btn btn-info" target="_blank">
+                        <i class="bi bi-clipboard-data"></i> Audit Logs
+                    </a>
                 </div>
                 <div class="card-body">
                     <div class="row">
