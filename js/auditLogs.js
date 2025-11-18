@@ -14,6 +14,7 @@ $(document).ready(function() {
     initializeDatePickers();
     loadFiltersData();
     loadData();
+    checkAdminAccess();
     
     // Event listeners
     $('#filterForm').on('submit', function(e) {
@@ -24,6 +25,7 @@ $(document).ready(function() {
     
     $('#resetBtn').on('click', resetFilters);
     $('#exportBtn').on('click', exportToExcel);
+    $('#truncateBtn').on('click', truncateTable);
 });
 
 // ==================== DATE PICKERS ====================
@@ -521,5 +523,100 @@ function showNotification(message, type = 'info') {
     setTimeout(() => {
         alert.alert('close');
     }, 5000);
+}
+
+// ==================== ADMIN FUNCTIONS ====================
+
+async function checkAdminAccess() {
+    try {
+        const response = await fetch('/api/check-session');
+        const data = await response.json();
+        
+        if (data.success && data.user) {
+            const user = data.user;
+            const userRole = user.role ? user.role.toLowerCase() : '';
+            
+            // Afficher le bouton "Vider la table" pour Superviseurs et Administrateurs
+            if (userRole === 'superviseur' || 
+                userRole === 'administrateur' || 
+                user.role === 'admin' || 
+                user.isSuperAdmin === true) {
+                $('#truncateBtn').show();
+            }
+        }
+    } catch (error) {
+        console.error('Erreur lors de la vérification des droits:', error);
+    }
+}
+
+async function truncateTable() {
+    // Confirmation avec double vérification
+    const confirmation = confirm(
+        '⚠️ ATTENTION ⚠️\n\n' +
+        'Vous êtes sur le point de SUPPRIMER DÉFINITIVEMENT tous les logs d\'audit client.\n\n' +
+        'Cette action est IRRÉVERSIBLE !\n\n' +
+        'Tous les historiques de recherches seront perdus.\n\n' +
+        'Voulez-vous vraiment continuer ?'
+    );
+    
+    if (!confirmation) {
+        return;
+    }
+    
+    // Deuxième confirmation
+    const finalConfirmation = confirm(
+        '⚠️ DERNIÈRE CONFIRMATION ⚠️\n\n' +
+        'Êtes-vous ABSOLUMENT SÛR de vouloir vider la table des logs d\'audit ?\n\n' +
+        'Cette action ne peut pas être annulée !'
+    );
+    
+    if (!finalConfirmation) {
+        return;
+    }
+    
+    try {
+        // Désactiver le bouton pendant l'opération
+        const $btn = $('#truncateBtn');
+        $btn.prop('disabled', true);
+        $btn.html('<i class="fas fa-spinner fa-spin"></i> Suppression...');
+        
+        const response = await fetch('/api/audit-logs/truncate', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(
+                `✅ ${data.message}`,
+                'success'
+            );
+            
+            // Recharger les données
+            setTimeout(() => {
+                loadData();
+            }, 1000);
+        } else {
+            showNotification(
+                `❌ Erreur: ${data.error}`,
+                'error'
+            );
+        }
+        
+    } catch (error) {
+        console.error('Erreur lors du vidage de la table:', error);
+        showNotification(
+            '❌ Erreur lors de la suppression des logs',
+            'error'
+        );
+    } finally {
+        // Réactiver le bouton
+        const $btn = $('#truncateBtn');
+        $btn.prop('disabled', false);
+        $btn.html('<i class="fas fa-trash-alt"></i> Vider la table');
+    }
 }
 

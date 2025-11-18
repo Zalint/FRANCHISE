@@ -7115,10 +7115,18 @@ app.get('/api/audit-client', checkAuth, async (req, res) => {
         
         // Logger la recherche dans la base de données
         try {
+            // Convertir pointVente array en string
+            let pointVente = null;
+            if (req.session.user.pointVente) {
+                pointVente = Array.isArray(req.session.user.pointVente) 
+                    ? req.session.user.pointVente.join(', ') 
+                    : req.session.user.pointVente;
+            }
+            
             await AuditClientLog.create({
                 user_id: req.session.user.id,
                 username: req.session.user.username,
-                point_de_vente: req.session.user.pointVente || null,
+                point_de_vente: pointVente,
                 phone_number_searched: phone_number,
                 client_name: response.data.client_info?.name || null,
                 search_timestamp: startTime,
@@ -7131,6 +7139,8 @@ app.get('/api/audit-client', checkAuth, async (req, res) => {
             console.log(`📝 Log enregistré pour ${phone_number}`);
         } catch (logError) {
             console.error('⚠️ Erreur lors de l\'enregistrement du log:', logError.message);
+            console.error('Stack:', logError.stack);
+            console.error('Code erreur:', logError.code);
             // Ne pas bloquer la réponse si le logging échoue
         }
         
@@ -7142,10 +7152,18 @@ app.get('/api/audit-client', checkAuth, async (req, res) => {
         
         // Logger l'échec
         try {
+            // Convertir pointVente array en string
+            let pointVente = null;
+            if (req.session.user.pointVente) {
+                pointVente = Array.isArray(req.session.user.pointVente) 
+                    ? req.session.user.pointVente.join(', ') 
+                    : req.session.user.pointVente;
+            }
+            
             await AuditClientLog.create({
                 user_id: req.session.user.id,
                 username: req.session.user.username,
-                point_de_vente: req.session.user.pointVente || null,
+                point_de_vente: pointVente,
                 phone_number_searched: req.query.phone_number,
                 search_timestamp: startTime,
                 consultation_start: startTime,

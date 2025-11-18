@@ -3,9 +3,9 @@ const router = express.Router();
 const { AuditClientLog } = require('../db/models');
 const { Op } = require('sequelize');
 
-// Middleware pour vérifier que l'utilisateur est Superviseur
+// Middleware pour vérifier que l'utilisateur est Superviseur ou Administrateur
 function checkSupervisorAccess(req, res, next) {
-    console.log('🔐 Vérification accès Superviseur');
+    console.log('🔐 Vérification accès Superviseur/Administrateur');
     console.log('Session user:', req.session.user);
     
     if (!req.session.user) {
@@ -21,17 +21,46 @@ function checkSupervisorAccess(req, res, next) {
     
     console.log('User role:', user.role, '(normalized:', userRole + ')');
     console.log('Is SuperAdmin:', user.isSuperAdmin);
-    console.log('Is admin:', user.role === 'admin');
     
-    // Accepter: Superviseur, superviseur, admin, ou isSuperAdmin
-    if (userRole === 'superviseur' || user.role === 'admin' || user.isSuperAdmin === true) {
+    // Accepter: Superviseur, superviseur, Administrateur, administrateur, admin, ou isSuperAdmin
+    if (userRole === 'superviseur' || 
+        userRole === 'administrateur' || 
+        user.role === 'admin' || 
+        user.isSuperAdmin === true) {
         console.log('✅ Accès autorisé');
         next();
     } else {
         console.log('❌ Accès refusé - Role:', user.role);
         return res.status(403).json({ 
             success: false, 
-            error: 'Accès refusé - Superviseur uniquement' 
+            error: 'Accès refusé - Superviseur/Administrateur uniquement' 
+        });
+    }
+}
+
+// Middleware pour vérifier que l'utilisateur est Admin (garde pour usage futur)
+function checkAdminAccess(req, res, next) {
+    console.log('🔐 Vérification accès Admin');
+    
+    if (!req.session.user) {
+        return res.status(401).json({ 
+            success: false, 
+            error: 'Non authentifié' 
+        });
+    }
+    
+    const user = req.session.user;
+    const userRole = user.role ? user.role.toLowerCase() : '';
+    
+    // Accepter uniquement: admin, administrateur ou isSuperAdmin
+    if (userRole === 'administrateur' || user.role === 'admin' || user.isSuperAdmin === true) {
+        console.log('✅ Accès admin autorisé pour:', user.username);
+        next();
+    } else {
+        console.log('❌ Accès refusé - Admin uniquement. Role:', user.role);
+        return res.status(403).json({ 
+            success: false, 
+            error: 'Accès refusé - Administrateur uniquement' 
         });
     }
 }
@@ -39,6 +68,9 @@ function checkSupervisorAccess(req, res, next) {
 // ==================== RÉCUPÉRER LES LOGS ====================
 router.get('/', checkSupervisorAccess, async (req, res) => {
     try {
+        console.log('📋 Récupération des logs d\'audit');
+        console.log('Query params:', req.query);
+        
         const {
             start_date,
             end_date,
@@ -83,6 +115,8 @@ router.get('/', checkSupervisorAccess, async (req, res) => {
             };
         }
 
+        console.log('🔍 Conditions de recherche:', JSON.stringify(where, null, 2));
+
         // Pagination
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
@@ -94,6 +128,8 @@ router.get('/', checkSupervisorAccess, async (req, res) => {
             offset: offset
         });
 
+        console.log(`✅ ${count} logs trouvés, ${rows.length} retournés`);
+
         res.json({
             success: true,
             total: count,
@@ -104,10 +140,12 @@ router.get('/', checkSupervisorAccess, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur lors de la récupération des logs:', error);
+        console.error('❌ Erreur lors de la récupération des logs:', error);
+        console.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
-            error: 'Erreur lors de la récupération des logs'
+            error: 'Erreur lors de la récupération des logs',
+            details: error.message
         });
     }
 });
@@ -346,6 +384,38 @@ router.get('/export', checkSupervisorAccess, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Erreur lors de l\'export'
+        });
+    }
+});
+
+// ==================== VIDER LA TABLE (SUPERVISEUR/ADMIN) ====================
+router.delete('/truncate', checkSupervisorAccess, async (req, res) => {
+    try {
+        console.log(`🗑️ Demande de vidage de la table audit_client_logs par: ${req.session.user.username} (${req.session.user.role})`);
+        
+        // Compter les logs avant suppression
+        const countBefore = await AuditClientLog.count();
+        
+        // Vider la table
+        await AuditClientLog.destroy({
+            where: {},
+            truncate: true
+        });
+        
+        console.log(`✅ Table audit_client_logs vidée par ${req.session.user.username}. ${countBefore} entrées supprimées.`);
+        
+        res.json({
+            success: true,
+            message: `Table vidée avec succès. ${countBefore} entrées supprimées.`,
+            deleted_count: countBefore
+        });
+        
+    } catch (error) {
+        console.error('❌ Erreur lors du vidage de la table:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erreur lors du vidage de la table',
+            details: error.message
         });
     }
 });
