@@ -4787,7 +4787,7 @@ app.get('/api/performance-achat/stats', checkAuth, checkReadAccess, async (req, 
 let veilleCache = {
     data: null,
     timestamp: null,
-    cacheDuration: 12 * 60 * 60 * 1000 // 12 heures en millisecondes
+    cacheDuration: 2 * 60 * 60 * 1000 // 2 heures en millisecondes (réduit de 12h)
 };
 
 // GET endpoint pour la veille actualités bétail
@@ -4825,28 +4825,42 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
             apiKey: process.env.OPENAI_API_KEY
         });
 
-        // Sources RSS Google News pour Mali, Mauritanie (90% du bétail) et Sénégal
+        // Sources RSS Google News pour Mali, Mauritanie (90% du bétail), Sénégal et International
         const searchQueries = [
             // Mali & Mauritanie (PRIORITAIRES - 90% de l'approvisionnement)
-            'Mali bétail',
-            'Mali boeuf élevage',
-            'Mauritanie bétail',
-            'Mauritanie boeuf élevage',
-            'Mali Mauritanie export bétail Sénégal',
+            { query: 'Mali bétail', category: 'regional', priority: 'high' },
+            { query: 'Mali boeuf élevage', category: 'regional', priority: 'high' },
+            { query: 'Mauritanie bétail', category: 'regional', priority: 'high' },
+            { query: 'Mauritanie boeuf élevage', category: 'regional', priority: 'high' },
+            { query: 'Mali Mauritanie export bétail Sénégal', category: 'regional', priority: 'high' },
             // Sénégal (marché local & réglementations)
-            'Sénégal bétail prix',
-            'Sénégal élevage bovin',
-            'Sénégal import bétail'
+            { query: 'Sénégal bétail prix', category: 'regional', priority: 'medium' },
+            { query: 'Sénégal élevage bovin', category: 'regional', priority: 'medium' },
+            { query: 'Sénégal import bétail', category: 'regional', priority: 'medium' },
+            // INTERNATIONAL (prix mondiaux, épidémies, restrictions commerciales)
+            { query: 'beef cattle international prices', category: 'international', priority: 'medium' },
+            { query: 'livestock disease outbreak Africa', category: 'international', priority: 'high' },
+            { query: 'cattle trade restrictions Africa', category: 'international', priority: 'high' },
+            { query: 'boeuf prix mondial marché', category: 'international', priority: 'medium' },
+            { query: 'FAO livestock market bulletin', category: 'international', priority: 'medium' }
         ];
 
         // Collecter les actualités
         const newsArticles = [];
-        const maxArticleAgeDays = 7; // Ignorer les articles de plus de 7 jours (1 semaine)
+        const maxArticleAgeDays = 21; // Ignorer les articles de plus de 21 jours (3 semaines) - augmenté de 7j
         // 'now' is already declared at the top of the function
         
-        for (const query of searchQueries) {
+        for (const queryObj of searchQueries) {
             try {
-                const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=fr&gl=SN&ceid=SN:fr`;
+                const query = queryObj.query;
+                const category = queryObj.category;
+                const priority = queryObj.priority;
+                
+                // Adapter la langue selon la catégorie
+                const lang = category === 'international' ? 'en' : 'fr';
+                const region = category === 'international' ? 'US' : 'SN';
+                
+                const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${lang}&gl=${region}&ceid=${region}:${lang}`;
                 const feed = await parser.parseURL(url);
                 
                 // Prendre les 5 articles les plus récents par requête, filtrer par date
@@ -4862,7 +4876,9 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
                             pubDateISO: pubDate.toISOString(),
                             ageInDays: ageInDays,
                             source: item.source?.title || 'Source inconnue',
-                            contentSnippet: item.contentSnippet || item.content || ''
+                            contentSnippet: item.contentSnippet || item.content || '',
+                            category: category, // regional ou international
+                            priority: priority // high, medium, low
                         };
                     })
                     .filter(item => item.ageInDays <= maxArticleAgeDays) // Filtrer les articles trop anciens
@@ -4870,7 +4886,7 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
                 
                 newsArticles.push(...recentArticles);
             } catch (error) {
-                console.error(`Error fetching RSS for query "${query}":`, error.message);
+                console.error(`Error fetching RSS for query "${queryObj.query}":`, error.message);
             }
         }
 
@@ -4890,9 +4906,13 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
         // Trier les articles par date (plus récents d'abord)
         newsArticles.sort((a, b) => a.ageInDays - b.ageInDays);
         
-        // Préparer le contenu pour l'analyse GPT avec date mise en évidence
+        // Séparer les articles régionaux et internationaux
+        const regionalArticles = newsArticles.filter(a => a.category === 'regional');
+        const internationalArticles = newsArticles.filter(a => a.category === 'international');
+        
+        // Préparer le contenu pour l'analyse GPT avec date et catégorie
         const articlesText = newsArticles.map((article, index) => 
-            `${index + 1}. [${article.pubDate}] ⏰ Il y a ${article.ageInDays} jour${article.ageInDays > 1 ? 's' : ''}\n   📰 ${article.title}\n   🔗 Source: ${article.source}\n   ${article.contentSnippet}\n`
+            `${index + 1}. [${article.category.toUpperCase()}] [${article.pubDate}] ⏰ Il y a ${article.ageInDays} jour${article.ageInDays > 1 ? 's' : ''}\n   📰 ${article.title}\n   🔗 Source: ${article.source}\n   🔗 Lien: ${article.link}\n   ${article.contentSnippet}\n`
         ).join('\n');
         
         // Calculer la moyenne d'âge des articles
@@ -4906,34 +4926,63 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
             messages: [
                 {
                     role: 'system',
-                    content: `Tu es un expert en analyse de marché du bétail en Afrique de l'Ouest. 
-                    Tu dois analyser les actualités du Mali, de la Mauritanie et du Sénégal pour identifier les facteurs pouvant affecter l'approvisionnement en bovins.
+                    content: `Tu es un expert en analyse de marché du bétail en Afrique de l'Ouest avec une vision internationale. 
+                    Tu dois analyser les actualités RÉGIONALES (Mali, Mauritanie, Sénégal) et INTERNATIONALES pour identifier les facteurs pouvant affecter l'approvisionnement en bovins.
                     
                     CONTEXTE CRITIQUE : 
                     - 90% du bétail provient du Mali et de la Mauritanie. PRIORISE l'analyse de ces deux pays.
                     - Le Sénégal est surveillé pour les réglementations locales, prix de marché et conditions de transport.
-                    - ATTENTION À LA DATE : Les articles ont maximum 7 jours. Priorise les événements les plus récents (0-2 jours) dans tes alertes.
+                    - NOUVEAU : Analyse INTERNATIONALE pour détecter les impacts indirects (prix mondiaux, épidémies, restrictions commerciales).
+                    - ATTENTION À LA DATE : Les articles ont maximum 21 jours. Priorise les événements les plus récents (0-3 jours) dans tes alertes.
                     
-                    Focus sur :
+                    Focus RÉGIONAL :
                     - Prix du bétail sur pied (Mali/Mauritanie = PRIORITÉ ABSOLUE)
                     - Restrictions d'export/import (frontières Mali-Sénégal, Mauritanie-Sénégal)
-                    - Maladies animales (fièvre aphteuse, peste bovine, etc.)
+                    - Maladies animales régionales (fièvre aphteuse, peste bovine, etc.)
                     - Sécheresse et conditions climatiques (impact sur disponibilité du cheptel)
                     - Tensions frontalières ou politiques (fermetures de frontières)
                     - Nouvelles réglementations (douanes, quarantaine, taxes)
-                    - Conditions de transport et logistique
                     
-                    IMPORTANT : Dans tes alertes et tendances, MENTIONNE l'âge de l'information (ex: "Il y a 2 jours", "Hier") pour contextualiser l'urgence.
+                    Focus INTERNATIONAL :
+                    - Prix mondiaux de la viande bovine (impact sur la demande locale)
+                    - Épidémies internationales de maladies animales (risques de propagation)
+                    - Restrictions commerciales internationales (embargo, quotas)
+                    - Tendances du marché mondial (demande, offre)
+                    - Innovations ou réglementations internationales (traçabilité, normes sanitaires)
+                    
+                    IMPORTANT : 
+                    - Dans tes alertes et tendances, MENTIONNE l'âge de l'information (ex: "Il y a 2 jours", "Hier")
+                    - INCLUS les liens des articles sources dans les alertes pertinentes
+                    - Sépare clairement les impacts RÉGIONAUX et INTERNATIONAUX
                     
                     Réponds UNIQUEMENT en JSON avec cette structure exacte :
                     {
                       "alertes": [
-                        {"niveau": "critique|warning|info", "titre": "...", "description": "...", "impact": "...", "date_relative": "Il y a X jour(s)"}
+                        {
+                          "niveau": "critique|warning|info", 
+                          "titre": "...", 
+                          "description": "...", 
+                          "impact": "...", 
+                          "date_relative": "Il y a X jour(s)",
+                          "categorie": "regional|international",
+                          "source_link": "URL de l'article source si disponible"
+                        }
                       ],
                       "tendances": [
-                        {"type": "prix|climat|reglementation|autre", "description": "...", "impact_previsionnel": "..."}
+                        {
+                          "type": "prix|climat|reglementation|marche_international|epidemie|autre", 
+                          "description": "...", 
+                          "impact_previsionnel": "...",
+                          "categorie": "regional|international"
+                        }
                       ],
-                      "contexte": "Résumé général de la situation en 2-3 phrases (mentionne la période couverte)",
+                      "international": {
+                        "resume": "Résumé des impacts internationaux en 2-3 phrases",
+                        "articles_pertinents": [
+                          {"titre": "...", "lien": "...", "impact": "..."}
+                        ]
+                      },
+                      "contexte": "Résumé général de la situation régionale + internationale en 2-3 phrases",
                       "recommandations": ["...", "..."]
                     }`
                 },
@@ -4941,7 +4990,7 @@ app.get('/api/veille-betail', checkAuth, checkReadAccess, async (req, res) => {
                     role: 'user',
                     content: `Analyse ces actualités récentes sur le bétail (Mali, Mauritanie, Sénégal) :
                     
-PÉRIODE COUVERTE : Articles publiés dans les 7 derniers jours
+PÉRIODE COUVERTE : Articles publiés dans les 21 derniers jours
 - Article le plus récent : Il y a ${newestArticle} jour(s)
 - Article le plus ancien : Il y a ${oldestArticle} jour(s)  
 - Âge moyen des articles : ${avgAge} jour(s)
@@ -4986,7 +5035,7 @@ Retourne uniquement le JSON structuré avec une attention particulière aux date
                 oldest_article_age_days: oldestArticle,
                 average_article_age_days: avgAge,
                 max_age_filter_days: maxArticleAgeDays,
-                coverage_period: `Articles publiés dans les ${maxArticleAgeDays} derniers jours`
+                coverage_period: `Articles publiés dans les ${maxArticleAgeDays} derniers jours (3 semaines)`
             },
             timestamp: new Date().toISOString()
         };

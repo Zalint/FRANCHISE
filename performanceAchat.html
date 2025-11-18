@@ -100,7 +100,54 @@
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1><i class="fas fa-chart-line"></i> Performance Achat</h1>
-            <div>
+            <div class="d-flex align-items-center">
+                <!-- Totaux de la période -->
+                <div class="card mr-3" style="min-width: 550px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                    <div class="card-body p-3">
+                        <h6 class="mb-2 text-muted" style="font-size: 0.9rem;">
+                            <i class="fas fa-calendar-alt"></i> Totaux Période Filtrée
+                        </h6>
+                        <!-- Ligne 1: Poids -->
+                        <div class="d-flex justify-content-between mb-3">
+                            <div class="text-center flex-fill border-right pr-2">
+                                <div class="text-muted" style="font-size: 0.75rem;">P. Estimé</div>
+                                <div class="h5 mb-0 font-weight-bold text-primary" id="total-poids-estime">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                </div>
+                            </div>
+                            <div class="text-center flex-fill pl-2">
+                                <div class="text-muted" style="font-size: 0.75rem;">P. Réel</div>
+                                <div class="h5 mb-0 font-weight-bold text-success" id="total-poids-reel">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Ligne 2: Écarts -->
+                        <div class="border-top pt-2">
+                            <div class="d-flex justify-content-between">
+                                <div class="text-center flex-fill border-right px-1">
+                                    <div class="text-muted" style="font-size: 0.7rem;">Écart Total</div>
+                                    <div class="h6 mb-0 font-weight-bold text-dark" id="total-ecart">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </div>
+                                </div>
+                                <div class="text-center flex-fill border-right px-1">
+                                    <div class="text-muted" style="font-size: 0.7rem;">Écarts +</div>
+                                    <div class="h6 mb-0 font-weight-bold text-warning" id="total-ecart-positif" title="Surestimations">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </div>
+                                </div>
+                                <div class="text-center flex-fill px-1">
+                                    <div class="text-muted" style="font-size: 0.7rem;">Écarts -</div>
+                                    <div class="h6 mb-0 font-weight-bold text-info" id="total-ecart-negatif" title="Sous-estimations">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <button class="btn btn-info mr-2" id="veilleBetailBtn" title="Veille actualités Mali/Mauritanie">
                     <i class="fas fa-newspaper"></i> Veille Actualités Bétail
                 </button>

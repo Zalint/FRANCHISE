@@ -161,6 +161,7 @@ async function loadPerformances(filters = {}) {
             allPerformances = data.performances;
             displayPerformances(allPerformances);
             updateQuickStats(allPerformances);
+            updatePeriodTotals(allPerformances);
         } else {
             showNotification('Erreur lors du chargement des performances', 'danger');
         }
@@ -417,6 +418,86 @@ function updateQuickStats(performances) {
     document.getElementById('stat-surestimation').textContent = surestimation;
     document.getElementById('stat-sous-estimation').textContent = sousEstimation;
     document.getElementById('stat-parfait').textContent = parfait;
+}
+
+// Update period totals (Poids Estimé, Poids Réel, and Écarts)
+function updatePeriodTotals(performances) {
+    let totalPoidsEstime = 0;
+    let totalPoidsReel = 0;
+    let totalEcart = 0;
+    let totalEcartPositif = 0;
+    let totalEcartNegatif = 0;
+    
+    // Calculate totals
+    performances.forEach(perf => {
+        if (perf.poids_estime) {
+            totalPoidsEstime += parseFloat(perf.poids_estime);
+        }
+        if (perf.poids_reel) {
+            totalPoidsReel += parseFloat(perf.poids_reel);
+        }
+        
+        // Calculate écarts
+        if (perf.ecart !== null && perf.ecart !== undefined) {
+            const ecart = parseFloat(perf.ecart);
+            totalEcart += ecart;
+            
+            if (ecart > 0) {
+                totalEcartPositif += ecart;
+            } else if (ecart < 0) {
+                totalEcartNegatif += ecart;
+            }
+        }
+    });
+    
+    // Format with thousands separator and kg unit
+    const formatWeight = (weight) => {
+        if (weight === 0) {
+            return '0 kg';
+        }
+        return weight.toLocaleString('fr-FR', { 
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0 
+        }) + ' kg';
+    };
+    
+    // Format écart with sign
+    const formatEcart = (ecart) => {
+        if (ecart === 0) {
+            return '0 kg';
+        }
+        const sign = ecart > 0 ? '+' : '';
+        return sign + ecart.toLocaleString('fr-FR', { 
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0 
+        }) + ' kg';
+    };
+    
+    // Update DOM elements - Poids
+    const estimeElement = document.getElementById('total-poids-estime');
+    const reelElement = document.getElementById('total-poids-reel');
+    
+    if (estimeElement) {
+        estimeElement.innerHTML = formatWeight(totalPoidsEstime);
+    }
+    if (reelElement) {
+        reelElement.innerHTML = formatWeight(totalPoidsReel);
+    }
+    
+    // Update DOM elements - Écarts
+    const ecartElement = document.getElementById('total-ecart');
+    const ecartPositifElement = document.getElementById('total-ecart-positif');
+    const ecartNegatifElement = document.getElementById('total-ecart-negatif');
+    
+    if (ecartElement) {
+        ecartElement.innerHTML = formatEcart(totalEcart);
+    }
+    if (ecartPositifElement) {
+        ecartPositifElement.innerHTML = formatEcart(totalEcartPositif);
+    }
+    if (ecartNegatifElement) {
+        ecartNegatifElement.innerHTML = formatEcart(totalEcartNegatif);
+    }
 }
 
 // Load rankings
@@ -829,7 +910,7 @@ async function showVeilleBetail() {
             </div>
             <p class="mt-2">Analyse des actualités en cours...</p>
             <small class="text-muted">
-                Scan des sources Mali, Mauritanie & Sénégal (7 derniers jours) + Analyse IA
+                Scan des sources Régionales (Mali, Mauritanie, Sénégal) + Internationales (3 dernières semaines) + Analyse IA
             </small>
         </div>
     `;
@@ -924,14 +1005,21 @@ function displayVeilleBetail(data) {
             const icon = alerte.niveau === 'critique' ? 'fa-exclamation-triangle' : 
                         alerte.niveau === 'warning' ? 'fa-exclamation-circle' : 'fa-info-circle';
             
+            // Badge de catégorie
+            const categorieBadge = alerte.categorie === 'international' ? 
+                '<span class="badge badge-primary mr-2"><i class="fas fa-globe"></i> International</span>' : 
+                '<span class="badge badge-secondary mr-2"><i class="fas fa-map-marker-alt"></i> Régional</span>';
+            
             html += `
                 <div class="alert alert-${alertClass}">
                     <h6 class="alert-heading">
                         <i class="fas ${icon}"></i> ${alerte.titre}
                         ${alerte.date_relative ? `<span class="badge badge-light float-right"><i class="fas fa-clock"></i> ${alerte.date_relative}</span>` : ''}
                     </h6>
+                    <div class="mb-2">${categorieBadge}</div>
                     <p class="mb-1">${alerte.description}</p>
                     <small><strong>Impact:</strong> ${alerte.impact}</small>
+                    ${alerte.source_link ? `<br><small><a href="${alerte.source_link}" target="_blank" class="text-decoration-none"><i class="fas fa-external-link-alt"></i> Lire l'article source</a></small>` : ''}
                 </div>
             `;
         });
@@ -939,6 +1027,32 @@ function displayVeilleBetail(data) {
         html += `
             <div class="alert alert-success mt-3">
                 <i class="fas fa-check-circle"></i> Aucune alerte critique identifiée
+            </div>
+        `;
+    }
+    
+    // Section Internationale (NOUVEAU)
+    if (data.international && (data.international.resume || (data.international.articles_pertinents && data.international.articles_pertinents.length > 0))) {
+        html += `
+            <div class="mt-4 mb-3">
+                <h5><i class="fas fa-globe text-primary"></i> Contexte International</h5>
+                <div class="card border-primary">
+                    <div class="card-body">
+                        ${data.international.resume ? `<p class="mb-3">${data.international.resume}</p>` : ''}
+                        ${data.international.articles_pertinents && data.international.articles_pertinents.length > 0 ? `
+                            <h6 class="mb-2"><i class="fas fa-newspaper"></i> Articles Pertinents:</h6>
+                            <ul class="list-unstyled">
+                                ${data.international.articles_pertinents.map(article => `
+                                    <li class="mb-2">
+                                        <strong>${article.titre}</strong>
+                                        ${article.lien ? `<br><a href="${article.lien}" target="_blank" class="text-primary"><i class="fas fa-external-link-alt"></i> Lire l'article</a>` : ''}
+                                        ${article.impact ? `<br><small class="text-muted">Impact: ${article.impact}</small>` : ''}
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        ` : ''}
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -951,10 +1065,19 @@ function displayVeilleBetail(data) {
         data.tendances.forEach(tendance => {
             const typeIcon = tendance.type === 'prix' ? 'fa-money-bill-wave' : 
                            tendance.type === 'climat' ? 'fa-cloud-sun' : 
-                           tendance.type === 'reglementation' ? 'fa-gavel' : 'fa-info';
+                           tendance.type === 'reglementation' ? 'fa-gavel' : 
+                           tendance.type === 'marche_international' ? 'fa-globe' :
+                           tendance.type === 'epidemie' ? 'fa-virus' : 'fa-info';
             const typeColor = tendance.type === 'prix' ? 'success' : 
                             tendance.type === 'climat' ? 'warning' : 
-                            tendance.type === 'reglementation' ? 'danger' : 'info';
+                            tendance.type === 'reglementation' ? 'danger' : 
+                            tendance.type === 'marche_international' ? 'primary' :
+                            tendance.type === 'epidemie' ? 'danger' : 'info';
+            
+            // Badge de catégorie
+            const categorieBadge = tendance.categorie === 'international' ? 
+                '<span class="badge badge-primary badge-sm"><i class="fas fa-globe"></i> International</span>' : 
+                '<span class="badge badge-secondary badge-sm"><i class="fas fa-map-marker-alt"></i> Régional</span>';
             
             html += `
                 <div class="col-md-6 mb-3">
@@ -962,8 +1085,9 @@ function displayVeilleBetail(data) {
                         <div class="card-body">
                             <h6 class="card-title">
                                 <i class="fas ${typeIcon} text-${typeColor}"></i> 
-                                ${tendance.type.charAt(0).toUpperCase() + tendance.type.slice(1)}
+                                ${tendance.type.charAt(0).toUpperCase() + tendance.type.slice(1).replace('_', ' ')}
                             </h6>
+                            <div class="mb-2">${categorieBadge}</div>
                             <p class="card-text">${tendance.description}</p>
                             <small class="text-muted"><strong>Impact prévu:</strong> ${tendance.impact_previsionnel}</small>
                         </div>
