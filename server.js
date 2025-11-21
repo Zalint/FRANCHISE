@@ -7588,81 +7588,36 @@ app.get('/api/external/ventes-date/pack/aggregated', validateApiKey, async (req,
         // Load pack compositions and products
         const { getPackComposition } = require('./config/pack-compositions');
         
-        // Load produits for price lookup
-        let produits = null;
-        try {
-            delete require.cache[require.resolve('./data/by-date/produits.js')];
-            produits = require('./data/by-date/produits.js');
-            if (produits && produits.produits) {
-                produits = produits.produits;
-            }
-        } catch (error) {
-            console.warn('Could not load produits.js, will use fallback prices');
-        }
-        
-        // Fallback prices using API parameters
-        const FALLBACK_PRIX = {
+        // ALWAYS use API parameters for prices (ignore produits.js and produitsInventaire.js)
+        const PRIX_PACK_PARAMS = {
             "Veau": prixAchatVeau,
             "Veau en détail": prixAchatVeau,
+            "Veau en gros": prixAchatVeau,
             "Boeuf": prixAchatBoeuf,
             "Boeuf en détail": prixAchatBoeuf,
             "Boeuf en gros": prixAchatBoeuf,
             "Poulet": prixAchatPoulet,
             "Poulet en détail": prixAchatPoulet,
+            "Poulet en gros": prixAchatPoulet,
             "Agneau": prixAchatAgneau,
             "Oeuf": prixAchatOeuf,
             "Merguez": prixAchatAgneau // Use agneau price for merguez
         };
         
-        // Product name mapping
-        const PRODUIT_MAPPING = {
-            "Veau": "Veau en détail",
-            "Boeuf": "Boeuf en détail",
-            "Poulet": "Poulet en détail",
-            "Mouton": "Agneau"
-        };
+        console.log('📦 Prix d\'achat packs (utilisés pour calcul):', PRIX_PACK_PARAMS);
         
-        // Function to get unit price with fallback indicator
+        // Function to get unit price from parameters only
         const getPrixUnitaireAvecFallback = (nomProduit, pointVente) => {
-            let prixUnitaire = null;
-            let fallbackPrix = false;
-            
-            // Try to find in produits.js
-            if (produits) {
-                const mappedName = PRODUIT_MAPPING[nomProduit] || nomProduit;
-                
-                for (const categorie in produits) {
-                    if (typeof produits[categorie] === 'object' && produits[categorie] !== null && typeof produits[categorie] !== 'function') {
-                        if (produits[categorie][mappedName]) {
-                            const prixData = produits[categorie][mappedName];
-                            
-                            // Priority 1: Point de vente specific price
-                            if (prixData[pointVente]) {
-                                prixUnitaire = prixData[pointVente];
-                            }
-                            // Priority 2: Default price
-                            else if (prixData.default) {
-                                prixUnitaire = prixData.default;
-                            }
-                            
-                            if (prixUnitaire !== null) {
-                                return { prix: prixUnitaire, fallback: false };
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Fallback to static mapping
-            if (FALLBACK_PRIX[nomProduit]) {
+            // ALWAYS use parameters, never read produits.js
+            if (PRIX_PACK_PARAMS[nomProduit]) {
                 return { 
-                    prix: FALLBACK_PRIX[nomProduit], 
-                    fallback: true 
+                    prix: PRIX_PACK_PARAMS[nomProduit], 
+                    fallback: false 
                 };
             }
             
             // No price found
-            console.warn(`Prix non trouvé pour le produit: ${nomProduit}`);
+            console.warn(`⚠️ Prix non trouvé pour le produit: ${nomProduit}`);
             return { 
                 prix: 0, 
                 fallback: true 
