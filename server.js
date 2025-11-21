@@ -7532,8 +7532,8 @@ app.get('/api/external/ventes-date/pack/aggregated', validateApiKey, async (req,
         } = req.query;
         
         // Parse purchase prices with defaults
-        const prixAchatBoeuf = parseFloat(boeufPackAchat) || 3400;
-        const prixAchatVeau = parseFloat(veauPackAchat) || 3550;
+        const prixAchatBoeuf = parseFloat(boeufPackAchat) || 3500;
+        const prixAchatVeau = parseFloat(veauPackAchat) || 3600;
         const prixAchatAgneau = parseFloat(agneauPackAchat) || 3800;
         const prixAchatPoulet = parseFloat(pouletPackAchat) || 2800;
         const prixAchatOeuf = parseFloat(oeufPackAchat) || 2500;
