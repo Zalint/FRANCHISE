@@ -7520,10 +7520,33 @@ app.get('/api/external/ventes-date/aggregated', validateApiKey, async (req, res)
 // External API for pack sales aggregation with composition breakdown
 app.get('/api/external/ventes-date/pack/aggregated', validateApiKey, async (req, res) => {
     try {
-        const { start_date, end_date, pointVente } = req.query;
+        const { 
+            start_date, 
+            end_date, 
+            pointVente,
+            boeufPackAchat,
+            veauPackAchat,
+            agneauPackAchat,
+            pouletPackAchat,
+            oeufPackAchat
+        } = req.query;
+        
+        // Parse purchase prices with defaults
+        const prixAchatBoeuf = parseFloat(boeufPackAchat) || 3400;
+        const prixAchatVeau = parseFloat(veauPackAchat) || 3550;
+        const prixAchatAgneau = parseFloat(agneauPackAchat) || 3800;
+        const prixAchatPoulet = parseFloat(pouletPackAchat) || 2800;
+        const prixAchatOeuf = parseFloat(oeufPackAchat) || 2500;
         
         console.log('==== EXTERNAL API - PACK AGGREGATION ====');
         console.log('Paramètres reçus:', { start_date, end_date, pointVente });
+        console.log('Prix d\'achat packs:', {
+            boeuf: prixAchatBoeuf,
+            veau: prixAchatVeau,
+            agneau: prixAchatAgneau,
+            poulet: prixAchatPoulet,
+            oeuf: prixAchatOeuf
+        });
         
         // Validate input
         if (!start_date || !end_date) {
@@ -7577,17 +7600,18 @@ app.get('/api/external/ventes-date/pack/aggregated', validateApiKey, async (req,
             console.warn('Could not load produits.js, will use fallback prices');
         }
         
-        // Fallback prices if produits.js is not available
+        // Fallback prices using API parameters
         const FALLBACK_PRIX = {
-            "Veau": 3900,
-            "Veau en détail": 3900,
-            "Boeuf": 3700,
-            "Boeuf en détail": 3700,
-            "Poulet": 3500,
-            "Poulet en détail": 3500,
-            "Agneau": 4500,
-            "Oeuf": 2800,
-            "Merguez": 4500
+            "Veau": prixAchatVeau,
+            "Veau en détail": prixAchatVeau,
+            "Boeuf": prixAchatBoeuf,
+            "Boeuf en détail": prixAchatBoeuf,
+            "Boeuf en gros": prixAchatBoeuf,
+            "Poulet": prixAchatPoulet,
+            "Poulet en détail": prixAchatPoulet,
+            "Agneau": prixAchatAgneau,
+            "Oeuf": prixAchatOeuf,
+            "Merguez": prixAchatAgneau // Use agneau price for merguez
         };
         
         // Product name mapping
@@ -12404,10 +12428,41 @@ app.get('/api/test-prix-moyen', checkAuth, async (req, res) => {
 // External API for Analytics (Proxy Marges)
 app.get('/api/external/analytics', validateApiKey, async (req, res) => {
     try {
-        const { startDate, endDate, pointVente, prixAchatAgneau, prixAchatPoulet, prixAchatOeuf } = req.query;
+        const { 
+            startDate, 
+            endDate, 
+            pointVente, 
+            prixAchatAgneau, 
+            prixAchatPoulet, 
+            prixAchatOeuf,
+            ratioPerteAgneau,
+            boeufPackAchat,
+            veauPackAchat,
+            agneauPackAchat,
+            pouletPackAchat,
+            oeufPackAchat
+        } = req.query;
+        
+        // Parse ratio agneau (défaut : 0 = pas de perte)
+        // Si fourni en pourcentage, convertir en décimal (ex: -5 → -0.05)
+        const ratioAgneau = ratioPerteAgneau ? parseFloat(ratioPerteAgneau) / 100 : 0;
         
         console.log('==== EXTERNAL API - ANALYTICS ====');
-        console.log('Request params:', { startDate, endDate, pointVente, prixAchatAgneau, prixAchatPoulet, prixAchatOeuf });
+        console.log('Request params:', { 
+            startDate, 
+            endDate, 
+            pointVente, 
+            prixAchatAgneau, 
+            prixAchatPoulet, 
+            prixAchatOeuf,
+            ratioPerteAgneau,
+            ratioAgneau,
+            boeufPackAchat,
+            veauPackAchat,
+            agneauPackAchat,
+            pouletPackAchat,
+            oeufPackAchat
+        });
         
         // Helper function to normalize date formats
         const normalizeDate = (dateStr) => {
@@ -12538,7 +12593,20 @@ app.get('/api/external/analytics', validateApiKey, async (req, res) => {
             
             try {
                 // Call our new function that queries the database directly
-                const proxyMargesData = await getProxyMargesViaAPI(finalStartDate, finalEndDate, pv, prixAchatAgneau, prixAchatPoulet, prixAchatOeuf);
+                const proxyMargesData = await getProxyMargesViaAPI(
+                    finalStartDate, 
+                    finalEndDate, 
+                    pv, 
+                    prixAchatAgneau, 
+                    prixAchatPoulet, 
+                    prixAchatOeuf,
+                    boeufPackAchat,
+                    veauPackAchat,
+                    agneauPackAchat,
+                    pouletPackAchat,
+                    oeufPackAchat,
+                    ratioAgneau
+                );
                 
                 if (!proxyMargesData) {
                     console.error(`❌ Failed to get proxy marges data for ${pv}`);
@@ -12676,7 +12744,7 @@ async function fetchAchatsBoeufWithRetry(initialStartDate, endDate, maxRetries =
 }
 
 // NEW: Helper function to get proxy marges by calling the existing stock-soir-marge API
-async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgneau = 4000, prixAchatPoulet = 2600, prixAchatOeuf = 2200) {
+async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgneau = 4000, prixAchatPoulet = 2600, prixAchatOeuf = 2200, boeufPackAchat, veauPackAchat, agneauPackAchat, pouletPackAchat, oeufPackAchat, ratioAgneau = 0) {
     try {
         console.log(`🚀 NOUVELLE FONCTION: getProxyMargesViaAPI pour ${pointVente} from ${startDate} to ${endDate}`);
         
@@ -12734,7 +12802,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 if (reconciliationData.success && reconciliationData.data.details[pointVente]) {
                     const pointData = reconciliationData.data.details[pointVente];
                     
-                    // Calculate ratios for Boeuf and Veau (as per documentation)
+                    // Calculate ratios for Boeuf, Veau and Agneau
                     if (pointData.Boeuf) {
                         const ventesNombre = parseFloat(pointData.Boeuf.ventesNombre) || 0;
                         const ventesTheoriquesNombre = parseFloat(pointData.Boeuf.ventesTheoriquesNombre) || 0;
@@ -12753,6 +12821,24 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                             ratios.veau = (ventesNombre / ventesTheoriquesNombre) - 1;
                             console.log(`🔍 Veau ratio calculated: ${ratios.veau * 100}%`);
                         }
+                    }
+                    
+                    if (pointData.Agneau) {
+                        const ventesNombre = parseFloat(pointData.Agneau.ventesNombre) || 0;
+                        const ventesTheoriquesNombre = parseFloat(pointData.Agneau.ventesTheoriquesNombre) || 0;
+                        
+                        if (ventesTheoriquesNombre !== 0) {
+                            ratios.agneau = (ventesNombre / ventesTheoriquesNombre) - 1;
+                            console.log(`🔍 Agneau ratio calculated from reconciliation: ${ratios.agneau * 100}%`);
+                        } else {
+                            // Fallback: use parameter if no reconciliation data
+                            ratios.agneau = ratioAgneau;
+                            console.log(`🔍 Agneau ratio from parameter (no reconciliation): ${ratios.agneau * 100}%`);
+                        }
+                    } else {
+                        // Fallback: use parameter if Agneau not in reconciliation data
+                        ratios.agneau = ratioAgneau;
+                        console.log(`🔍 Agneau ratio from parameter (not tracked): ${ratios.agneau * 100}%`);
                     }
                 }
             } else {
@@ -12924,7 +13010,79 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 achatsBoeufDebugInfo.comment = `Erreur lors de la récupération des prix d'achat: ${error.message}`;
             }
             
-            // STEP 4: Get sales data for prices and quantities (filtered by exact dates using TO_DATE)
+            // STEP 4: Get pack composition data for accurate margin calculation
+            console.log(`🔍 Getting pack composition data from API for accurate margin calculation...`);
+            let packCostData = {
+                montantInformatif: 0,
+                montantTotal: 0,
+                margeAbsolue: 0,
+                margePourcentage: 0
+            };
+            
+            try {
+                const baseUrlPack = process.env.NODE_ENV === 'production' 
+                    ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+                    : 'http://localhost:3000';
+                
+                // Convert dates from DD/MM/YYYY to YYYY-MM-DD for pack API
+                const convertToYYYYMMDD = (dateStr) => {
+                    const [day, month, year] = dateStr.split('/');
+                    return `${year}-${month}-${day}`;
+                };
+                
+                const packStartDate = convertToYYYYMMDD(startDate);
+                const packEndDate = convertToYYYYMMDD(endDate);
+                
+                // Build pack API URL with optional purchase price parameters
+                let packApiUrl = `${baseUrlPack}/api/external/ventes-date/pack/aggregated?start_date=${packStartDate}&end_date=${packEndDate}&pointVente=${encodeURIComponent(pointVente)}`;
+                
+                // Add optional pack purchase prices if provided
+                if (boeufPackAchat) packApiUrl += `&boeufPackAchat=${boeufPackAchat}`;
+                if (veauPackAchat) packApiUrl += `&veauPackAchat=${veauPackAchat}`;
+                if (agneauPackAchat) packApiUrl += `&agneauPackAchat=${agneauPackAchat}`;
+                if (pouletPackAchat) packApiUrl += `&pouletPackAchat=${pouletPackAchat}`;
+                if (oeufPackAchat) packApiUrl += `&oeufPackAchat=${oeufPackAchat}`;
+                
+                console.log(`🔍 Calling pack API: ${packApiUrl}`);
+                
+                const packResponse = await fetch(packApiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (packResponse.ok) {
+                    const packResult = await packResponse.json();
+                    console.log(`🔍 Pack API response received:`, packResult.success);
+                    
+                    if (packResult.success && packResult.pointsVente && packResult.pointsVente[pointVente]) {
+                        const pvPackData = packResult.pointsVente[pointVente];
+                        packCostData = {
+                            montantInformatif: pvPackData.montantInformatif || 0,
+                            montantTotal: pvPackData.montantTotal || 0,
+                            margeAbsolue: pvPackData.margeAbsolue || 0,
+                            margePourcentage: pvPackData.margePourcentage || 0
+                        };
+                        
+                        console.log(`✅ Pack cost data extracted:`, {
+                            montantInformatif: packCostData.montantInformatif,
+                            montantTotal: packCostData.montantTotal,
+                            margeAbsolue: packCostData.margeAbsolue,
+                            margePourcentage: packCostData.margePourcentage
+                        });
+                    } else {
+                        console.log(`⚠️ No pack data found for ${pointVente}, using default (marge = 0)`);
+                    }
+                } else {
+                    console.error(`❌ Pack API call failed: ${packResponse.status}`);
+                }
+            } catch (error) {
+                console.error(`❌ Error calling pack API:`, error.message);
+            }
+            
+            // STEP 5: Get sales data for prices and quantities (filtered by exact dates using TO_DATE)
             console.log(`🔍 Getting sales data for ${pointVente} from ${startDDMMYYYY} to ${endDDMMYYYY} using TO_DATE`);
             
             const salesQuery = `
@@ -13003,7 +13161,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 const veauData = formatProductFromSalesWithRatios(salesResult.rows, 'veau', ratios.veau || 0, null, purchasePrices);
                 const pouletData = formatProductFromSalesWithRatios(salesResult.rows, 'poulet', 0, null, purchasePrices); // No ratio for poulet
                 const oeufData = formatProductFromSalesWithRatios(salesResult.rows, 'oeuf', 0, null, purchasePrices);     // No ratio for oeuf
-                const packsData = formatProductFromSalesWithRatios(salesResult.rows, 'pack', 0, 'packs', purchasePrices);
+                const packsData = formatProductFromSalesWithRatios(salesResult.rows, 'pack', 0, 'packs', purchasePrices, packCostData);
                 const surPiedsData = formatProductFromSalesWithRatios(salesResult.rows, 'sur pieds', 0, 'sur pieds', purchasePrices);
                 const diversData = formatProductFromSalesWithRatios(salesResult.rows, 'divers', 0, 'divers', purchasePrices);
                 const autreData = formatProductFromSalesWithRatios(salesResult.rows, 'autre', 0, 'autre', purchasePrices);
@@ -13157,7 +13315,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
 }
 
 // Helper function to format product data using Mode SPÉCIFIQUE logic (ratios from reconciliation)
-function formatProductFromSalesWithRatios(salesRows, productType, ratio, specialType = null, purchasePrices = null) {
+function formatProductFromSalesWithRatios(salesRows, productType, ratio, specialType = null, purchasePrices = null, packCostData = null) {
     // Find products matching the type
     let matchingProducts = [];
     
@@ -13276,8 +13434,24 @@ function formatProductFromSalesWithRatios(salesRows, productType, ratio, special
     let prixAchat = 0;
     let cout, marge;
     
-    if (specialType === 'packs' || specialType === 'autre' || specialType === 'sur pieds') {
-        // For Packs, Autre and Sur Pieds: "Pas de coût d'achat", Coût = CA, Marge = 0
+    if (specialType === 'packs') {
+        // For Packs: Use real cost calculation from pack composition API
+        if (packCostData && packCostData.montantInformatif > 0) {
+            // Use actual pack composition cost
+            cout = packCostData.montantInformatif;
+            marge = totalCA - cout;
+            console.log(`📦 PACKS - VRAIE MARGE CALCULÉE:`);
+            console.log(`   - CA: ${totalCA} FCFA`);
+            console.log(`   - Coût (composition): ${cout} FCFA`);
+            console.log(`   - Marge: ${marge} FCFA (${packCostData.margePourcentage}%)`);
+        } else {
+            // Fallback to old logic if no pack data available
+            cout = totalCA;
+            marge = 0;
+            console.log(`📦 PACKS - Pas de données de composition, marge = 0`);
+        }
+    } else if (specialType === 'autre' || specialType === 'sur pieds') {
+        // For Autre and Sur Pieds: "Pas de coût d'achat", Coût = CA, Marge = 0
         cout = totalCA;
         marge = 0;
     } else if (specialType === 'divers') {
