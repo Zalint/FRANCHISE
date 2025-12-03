@@ -1,0 +1,47 @@
+[
+  {
+    "username": "ADMIN",
+    "password": "$2b$10$jPhgA.cIqO.5B6u2/CeV1OqBDSNYGSDVbwTc4d3gks2wBoSEkV2zq",
+    "role": "admin",
+    "pointVente": "tous",
+    "active": true
+  },
+  {
+    "username": "KBA",
+    "password": "$2b$10$AjtmT1ZdD9GikjyPTZjRxOaYoIK3KiZWpSGu4iBy9ojoyuMDh0jbW",
+    "role": "user",
+    "pointVente": "tous",
+    "active": true
+  },
+  
+  {
+    "username": "NADOU",
+    "password": "$2b$10$bPlSRCSp6G6/5sSzd3NOUOAlgoLstS33QvfeH8ZGDPFHhGr772iUK",
+    "role": "superutilisateur",
+    "pointVente": [
+      "tous"
+    ],
+    "active": true
+  },
+  {
+    "username": "OUSMANE",
+    "password": "$2b$10$FA7jPgo/pzPFBz6BgHkk3eDa2nK0AFAgqbvLcoOYoaEV9uf2NRDMm",
+    "role": "superviseur",
+    "pointVente": "tous",
+    "active": true
+  },
+  {
+    "username": "SALIOU",
+    "password": "$2b$10$jPhgA.cIqO.5B6u2/CeV1OqBDSNYGSDVbwTc4d3gks2wBoSEkV2zq",
+    "role": "superviseur",
+    "pointVente": "tous",
+    "active": true
+  },
+  {
+    "username": "SALY",
+    "password": "$2b$10$jPhgA.cIqO.5B6u2/CeV1OqBDSNYGSDVbwTc4d3gks2wBoSEkV2zq",
+    "role": "superviseur",
+    "pointVente": "tous",
+    "active": true
+  }
+]

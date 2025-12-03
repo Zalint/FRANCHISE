@@ -4,6 +4,7 @@ const path = require('path');
 
 // Chemin vers le fichier de sauvegarde des utilisateurs
 const USERS_FILE_PATH = path.join(__dirname, 'data', 'by-date', 'users.json');
+const USERS_FILE_PATH_FALLBACK = path.join(__dirname, 'users.json');
 
 // Liste des utilisateurs par défaut (utilisée seulement si le fichier n'existe pas)
 const defaultUsers = [
@@ -99,25 +100,32 @@ let users = [];
 // Fonction pour charger les utilisateurs depuis le fichier
 async function loadUsers() {
     try {
-        // Vérifier si le fichier existe
+        // Vérifier si le fichier existe dans data/by-date
         try {
             const data = await fs.readFile(USERS_FILE_PATH, 'utf8');
             users = JSON.parse(data);
             console.log(`Utilisateurs chargés depuis ${USERS_FILE_PATH}: ${users.length} utilisateurs`);
         } catch (error) {
-            // Si le fichier n'existe pas, créer le dossier et sauvegarder les utilisateurs par défaut
-            console.log('Fichier utilisateurs non trouvé, création avec les utilisateurs par défaut');
-            
-            // Créer le dossier data s'il n'existe pas
-            const dataDir = path.dirname(USERS_FILE_PATH);
+            // Fallback: essayer de charger depuis le fichier racine
             try {
-                await fs.mkdir(dataDir, { recursive: true });
-            } catch (mkdirError) {
-                console.log('Dossier data existe déjà');
+                const data = await fs.readFile(USERS_FILE_PATH_FALLBACK, 'utf8');
+                users = JSON.parse(data);
+                console.log(`Utilisateurs chargés depuis ${USERS_FILE_PATH_FALLBACK} (fallback): ${users.length} utilisateurs`);
+            } catch (fallbackError) {
+                // Si aucun fichier n'existe, créer le dossier et sauvegarder les utilisateurs par défaut
+                console.log('Fichier utilisateurs non trouvé, création avec les utilisateurs par défaut');
+                
+                // Créer le dossier data s'il n'existe pas
+                const dataDir = path.dirname(USERS_FILE_PATH);
+                try {
+                    await fs.mkdir(dataDir, { recursive: true });
+                } catch (mkdirError) {
+                    console.log('Dossier data existe déjà');
+                }
+                
+                users = [...defaultUsers];
+                await saveUsers();
             }
-            
-            users = [...defaultUsers];
-            await saveUsers();
         }
     } catch (error) {
         console.error('Erreur lors du chargement des utilisateurs:', error);
