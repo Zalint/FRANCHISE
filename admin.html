@@ -34,7 +34,7 @@
     <div class="container-fluid">
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
             <div class="container-fluid">
-                <a class="navbar-brand" href="#">Administration</a>
+                <a class="navbar-brand" href="#"><span id="client-name-display"></span> - Administration</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                     <span class="navbar-toggler-icon"></span>
                 </button>
@@ -65,6 +65,12 @@
                             <a class="nav-link" href="user-management.html">
                                 <i class="fas fa-users-cog me-1"></i>
                                 Gestion des Utilisateurs
+                            </a>
+                        </li>
+                        <li class="nav-item" id="modules-nav">
+                            <a class="nav-link" href="#" data-section="modules">
+                                <i class="fas fa-puzzle-piece me-1"></i>
+                                Modules
                             </a>
                         </li>
                     </ul>
@@ -497,6 +503,43 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Section Modules -->
+            <div id="modules-section" class="admin-section">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-puzzle-piece me-2"></i>Gestion des Modules
+                        </h5>
+                        <button class="btn btn-light btn-sm" id="refresh-modules-btn">
+                            <i class="fas fa-sync"></i> Actualiser
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info mb-4">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Modules de l'application:</strong> Activez ou désactivez les fonctionnalités selon vos besoins.
+                            Les modules désactivés ne seront plus visibles dans le menu et leurs API seront bloquées.
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="modules-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 50px;">Statut</th>
+                                        <th>Module</th>
+                                        <th>Description</th>
+                                        <th style="width: 120px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="modules-table-body">
+                                    <!-- Les modules seront chargés dynamiquement -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -630,6 +673,8 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/fr.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Gestionnaire de configuration client -->
+    <script src="js/client-config-handler.js"></script>
     <script src="admin.js"></script>
 </body>
 </html> 

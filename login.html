@@ -26,7 +26,7 @@
 <body>
     <div class="container">
         <div class="login-form">
-            <h2 class="text-center mb-4">Connexion</h2>
+            <h3 class="text-center mb-4 text-primary" id="client-name-display"></h3>
             <form id="loginForm">
                 <div class="mb-3">
                     <label for="username" class="form-label">Nom d'utilisateur</label>
@@ -135,6 +135,24 @@
 
         // Vérifier la session au chargement de la page
         checkInitialAuth();
+        
+        // Charger et afficher le nom du client
+        async function loadClientName() {
+            try {
+                const response = await fetch('/api/client-config');
+                const data = await response.json();
+                if (data.success && data.config.clientName) {
+                    const clientNameDisplay = document.getElementById('client-name-display');
+                    if (clientNameDisplay) {
+                        clientNameDisplay.textContent = data.config.clientName;
+                    }
+                    document.title = data.config.clientName + ' - Connexion';
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement du nom client:', error);
+            }
+        }
+        loadClientName();
     </script>
 </body>
 </html> 

@@ -39,18 +39,19 @@ async function addCashPaymentToReconciliation() {
     }
     
     // Mapping des références de paiement aux points de vente
+    // NOTE: La source canonique est points-vente-payment-ref.js - garder synchronisé
     const PAYMENT_REF_MAPPING = {
         'V_TB': 'Touba',
-        'V_PROD': 'MATA PROD',
-        'V_DHR': 'Dahra', 
-        'V_ALS': 'Aliou Sow',
+        'V_DHR': 'Dahra',
         'V_LGR': 'Linguere',
         'V_MBA': 'Mbao',
-        'V_KM': 'Keur Massar',
         'V_OSF': 'O.Foire',
         'V_SAC': 'Sacre Coeur',
-        'V_ABATS': 'Abattage'
-        // Ajoutez d'autres mappings si nécessaire
+        'V_ABATS': 'Abattage',
+        // Extensions supplémentaires
+        'V_PROD': 'MATA PROD',
+        'V_ALS': 'Aliou Sow',
+        'V_KM': 'Keur Massar'
     };
 
     // Helper function for mapping normalization

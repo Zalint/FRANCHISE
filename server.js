@@ -13,6 +13,7 @@ const session = require('express-session');
 const axios = require('axios');
 const users = require('./users');
 const PaymentLink = require('./db/models/PaymentLink');
+const pointsVentePaymentRef = require('./points-vente-payment-ref');
 // Charger les points de vente avec fallback
 let pointsVente;
 try {
@@ -293,8 +294,30 @@ const {
     checkReconciliationAccess
 } = require('./middlewares/auth');
 
+// Importer les middlewares de modules
+const {
+    checkModuleActive,
+    requireModule,
+    checkStockModule,
+    checkReconciliationModule,
+    checkAuditModule,
+    checkCashPaiementModule,
+    checkSuiviAchatBoeufModule,
+    checkEstimationModule,
+    checkPrecommandeModule,
+    checkPaymentLinksModule,
+    checkAbonnementsModule
+} = require('./middlewares/modules');
+
+// Importer la configuration des modules
+const modulesConfig = require('./config/modules-config');
+
+// Importer la configuration du client
+const clientConfig = require('./config/client-config');
+
 // Importer les routes
 const paymentsGeneratedRouter = require('./routes/payments-generated');
+const modulesRouter = require('./routes/modules');
 
 // Route pour obtenir la liste des points de vente (admin seulement)
 app.get('/api/admin/points-vente', checkAuth, checkAdmin, (req, res) => {
@@ -308,6 +331,52 @@ app.get('/api/admin/points-vente', checkAuth, checkAdmin, (req, res) => {
 
 // Routes des paiements générés
 app.use('/api/payments/generated', paymentsGeneratedRouter);
+
+// =================== ROUTES CONFIGURATION CLIENT ===================
+// GET /api/client-config - Obtenir la configuration du client (public)
+app.get('/api/client-config', (req, res) => {
+    try {
+        const config = clientConfig.getClientConfig();
+        res.json({ success: true, config });
+    } catch (error) {
+        console.error('Erreur lors de la récupération de la configuration client:', error);
+        res.status(500).json({ success: false, message: 'Erreur serveur' });
+    }
+});
+
+// PUT /api/client-config - Mettre à jour la configuration du client (admin seulement)
+app.put('/api/client-config', checkAuth, checkAdmin, (req, res) => {
+    try {
+        const updates = req.body;
+        const newConfig = clientConfig.updateClientConfig(updates);
+        res.json({ success: true, config: newConfig, message: 'Configuration mise à jour' });
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour de la configuration client:', error);
+        res.status(500).json({ success: false, message: 'Erreur serveur' });
+    }
+});
+
+console.log('✅ Routes de configuration client chargées');
+
+// Routes de gestion des modules
+// GET /api/modules - Liste tous les modules (public, pour le frontend)
+// GET /api/modules/status - État simplifié des modules
+// GET /api/modules/active - Modules actifs uniquement
+// POST /api/modules/:moduleId/activate - Activer un module (admin)
+// POST /api/modules/:moduleId/deactivate - Désactiver un module (admin)
+// POST /api/modules/:moduleId/toggle - Basculer l'état d'un module (admin)
+app.use('/api/modules', (req, res, next) => {
+    // Les routes GET sont publiques (nécessaires pour le frontend)
+    if (req.method === 'GET') {
+        return next();
+    }
+    // Les routes POST/PUT/DELETE nécessitent d'être admin
+    checkAuth(req, res, () => {
+        checkAdmin(req, res, next);
+    });
+}, modulesRouter);
+
+console.log('✅ Routes de gestion des modules chargées');
 
 // Route pour gérer les points de vente (admin seulement)
 app.post('/api/admin/points-vente', checkAuth, checkAdmin, async (req, res) => {
@@ -410,16 +479,8 @@ const getPaymentRefMapping = () => {
         return require('./data/by-date/paymentRefMapping.js');
     } catch (error) {
         console.error('Erreur lors du chargement du mapping des références:', error);
-        // Fallback vers un mapping par défaut
-        return {
-            'V_TB': 'Touba',
-            'V_DHR': 'Dahra',
-            'V_LGR': 'Linguere',
-            'V_MBA': 'Mbao',
-            'V_OSF': 'O.Foire',
-            'V_SAC': 'Sacre Coeur',
-            'V_ABATS': 'Abattage'
-        };
+        // Fallback vers le fichier centralisé
+        return pointsVentePaymentRef;
     }
 };
 
@@ -473,16 +534,11 @@ const STOCK_SOIR_PATH = path.join(__dirname, 'data', 'stock-soir.json');
 const TRANSFERTS_PATH = path.join(__dirname, 'data', 'transferts.json');
 
 // Constantes pour le mappage des références de paiement aux points de vente
+// Utilise le fichier centralisé et ajoute les références supplémentaires
 const PAYMENT_REF_TO_PDV = {
-  'V_TB': 'Touba',
-  'V_DHR': 'Dahra',
+  ...pointsVentePaymentRef,
   'V_ALS': 'Aliou Sow',
-  'V_LGR': 'Linguere',
-  'V_MBA': 'Mbao',
-  'V_KM': 'Keur Massar',
-  'V_OSF': 'O.Foire',
-  'V_SAC': 'Sacre Coeur',
-  'V_ABATS': 'Abattage'
+  'V_KM': 'Keur Massar'
 };
 
 // Fonction pour obtenir le chemin du fichier en fonction de la date
@@ -6033,15 +6089,10 @@ const bictorys = axios.create({
         }
 
 // Mapping des références de paiement aux points de vente
+// Utilise le fichier centralisé points-vente-payment-ref.js et ajoute Keur Massar
 const PAYMENT_REF_MAPPING = {
-    'V_DHR': 'Dahra',          // ✅ Actif
-    'V_LGR': 'Linguere',       // ✅ Actif  
-    'V_MBA': 'Mbao',           // ✅ Actif
-    'V_KM': 'Keur Massar',     // ✅ Actif
-    'V_OSF': 'O.Foire',        // ✅ Actif
-    'V_SAC': 'Sacre Coeur',    // ✅ Actif
-    'V_ABATS': 'Abattage',     // ✅ Actif
-    'V_TB': 'Touba'            // ⚠️ Inactif mais conservé pour compatibilité
+    ...pointsVentePaymentRef,
+    'V_KM': 'Keur Massar'      // ✅ Actif (non inclus dans le fichier de base)
 };
 
 // Mapping inverse pour obtenir la référence à partir du point de vente

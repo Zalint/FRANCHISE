@@ -788,7 +788,37 @@ async function checkAuth() {
         const roleDisplayName = getUserRoleDisplayName(currentUser);
         document.getElementById('user-info').textContent = `Connecté en tant que ${currentUser.username} (${roleDisplayName})`;
         
-        // Gérer la visibilité des onglets selon les permissions
+        // Charger l'état des modules si le gestionnaire est disponible
+        if (window.ModulesHandler) {
+            await window.ModulesHandler.loadStatus();
+            console.log('✅ État des modules chargé dans checkAuth');
+        }
+        
+        // Fonction helper pour vérifier module + permission et appliquer la visibilité
+        const setElementVisibility = (element, elementId, hasPermission) => {
+            if (!element) return;
+            
+            // Vérifier d'abord si le module est actif
+            const moduleAllowed = window.ModulesHandler ? window.ModulesHandler.isElementAllowed(elementId) : true;
+            
+            // L'élément est visible si le module est actif ET l'utilisateur a la permission
+            const shouldShow = moduleAllowed && hasPermission;
+            
+            // Retirer la classe module-pending (état initial avant vérification)
+            element.classList.remove('module-pending');
+            
+            if (shouldShow) {
+                // Module actif et permission accordée - afficher
+                element.classList.remove('module-disabled');
+                element.classList.add('module-verified');
+            } else {
+                // Module désactivé ou pas de permission - masquer
+                element.classList.remove('module-verified');
+                element.classList.add('module-disabled');
+            }
+        };
+        
+        // Gérer la visibilité des onglets selon les permissions ET les modules actifs
         const importTabContainer = document.getElementById('import-tab-container');
         const stockInventaireItem = document.getElementById('stock-inventaire-item');
         const copierStockItem = document.getElementById('copier-stock-item');
@@ -797,64 +827,52 @@ async function checkAuth() {
         const suiviAchatBoeufItem = document.getElementById('suivi-achat-boeuf-item');
         const precommandeItem = document.getElementById('precommande-item');
         const paymentLinksItem = document.getElementById('payment-links-item');
+        const abonnementsItem = document.getElementById('abonnements-item');
+        const reconciliationItem = document.getElementById('reconciliation-item');
+        const reconciliationMoisItem = document.getElementById('reconciliation-mois-item');
+        const stockAlerteItem = document.getElementById('stock-alerte-item');
         
-        // Masquer les onglets selon les permissions de l'utilisateur
+        // Masquer les onglets selon les permissions de l'utilisateur ET les modules actifs
         
-        // Onglet Import - pour utilisateurs avancés
-        if (currentUser.canManageAdvanced) {
-            if (importTabContainer) importTabContainer.style.display = 'block';
-        } else {
-            if (importTabContainer) importTabContainer.style.display = 'none';
+        // Onglet Import - pour utilisateurs avancés (pas de module associé)
+        if (importTabContainer) {
+            importTabContainer.style.display = currentUser.canManageAdvanced ? 'block' : 'none';
         }
         
-        // Onglet Stock inventaire - pour utilisateurs avec accès à tous les points de vente
-        if (currentUser.canAccessAllPointsVente) {
-            if (stockInventaireItem) stockInventaireItem.style.display = 'block';
-        } else {
-            if (stockInventaireItem) stockInventaireItem.style.display = 'none';
-        }
+        // Onglet Stock inventaire - module stock + accès à tous les points de vente
+        setElementVisibility(stockInventaireItem, 'stock-inventaire-item', currentUser.canAccessAllPointsVente);
         
-        // Onglet Copier Stock - pour utilisateurs qui peuvent copier le stock
-        if (currentUser.canCopyStock) {
-            if (copierStockItem) copierStockItem.style.display = 'block';
-        } else {
-            if (copierStockItem) copierStockItem.style.display = 'none';
-        }
+        // Onglet Copier Stock - module stock + permission copier stock
+        setElementVisibility(copierStockItem, 'copier-stock-item', currentUser.canCopyStock);
         
-        // Onglet Cash Paiement - pour utilisateurs avancés
-        if (currentUser.canManageAdvanced) {
-            if (cashPaymentItem) cashPaymentItem.style.display = 'block';
-        } else {
-            if (cashPaymentItem) cashPaymentItem.style.display = 'none';
-        }
+        // Onglet Cash Paiement - module cash-paiement + utilisateurs avancés
+        setElementVisibility(cashPaymentItem, 'cash-payment-item', currentUser.canManageAdvanced);
         
-        // Onglet Suivi achat boeuf - pour utilisateurs avancés
-        if (currentUser.canManageAdvanced) {
-            if (suiviAchatBoeufItem) suiviAchatBoeufItem.style.display = 'block';
-        } else {
-            if (suiviAchatBoeufItem) suiviAchatBoeufItem.style.display = 'none';
-        }
+        // Onglet Suivi achat boeuf - module suivi-achat-boeuf + utilisateurs avancés
+        setElementVisibility(suiviAchatBoeufItem, 'suivi-achat-boeuf-item', currentUser.canManageAdvanced);
         
-        // Onglet Estimation - pour utilisateurs qui peuvent gérer les estimations
-        if (currentUser.canManageEstimation) {
-            if (estimationItem) estimationItem.style.display = 'block';
-        } else {
-            if (estimationItem) estimationItem.style.display = 'none';
-        }
+        // Onglet Estimation - module estimation + permission estimation
+        setElementVisibility(estimationItem, 'estimation-item', currentUser.canManageEstimation);
         
-        // Onglet Pré-commande - mêmes permissions que Saisie (utilisateurs avec droits d'écriture)
-        if (currentUser.canWrite) {
-            if (precommandeItem) precommandeItem.style.display = 'block';
-        } else {
-            if (precommandeItem) precommandeItem.style.display = 'none';
-        }
+        // Onglet Pré-commande - module precommande + droits d'écriture
+        setElementVisibility(precommandeItem, 'precommande-item', currentUser.canWrite);
         
-        // Onglet Générer Paiement - pour tous les utilisateurs avec droits d'écriture
-        if (currentUser.canWrite) {
-            if (paymentLinksItem) paymentLinksItem.style.display = 'block';
-        } else {
-            if (paymentLinksItem) paymentLinksItem.style.display = 'none';
-        }
+        // Onglet Générer Paiement - module payment-links + droits d'écriture
+        setElementVisibility(paymentLinksItem, 'payment-links-item', currentUser.canWrite);
+        
+        // Onglet Abonnements - module abonnements + droits d'écriture
+        setElementVisibility(abonnementsItem, 'abonnements-item', currentUser.canWrite);
+        
+        // Onglet Réconciliation - module reconciliation (visible pour tous les authentifiés)
+        setElementVisibility(reconciliationItem, 'reconciliation-item', true);
+        
+        // Onglet Réconciliation du mois - module reconciliation (visible pour tous les authentifiés)
+        setElementVisibility(reconciliationMoisItem, 'reconciliation-mois-item', true);
+        
+        // Onglet Audit/Stock alerte - module audit (visible pour tous les authentifiés)
+        setElementVisibility(stockAlerteItem, 'stock-alerte-item', true);
+        
+        console.log('✅ Visibilité des onglets mise à jour (modules + permissions)');
         
         // Section Analytics des Ventes - visible uniquement pour les superviseurs
         const analyticsSection = document.getElementById('analytics-section');
@@ -4820,63 +4838,97 @@ function initCopierStock() {
     console.log('%c=== Initialisation de la page copier stock terminée ===', 'background: #222; color: #bada55; font-size: 16px; padding: 5px;');
 }
 
-// Fonction pour afficher les onglets en fonction des droits utilisateur
-function afficherOngletsSuivantDroits(userData) {
+// Fonction pour afficher les onglets en fonction des droits utilisateur ET des modules actifs
+async function afficherOngletsSuivantDroits(userData) {
     const roleDisplayName = getUserRoleDisplayName(userData);
     document.getElementById('user-info').textContent = `Connecté en tant que ${userData.username} (${roleDisplayName})`;
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('main-content').style.display = 'block';
     
-    // Gérer la visibilité des onglets selon les permissions
+    // Charger l'état des modules si pas encore fait
+    if (window.ModulesHandler) {
+        await window.ModulesHandler.loadStatus();
+    }
+    
+    // Fonction helper pour vérifier module + permission
+    const shouldShowElement = (elementId, hasPermission) => {
+        // Vérifier d'abord si le module est actif
+        if (window.ModulesHandler && !window.ModulesHandler.isElementAllowed(elementId)) {
+            return false;
+        }
+        // Ensuite vérifier la permission utilisateur
+        return hasPermission;
+    };
+    
+    // Gérer la visibilité des onglets selon les permissions ET les modules
     const stockInventaireItem = document.getElementById('stock-inventaire-item');
     const copierStockItem = document.getElementById('copier-stock-item');
     const cashPaymentItem = document.getElementById('cash-payment-item');
     const estimationItem = document.getElementById('estimation-item');
     const suiviAchatBoeufItem = document.getElementById('suivi-achat-boeuf-item');
     const paymentLinksItem = document.getElementById('payment-links-item');
+    const precommandeItem = document.getElementById('precommande-item');
+    const reconciliationItem = document.getElementById('reconciliation-item');
+    const reconciliationMoisItem = document.getElementById('reconciliation-mois-item');
+    const abonnementsItem = document.getElementById('abonnements-item');
+    const stockAlerteItem = document.getElementById('stock-alerte-item');
     
     // Onglet Stock inventaire - pour utilisateurs avec accès à tous les points de vente
-    if (userData.canAccessAllPointsVente) {
-        if (stockInventaireItem) stockInventaireItem.style.display = 'block';
-    } else {
-        if (stockInventaireItem) stockInventaireItem.style.display = 'none';
+    if (stockInventaireItem) {
+        stockInventaireItem.style.display = shouldShowElement('stock-inventaire-item', userData.canAccessAllPointsVente) ? 'block' : 'none';
     }
     
     // Onglet Copier Stock - pour utilisateurs qui peuvent copier le stock
-    if (userData.canCopyStock) {
-        if (copierStockItem) copierStockItem.style.display = 'block';
-    } else {
-        if (copierStockItem) copierStockItem.style.display = 'none';
+    if (copierStockItem) {
+        copierStockItem.style.display = shouldShowElement('copier-stock-item', userData.canCopyStock) ? 'block' : 'none';
     }
     
     // Onglet Cash Paiement - pour utilisateurs avancés
-    if (userData.canManageAdvanced) {
-        if (cashPaymentItem) cashPaymentItem.style.display = 'block';
-    } else {
-        if (cashPaymentItem) cashPaymentItem.style.display = 'none';
+    if (cashPaymentItem) {
+        cashPaymentItem.style.display = shouldShowElement('cash-payment-item', userData.canManageAdvanced) ? 'block' : 'none';
     }
     
     // Onglet Suivi achat boeuf - pour utilisateurs avancés
-    if (userData.canManageAdvanced) {
-        if (suiviAchatBoeufItem) suiviAchatBoeufItem.style.display = 'block';
-    } else {
-        if (suiviAchatBoeufItem) suiviAchatBoeufItem.style.display = 'none';
+    if (suiviAchatBoeufItem) {
+        suiviAchatBoeufItem.style.display = shouldShowElement('suivi-achat-boeuf-item', userData.canManageAdvanced) ? 'block' : 'none';
     }
     
     // Onglet Estimation - pour utilisateurs qui peuvent gérer les estimations
-    if (userData.canManageEstimation) {
-        if (estimationItem) estimationItem.style.display = 'block';
-    } else {
-        if (estimationItem) estimationItem.style.display = 'none';
+    if (estimationItem) {
+        estimationItem.style.display = shouldShowElement('estimation-item', userData.canManageEstimation) ? 'block' : 'none';
     }
     
     // Onglet Générer Paiement - pour tous les utilisateurs avec droits d'écriture
-    if (userData.canWrite) {
-        if (paymentLinksItem) paymentLinksItem.style.display = 'block';
-    } else {
-        if (paymentLinksItem) paymentLinksItem.style.display = 'none';
+    if (paymentLinksItem) {
+        paymentLinksItem.style.display = shouldShowElement('payment-links-item', userData.canWrite) ? 'block' : 'none';
     }
-   
+    
+    // Onglet Pré-commande - pour utilisateurs avec droits d'écriture
+    if (precommandeItem) {
+        precommandeItem.style.display = shouldShowElement('precommande-item', userData.canWrite) ? 'block' : 'none';
+    }
+    
+    // Onglet Réconciliation - visible pour tous les utilisateurs authentifiés mais contrôlé par module
+    if (reconciliationItem) {
+        reconciliationItem.style.display = shouldShowElement('reconciliation-item', true) ? 'block' : 'none';
+    }
+    
+    // Onglet Réconciliation du mois - visible pour tous les utilisateurs authentifiés mais contrôlé par module
+    if (reconciliationMoisItem) {
+        reconciliationMoisItem.style.display = shouldShowElement('reconciliation-mois-item', true) ? 'block' : 'none';
+    }
+    
+    // Onglet Abonnements - pour utilisateurs avec droits d'écriture
+    if (abonnementsItem) {
+        abonnementsItem.style.display = shouldShowElement('abonnements-item', userData.canWrite) ? 'block' : 'none';
+    }
+    
+    // Onglet Audit/Stock alerte - visible pour tous les utilisateurs authentifiés mais contrôlé par module
+    if (stockAlerteItem) {
+        stockAlerteItem.style.display = shouldShowElement('stock-alerte-item', true) ? 'block' : 'none';
+    }
+    
+    console.log('✅ Onglets affichés selon droits utilisateur et modules actifs');
 }
 
 // Fonction pour initialiser la page d'inventaire

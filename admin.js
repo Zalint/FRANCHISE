@@ -2677,6 +2677,166 @@ document.addEventListener('DOMContentLoaded', function() {
             if (stocksSection) {
                 initStocksSection();
             }
+            
+            // Initialiser la section modules
+            initModulesSection();
         }
     });
-}); 
+});
+
+// =================== GESTION DES MODULES ===================
+
+/**
+ * Initialiser la section de gestion des modules
+ */
+function initModulesSection() {
+    console.log('Initialisation de la section modules...');
+    
+    // Charger les modules
+    chargerModules();
+    
+    // Event listener pour le bouton d'actualisation
+    const refreshBtn = document.getElementById('refresh-modules-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', chargerModules);
+    }
+}
+
+/**
+ * Charger la liste des modules depuis l'API
+ */
+async function chargerModules() {
+    const tbody = document.getElementById('modules-table-body');
+    if (!tbody) return;
+    
+    try {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>';
+        
+        const response = await fetch('/api/modules', {
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.message || 'Erreur lors du chargement');
+        }
+        
+        afficherModules(data.modules);
+        
+    } catch (error) {
+        console.error('Erreur lors du chargement des modules:', error);
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">
+            <i class="fas fa-exclamation-triangle"></i> Erreur: ${error.message}
+        </td></tr>`;
+    }
+}
+
+/**
+ * Afficher les modules dans le tableau
+ */
+function afficherModules(modules) {
+    const tbody = document.getElementById('modules-table-body');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    // Trier les modules par nom
+    const sortedModules = Object.values(modules).sort((a, b) => a.name.localeCompare(b.name));
+    
+    for (const module of sortedModules) {
+        const row = document.createElement('tr');
+        row.setAttribute('data-module-id', module.id);
+        
+        // Icône de statut
+        const statusIcon = module.active 
+            ? '<i class="fas fa-check-circle text-success fs-4"></i>'
+            : '<i class="fas fa-times-circle text-danger fs-4"></i>';
+        
+        // Badge pour module essentiel
+        const coreBadge = module.isCore 
+            ? '<span class="badge bg-secondary ms-2">Essentiel</span>'
+            : '';
+        
+        // Bouton d'action
+        const actionBtn = module.isCore
+            ? '<button class="btn btn-sm btn-secondary" disabled title="Module essentiel"><i class="fas fa-lock"></i></button>'
+            : module.active
+                ? `<button class="btn btn-sm btn-warning" onclick="toggleModule('${module.id}')" title="Désactiver"><i class="fas fa-toggle-on"></i> Désactiver</button>`
+                : `<button class="btn btn-sm btn-success" onclick="toggleModule('${module.id}')" title="Activer"><i class="fas fa-toggle-off"></i> Activer</button>`;
+        
+        row.innerHTML = `
+            <td class="text-center">${statusIcon}</td>
+            <td>
+                <strong>${module.name}</strong>${coreBadge}
+                <br><small class="text-muted">ID: ${module.id}</small>
+            </td>
+            <td>${module.description || '-'}</td>
+            <td>${actionBtn}</td>
+        `;
+        
+        tbody.appendChild(row);
+    }
+}
+
+/**
+ * Activer/Désactiver un module
+ */
+async function toggleModule(moduleId) {
+    try {
+        const response = await fetch(`/api/modules/${moduleId}/toggle`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Afficher une notification
+            const message = data.active 
+                ? `Module "${data.moduleId}" activé avec succès`
+                : `Module "${data.moduleId}" désactivé avec succès`;
+            
+            afficherNotification(message, data.active ? 'success' : 'warning');
+            
+            // Recharger la liste des modules
+            chargerModules();
+        } else {
+            throw new Error(data.message || 'Erreur lors de la mise à jour');
+        }
+        
+    } catch (error) {
+        console.error('Erreur lors du toggle du module:', error);
+        afficherNotification(`Erreur: ${error.message}`, 'danger');
+    }
+}
+
+/**
+ * Afficher une notification temporaire
+ */
+function afficherNotification(message, type = 'info') {
+    // Vérifier si un conteneur de notification existe, sinon le créer
+    let container = document.getElementById('notification-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notification-container';
+        container.style.cssText = 'position: fixed; top: 80px; right: 20px; z-index: 9999; max-width: 350px;';
+        document.body.appendChild(container);
+    }
+    
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type} alert-dismissible fade show`;
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Supprimer automatiquement après 5 secondes
+    setTimeout(() => {
+        notification.remove();
+    }, 5000);
+} 

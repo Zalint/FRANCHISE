@@ -27,16 +27,19 @@ const ReconciliationManager = (function() {
     ];
     
     // Mapping des références de paiement aux points de vente
+    // NOTE: La source canonique est points-vente-payment-ref.js - garder synchronisé
     const PAYMENT_REF_MAPPING = {
         'V_TB': 'Touba',
-        'V_PROD': 'MATA PROD',
-        'V_DHR': 'Dahra', 
-        'V_ALS': 'Aliou Sow',
+        'V_DHR': 'Dahra',
         'V_LGR': 'Linguere',
         'V_MBA': 'Mbao',
-        'V_KM': 'Keur Massar',
         'V_OSF': 'O.Foire',
-        'V_SAC': 'Sacre Coeur'
+        'V_SAC': 'Sacre Coeur',
+        'V_ABATS': 'Abattage',
+        // Extensions supplémentaires
+        'V_PROD': 'MATA PROD',
+        'V_ALS': 'Aliou Sow',
+        'V_KM': 'Keur Massar'
     };
     
     // Index des colonnes pour accès rapide
@@ -1194,7 +1197,7 @@ const ReconciliationManager = (function() {
                 <div id="debug-formule" class="mb-3"></div>
                 <div id="debug-ecart" class="mb-3"></div>
                 
-                <div class="row mb-3" id="inventaire-buttons-container">
+                <div class="row mb-3 stock-module-element" id="inventaire-buttons-container">
                     <div class="col-md-6">
                         <button id="btn-voir-inventaire-matin" class="btn btn-primary">Voir inventaire matin</button>
                     </div>
@@ -1208,11 +1211,15 @@ const ReconciliationManager = (function() {
                 <div id="debug-ventes-section" class="mt-3"></div>
             `;
             
-            // Masquer les boutons d'inventaire pour les lecteurs
+            // Masquer les boutons d'inventaire pour les lecteurs OU si le module stock est désactivé
             const currentUser = window.currentUser;
             const inventaireButtonsContainer = document.getElementById('inventaire-buttons-container');
-            if (currentUser && currentUser.role === 'lecteur' && inventaireButtonsContainer) {
-                inventaireButtonsContainer.style.display = 'none';
+            const stockModuleActive = window.ModulesHandler ? window.ModulesHandler.isModuleActive('stock') : true;
+            
+            if (inventaireButtonsContainer) {
+                if ((currentUser && currentUser.role === 'lecteur') || !stockModuleActive) {
+                    inventaireButtonsContainer.style.display = 'none';
+                }
             }
             
             // Ajouter les écouteurs d'événements pour les boutons

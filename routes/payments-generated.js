@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const axios = require('axios');
 const PaymentLink = require('../db/models/PaymentLink');
 const pointsVente = require('../points-vente');
+const pointsVentePaymentRef = require('../points-vente-payment-ref');
 const { checkAuth, checkReadAccess } = require('../middlewares/auth');
 
 const router = express.Router();
@@ -255,17 +256,16 @@ router.get('/bictorys/source', checkAuthOrApiKey, async (req, res) => {
         }
 
         // 3. Mapping des points de vente vers les références Bictorys
-        const POINT_VENTE_TO_REFS = {
-            'Touba': ['V_TB', 'G_TB'],
-            'Dahra': ['V_DHR', 'G_DHR'],
-            'Aliou Sow': ['V_ALS', 'G_ALS'],
-            'Linguere': ['V_LGR', 'G_LGR'],
-            'Mbao': ['V_MBA', 'G_MBA'],
-            'Keur Massar': ['V_KM', 'G_KM'],
-            'O.Foire': ['V_OSF', 'G_OSF'],
-            'Sacre Coeur': ['V_SAC', 'G_SAC'],
-            'Abattage': ['V_ABATS', 'G_ABATS']
-        };
+        // Généré dynamiquement depuis pointsVentePaymentRef + extensions
+        const POINT_VENTE_TO_REFS = {};
+        // Ajouter les références depuis le fichier centralisé
+        Object.entries(pointsVentePaymentRef).forEach(([ref, pointVenteName]) => {
+            const gRef = ref.replace('V_', 'G_');
+            POINT_VENTE_TO_REFS[pointVenteName] = [ref, gRef];
+        });
+        // Ajouter les références supplémentaires non incluses dans le fichier de base
+        POINT_VENTE_TO_REFS['Aliou Sow'] = ['V_ALS', 'G_ALS'];
+        POINT_VENTE_TO_REFS['Keur Massar'] = ['V_KM', 'G_KM'];
 
         const references = POINT_VENTE_TO_REFS[pointVente];
         

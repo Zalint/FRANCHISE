@@ -14,6 +14,39 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/fr.js"></script>
     <style>
+        /* ============================================
+           MODULES: Masquer par défaut les éléments dépendant des modules
+           Ils seront affichés par JavaScript une fois le statut des modules vérifié
+           ============================================ */
+        .module-pending {
+            display: none !important;
+        }
+        
+        /* Classe pour afficher les éléments une fois le module vérifié */
+        .module-verified {
+            display: block !important;
+        }
+        
+        /* Classe pour masquer les éléments dont le module est désactivé */
+        .module-disabled {
+            display: none !important;
+        }
+        
+        /* Masquer les colonnes/éléments cash quand le module cash-paiement est désactivé */
+        .cash-module-hidden {
+            display: none !important;
+        }
+        
+        /* Masquer les éléments stock/inventaire quand le module stock est désactivé */
+        .stock-module-hidden {
+            display: none !important;
+        }
+        
+        /* Masquer les éléments audit quand le module audit est désactivé */
+        .audit-module-hidden {
+            display: none !important;
+        }
+        
         /* Container and layout fixes */
         .navbar-container, .main-content {
             padding-left: 0;
@@ -289,7 +322,7 @@
     <div class="container-fluid navbar-container">
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
             <div class="container-fluid">
-                <a class="navbar-brand" href="#">
+                <a class="navbar-brand d-flex align-items-center" href="#">
                     <img src="image/LogoMatixVect.png" alt="Matix Logo" height="90" class="d-inline-block align-text-top me-2">
                 </a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -306,50 +339,51 @@
                         <!--<li class="nav-item" id="import-tab-container">
                             <a class="nav-link" href="#" id="import-tab">Import</a>
                         </li>-->
-                        <li class="nav-item" id="stock-inventaire-item" style="display: none;">
+                        <li class="nav-item module-pending" id="stock-inventaire-item">
                             <a class="nav-link" href="#" id="stock-inventaire-tab">Stock inventaire</a>
                         </li>
-                        <li class="nav-item" id="copier-stock-item">
+                        <li class="nav-item module-pending" id="copier-stock-item">
                             <a class="nav-link" href="#" id="copier-stock-tab">Copier Stock</a>
                         </li>
                       
-                        <li class="nav-item" id="reconciliation-item">
+                        <li class="nav-item module-pending" id="reconciliation-item">
                             <a class="nav-link" href="#" id="reconciliation-tab">Réconciliation</a>
                         </li>
-                        <li class="nav-item" id="reconciliation-mois-item">
+                        <li class="nav-item module-pending" id="reconciliation-mois-item">
                             <a class="nav-link" href="#" id="reconciliation-mois-tab">Réconciliation du mois</a>
                         </li>
-                        <li class="nav-item" id="stock-alerte-item">
+                        <li class="nav-item module-pending" id="stock-alerte-item">
                             <a class="nav-link" href="#" id="stock-alerte-tab">Audit</a>
                         </li>
-                        <li class="nav-item" id="cash-payment-item">
+                        <li class="nav-item module-pending" id="cash-payment-item">
                             <a class="nav-link" href="#" id="cash-payment-tab">Cash Paiement</a>
                         </li>
-                        <li class="nav-item" id="suivi-achat-boeuf-item">
+                        <li class="nav-item module-pending" id="suivi-achat-boeuf-item">
                             <a class="nav-link" href="#" id="suivi-achat-boeuf-tab">Suivi achat boeuf</a>
                         </li>
-                        <li class="nav-item" id="estimation-item">
+                        <li class="nav-item module-pending" id="estimation-item">
                             <a class="nav-link" href="#" id="estimation-tab">
                                 <i class="bi bi-graph-up"></i> Estimation
                             </a>
                         </li>
-                        <li class="nav-item" id="precommande-item">
+                        <li class="nav-item module-pending" id="precommande-item">
                             <a class="nav-link" href="#" id="precommande-tab">
                                 <i class="bi bi-cart-plus"></i> Pré-commande clients
                             </a>
                         </li>
-                        <li class="nav-item" id="payment-links-item">
+                        <li class="nav-item module-pending" id="payment-links-item">
                             <a class="nav-link" href="#" id="payment-links-tab">
                                 <i class="bi bi-credit-card"></i> Générer Paiement
                             </a>
                         </li>
-                        <li class="nav-item" id="abonnements-item">
+                        <li class="nav-item module-pending" id="abonnements-item">
                             <a class="nav-link" href="abonnements.html">
                                 <i class="bi bi-credit-card-2-front"></i> Abonnements
                             </a>
                         </li>
                     </ul>
-                    <div class="navbar-nav">
+                    <div class="navbar-nav text-end">
+                        <span id="client-name-display" class="nav-link fw-bold text-warning"></span>
                         <span class="nav-item nav-link" id="user-info"></span>
                         <a class="nav-link" href="#" id="logout-btn">Déconnexion</a>
                     </div>
@@ -365,7 +399,7 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">Saisie des ventes</h5>
-                        <a href="/auditClient.html" class="btn btn-info" target="_blank">
+                        <a href="/auditClient.html" class="btn btn-info audit-module-element" target="_blank">
                             <i class="bi bi-person-check"></i> Audit Client
                         </a>
                     </div>
@@ -1464,9 +1498,9 @@
                                                 <th class="text-end">Ventes Théoriques</th>
                                                 <th class="text-end">Ventes Saisies</th>
                                                 <th class="text-end">Écart</th>
-                                                <th class="text-end">Montant Total Cash</th>
+                                                <th class="text-end cash-module-col">Montant Total Cash</th>
                                                 <th class="text-end">Écart %</th>
-                                                <th class="text-end">Ecart Cash</th>
+                                                <th class="text-end cash-module-col">Ecart Cash</th>
                                                 <th>Commentaire</th>
                                             </tr>
                                         </thead>
@@ -1838,7 +1872,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-3 cash-module-card">
                                         <div class="card text-white bg-info h-100">
                                             <div class="card-body">
                                                 <h5 class="card-title">Total Versements (Cash) (Mois)</h5>
@@ -1846,7 +1880,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-3 cash-module-card">
                                          <div class="card text-dark bg-warning h-100">
                                              <div class="card-body">
                                                  <h5 class="card-title">Estimation Versements (Mois)</h5>
@@ -1916,9 +1950,9 @@
                                                 <th class="text-end">Ventes Théoriques</th>
                                                 <th class="text-end">Ventes Saisies</th>
                                                 <th class="text-end">Écart</th>
-                                                <th class="text-end">Montant Total Cash</th>
+                                                <th class="text-end cash-module-col">Montant Total Cash</th>
                                                 <th class="text-end">Écart %</th>
-                                                <th class="text-end">Ecart Cash</th>
+                                                <th class="text-end cash-module-col">Ecart Cash</th>
                                                 <th>Commentaire</th>
                                             </tr>
                                         </thead>
@@ -2425,6 +2459,10 @@
     <script src="reconciliationManager.js"></script>
     <script src="cash-payment-function.js"></script>
     <script src="js/vente-abonnement.js"></script>
+    <!-- Gestionnaire de modules - doit être chargé avant script.js -->
+    <script src="js/modules-handler.js"></script>
+    <!-- Gestionnaire de configuration client -->
+    <script src="js/client-config-handler.js"></script>
     <script src="script.js"></script>
     <script src="cash-payment.js"></script>
     <script src="transfert.js"></script>
