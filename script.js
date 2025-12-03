@@ -779,6 +779,10 @@ async function checkAuth() {
         
         // Stocker l'utilisateur dans la variable window pour l'accès global
         window.currentUser = currentUser;
+        
+        // Afficher le contenu de la page maintenant que l'authentification est vérifiée
+        document.body.classList.remove('auth-pending');
+        document.body.classList.add('auth-verified');
 
         await populatePointVenteDropdowns();
         await initPointsVentePhysiques();
