@@ -106,21 +106,29 @@ let users = [];
 
 // Fonction pour charger les utilisateurs depuis le fichier
 async function loadUsers() {
+    console.log('=== CHARGEMENT DES UTILISATEURS ===');
+    console.log('Chemin principal:', USERS_FILE_PATH);
+    console.log('Chemin fallback:', USERS_FILE_PATH_FALLBACK);
+    
     try {
         // Vérifier si le fichier existe dans data/by-date
         try {
             const data = await fs.readFile(USERS_FILE_PATH, 'utf8');
             users = JSON.parse(data);
-            console.log(`Utilisateurs chargés depuis ${USERS_FILE_PATH}: ${users.length} utilisateurs`);
+            console.log(`✅ Utilisateurs chargés depuis ${USERS_FILE_PATH}: ${users.length} utilisateurs`);
+            console.log('Utilisateurs disponibles:', users.map(u => u.username).join(', '));
         } catch (error) {
+            console.log(`❌ Erreur lecture ${USERS_FILE_PATH}:`, error.message);
             // Fallback: essayer de charger depuis le fichier racine
             try {
                 const data = await fs.readFile(USERS_FILE_PATH_FALLBACK, 'utf8');
                 users = JSON.parse(data);
-                console.log(`Utilisateurs chargés depuis ${USERS_FILE_PATH_FALLBACK} (fallback): ${users.length} utilisateurs`);
+                console.log(`✅ Utilisateurs chargés depuis ${USERS_FILE_PATH_FALLBACK} (fallback): ${users.length} utilisateurs`);
+                console.log('Utilisateurs disponibles:', users.map(u => u.username).join(', '));
             } catch (fallbackError) {
+                console.log(`❌ Erreur lecture ${USERS_FILE_PATH_FALLBACK}:`, fallbackError.message);
                 // Si aucun fichier n'existe, créer le dossier et sauvegarder les utilisateurs par défaut
-                console.log('Fichier utilisateurs non trouvé, création avec les utilisateurs par défaut');
+                console.log('⚠️ Fichier utilisateurs non trouvé, utilisation des utilisateurs par défaut');
                 
                 // Créer le dossier data s'il n'existe pas
                 const dataDir = path.dirname(USERS_FILE_PATH);
@@ -131,13 +139,15 @@ async function loadUsers() {
                 }
                 
                 users = [...defaultUsers];
+                console.log('Utilisateurs par défaut:', users.map(u => u.username).join(', '));
                 await saveUsers();
             }
         }
     } catch (error) {
-        console.error('Erreur lors du chargement des utilisateurs:', error);
+        console.error('❌ Erreur critique lors du chargement des utilisateurs:', error);
         // En cas d'erreur, utiliser les utilisateurs par défaut
         users = [...defaultUsers];
+        console.log('Utilisateurs par défaut (fallback):', users.map(u => u.username).join(', '));
     }
 }
 
