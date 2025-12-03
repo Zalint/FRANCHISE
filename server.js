@@ -521,9 +521,16 @@ const getPaymentRefMapping = () => {
         delete require.cache[require.resolve('./data/by-date/paymentRefMapping.js')];
         return require('./data/by-date/paymentRefMapping.js');
     } catch (error) {
-        console.error('Erreur lors du chargement du mapping des références:', error);
-        // Fallback vers le fichier centralisé
-        return pointsVentePaymentRef;
+        // Fallback to root folder
+        try {
+            delete require.cache[require.resolve('./paymentRefMapping.js')];
+            console.log('PaymentRefMapping chargé depuis paymentRefMapping.js (fallback)');
+            return require('./paymentRefMapping.js');
+        } catch (e2) {
+            console.error('Erreur lors du chargement du mapping des références:', e2);
+            // Fallback vers le fichier centralisé
+            return pointsVentePaymentRef;
+        }
     }
 };
 
