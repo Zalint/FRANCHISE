@@ -36,5 +36,12 @@
     "role": "superviseur",
     "pointVente": "tous",
     "active": true
+  },
+  {
+    "username": "SALY",
+    "password": "$2b$10$jPhgA.cIqO.5B6u2/CeV1OqBDSNYGSDVbwTc4d3gks2wBoSEkV2zq",
+    "role": "superviseur",
+    "pointVente": "tous",
+    "active": true
   }
 ]
