@@ -222,7 +222,21 @@ function applyModuleSpecificVisibility() {
         }
     });
     
-    console.log(`✅ Visibilité spécifique appliquée (cash: ${cashModuleActive}, stock: ${stockModuleActive}, audit: ${auditModuleActive})`);
+    // Gérer les éléments abonnements
+    const abonnementModuleActive = modulesStatus['abonnements'] === true;
+    const abonnementElements = document.querySelectorAll('.abonnement-module-element');
+    abonnementElements.forEach(el => {
+        if (abonnementModuleActive) {
+            el.style.display = '';
+            el.classList.remove('abonnement-module-hidden');
+        } else {
+            el.style.display = 'none';
+            el.classList.add('abonnement-module-hidden');
+            console.log('🔴 Élément abonnement masqué:', el.id || el.className);
+        }
+    });
+    
+    console.log(`✅ Visibilité spécifique appliquée (cash: ${cashModuleActive}, stock: ${stockModuleActive}, audit: ${auditModuleActive}, abonnement: ${abonnementModuleActive})`);
 }
 
 /**
