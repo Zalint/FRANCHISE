@@ -1,0 +1,22 @@
+{
+  "Mbao-Boeuf": {
+    "date": "06-09-2025",
+    "typeStock": "soir",
+    "Point de Vente": "Mbao",
+    "Produit": "Boeuf",
+    "Nombre": "20",
+    "PU": "3600",
+    "Montant": "72000",
+    "Commentaire": "Test stock soir"
+  },
+  "O.Foire-Veau": {
+    "date": "06-09-2025",
+    "typeStock": "soir",
+    "Point de Vente": "O.Foire",
+    "Produit": "Veau",
+    "Nombre": "10",
+    "PU": "3800",
+    "Montant": "38000",
+    "Commentaire": "Test stock soir"
+  }
+}
