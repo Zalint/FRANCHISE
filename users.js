@@ -6,55 +6,20 @@ const path = require('path');
 const USERS_FILE_PATH = path.join(__dirname, 'data', 'by-date', 'users.json');
 const USERS_FILE_PATH_FALLBACK = path.join(__dirname, 'users.json');
 
-// Liste des utilisateurs par défaut (utilisée seulement si le fichier n'existe pas)
+// Liste des utilisateurs par défaut (doit correspondre à data/by-date/users.json)
 const defaultUsers = [
     {
         username: 'ADMIN',
-        password: '$2b$10$rXRMYSP0MzuiT9T1l1lR5Ou57eqnW.fxkihkgFzp.l8RVpNg0BCmq',
+        password: '$2b$10$jPhgA.cIqO.5B6u2/CeV1OqBDSNYGSDVbwTc4d3gks2wBoSEkV2zq',
         role: 'admin',
         pointVente: 'tous',
         active: true
     },
     {
-        username: 'MBA',
-        password: '$2b$10$SGgkVN9qBf.nChuQYfWs5OFfu9yduQ5YAp4YhFPwLySW1naAXywmK',
+        username: 'KBA',
+        password: '$2b$10$AjtmT1ZdD9GikjyPTZjRxOaYoIK3KiZWpSGu4iBy9ojoyuMDh0jbW',
         role: 'user',
-        pointVente: 'Mbao',
-        active: true
-    },
-    {
-        username: 'OSF',
-        password: '$2b$10$sZr41Lpfz3dFM3UBdl38deaWSWB6lYzZw0uTJEIxtWXD3oEBMLJq6',
-        role: 'user',
-        pointVente: 'O.Foire',
-        active: true
-    },
-    {
-        username: 'KMS',
-        password: '$2b$10$fM8r6G5YXoQbMweovFX4dewL4h3YiIKkGAdRgXXthVaKoVzhaf68W',
-        role: 'user',
-        pointVente: 'Keur Massar',
-        active: true
-    },
-    {
-        username: 'LNG',
-        password: '$2b$10$5/Ufo00FlSk2vq9.Smuoh.ub4XpiuqiJLya1HrvvuSwl5vcAtYOoK',
-        role: 'user',
-        pointVente: 'Linguere',
-        active: true
-    },
-    {
-        username: 'DHR',
-        password: '$2b$10$Pc4VgsIWK7BXyw2mcWa5/OMDydUgBHR3HkCaSWaqNWSCZ1gOp6jgC',
-        role: 'user',
-        pointVente: 'Dahra',
-        active: true
-    },
-    {
-        username: 'TBM',
-        password: '$2b$10$3lnpwyz.WNC3Ac3LDIIHfOWnQUuglBDHlk4sHB4nB/VV6ZD9fLLZ.',
-        role: 'user',
-        pointVente: 'Touba',
+        pointVente: 'tous',
         active: true
     },
     {
@@ -72,13 +37,6 @@ const defaultUsers = [
         active: true
     },
     {
-        username: 'PAPI',
-        password: '$2b$10$mo1zaS1mo/GAl3jOR3f4ZuxwpVjr28nISR4jviHUpCY2GetfWE2Ve',
-        role: 'user',
-        pointVente: 'tous',
-        active: true
-    },
-    {
         username: 'SALIOU',
         password: '$2b$10$IlcAh43xYqhprICFx2oIv.FLgbsMPso7vHgGsXc9H81VNCTiA/TWq',
         role: 'superviseur',
@@ -91,13 +49,6 @@ const defaultUsers = [
         role: 'superviseur',
         pointVente: 'tous',
         active: true
-    },
-    {
-        username: 'SCR',
-        password: '$2b$10$fGNRB1.MSl4JT5EkMwYpT.RKDuCc4RmpXXZvz/OKpn3sm3ozNTLUe',
-        role: 'user',
-        pointVente: 'Sacre Coeur',
-        active: true
     }
 ];
 
@@ -107,40 +58,31 @@ let users = [];
 // Fonction pour charger les utilisateurs depuis le fichier
 async function loadUsers() {
     console.log('=== CHARGEMENT DES UTILISATEURS ===');
-    console.log('Chemin principal:', USERS_FILE_PATH);
-    console.log('Chemin fallback:', USERS_FILE_PATH_FALLBACK);
+    console.log('Chemin principal (racine):', USERS_FILE_PATH_FALLBACK);
+    console.log('Chemin secondaire:', USERS_FILE_PATH);
     
     try {
-        // Vérifier si le fichier existe dans data/by-date
+        // PRIORITÉ: Charger depuis le fichier racine (plus à jour avec git)
         try {
-            const data = await fs.readFile(USERS_FILE_PATH, 'utf8');
+            const data = await fs.readFile(USERS_FILE_PATH_FALLBACK, 'utf8');
             users = JSON.parse(data);
-            console.log(`✅ Utilisateurs chargés depuis ${USERS_FILE_PATH}: ${users.length} utilisateurs`);
+            console.log(`✅ Utilisateurs chargés depuis ${USERS_FILE_PATH_FALLBACK}: ${users.length} utilisateurs`);
             console.log('Utilisateurs disponibles:', users.map(u => u.username).join(', '));
         } catch (error) {
-            console.log(`❌ Erreur lecture ${USERS_FILE_PATH}:`, error.message);
-            // Fallback: essayer de charger depuis le fichier racine
+            console.log(`❌ Erreur lecture ${USERS_FILE_PATH_FALLBACK}:`, error.message);
+            // Fallback: essayer de charger depuis data/by-date
             try {
-                const data = await fs.readFile(USERS_FILE_PATH_FALLBACK, 'utf8');
+                const data = await fs.readFile(USERS_FILE_PATH, 'utf8');
                 users = JSON.parse(data);
-                console.log(`✅ Utilisateurs chargés depuis ${USERS_FILE_PATH_FALLBACK} (fallback): ${users.length} utilisateurs`);
+                console.log(`✅ Utilisateurs chargés depuis ${USERS_FILE_PATH} (fallback): ${users.length} utilisateurs`);
                 console.log('Utilisateurs disponibles:', users.map(u => u.username).join(', '));
             } catch (fallbackError) {
-                console.log(`❌ Erreur lecture ${USERS_FILE_PATH_FALLBACK}:`, fallbackError.message);
-                // Si aucun fichier n'existe, créer le dossier et sauvegarder les utilisateurs par défaut
+                console.log(`❌ Erreur lecture ${USERS_FILE_PATH}:`, fallbackError.message);
+                // Si aucun fichier n'existe, utiliser les utilisateurs par défaut
                 console.log('⚠️ Fichier utilisateurs non trouvé, utilisation des utilisateurs par défaut');
-                
-                // Créer le dossier data s'il n'existe pas
-                const dataDir = path.dirname(USERS_FILE_PATH);
-                try {
-                    await fs.mkdir(dataDir, { recursive: true });
-                } catch (mkdirError) {
-                    console.log('Dossier data existe déjà');
-                }
                 
                 users = [...defaultUsers];
                 console.log('Utilisateurs par défaut:', users.map(u => u.username).join(', '));
-                await saveUsers();
             }
         }
     } catch (error) {
