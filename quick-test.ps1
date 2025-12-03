@@ -2,7 +2,7 @@
 $apiKey = "YOUR_ACTUAL_API_KEY_HERE"  # ← Replace this with your real API key
 
 Write-Host "🧪 Testing Stock Copy API" -ForegroundColor Cyan
-Write-Host "📍 Endpoint: https://mata-lgzy.onrender.com/api/external/stock/copy"
+Write-Host "📍 Endpoint: https://keur-bali.onrender.com/api/external/stock/copy"
 Write-Host "🔑 API Key: $($apiKey.Substring(0,[Math]::Min(10,$apiKey.Length)))..."
 Write-Host ""
 
@@ -10,7 +10,7 @@ Write-Host ""
 Write-Host "1️⃣ Testing Health Check..." -ForegroundColor Yellow
 try {
     $headers = @{ 'X-API-Key' = $apiKey }
-    $health = Invoke-RestMethod -Uri 'https://mata-lgzy.onrender.com/api/external/health' -Method Get -Headers $headers
+    $health = Invoke-RestMethod -Uri 'https://keur-bali.onrender.com/api/external/health' -Method Get -Headers $headers
     Write-Host "✅ Health Check Passed!" -ForegroundColor Green
     Write-Host "   Environment: $($health.environment)"
     Write-Host "   API Key Configured: $($health.apiKeyConfigured)"
@@ -26,7 +26,7 @@ Write-Host "2️⃣ Testing Dry Run (Safe Test)..." -ForegroundColor Yellow
 try {
     $headers = @{ 'Content-Type' = 'application/json'; 'X-API-Key' = $apiKey }
     $body = '{"date":"2025-08-09","dryRun":true,"override":true}'
-    $result = Invoke-RestMethod -Uri 'https://mata-lgzy.onrender.com/api/external/stock/copy' -Method Post -Headers $headers -Body $body
+    $result = Invoke-RestMethod -Uri 'https://keur-bali.onrender.com/api/external/stock/copy' -Method Post -Headers $headers -Body $body
     
     Write-Host "✅ Dry Run Successful!" -ForegroundColor Green
     Write-Host "   Success: $($result.success)"

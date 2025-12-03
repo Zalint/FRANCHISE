@@ -43,25 +43,28 @@ try {
 // Function to reload products configuration
 function reloadProduitsConfig() {
     try {
+        const produitsPath = path.join(__dirname, 'data', 'by-date', 'produits');
+        const produitsInventairePath = path.join(__dirname, 'data', 'by-date', 'produitsInventaire');
+        
         // Clear the require cache for products files
-        delete require.cache[require.resolve('./data/by-date/produits')];
-        delete require.cache[require.resolve('./data/by-date/produitsInventaire')];
+        delete require.cache[require.resolve(produitsPath)];
+        delete require.cache[require.resolve(produitsInventairePath)];
         
         // Clear cache for points de vente (both locations)
         try {
-            delete require.cache[require.resolve('./data/by-date/points-vente')];
+            delete require.cache[require.resolve(path.join(__dirname, 'data', 'by-date', 'points-vente'))];
         } catch (e) {
             // Ignore if file doesn't exist
         }
         try {
-            delete require.cache[require.resolve('./points-vente')];
+            delete require.cache[require.resolve(path.join(__dirname, 'points-vente'))];
         } catch (e) {
             // Ignore if file doesn't exist
         }
         
         // Reload the modules
-        const newProduits = require('./data/by-date/produits');
-        const newProduitsInventaire = require('./data/by-date/produitsInventaire');
+        const newProduits = require(produitsPath);
+        const newProduitsInventaire = require(produitsInventairePath);
         
         // Reload points de vente with fallback
         let newPointsVente;
@@ -89,8 +92,9 @@ function reloadProduitsConfig() {
     }
 }
 
-let produits = require('./data/by-date/produits');
-let produitsInventaire = require('./data/by-date/produitsInventaire');
+const path = require('path');
+let produits = require(path.join(__dirname, 'data', 'by-date', 'produits'));
+let produitsInventaire = require(path.join(__dirname, 'data', 'by-date', 'produitsInventaire'));
 const bcrypt = require('bcrypt');
 const fsPromises = require('fs').promises;
 const { Vente, Stock, Transfert, Reconciliation, CashPayment, AchatBoeuf, Depense, WeightParams, Precommande, ClientAbonne, PaiementAbonnement, PerformanceAchat } = require('./db/models');
@@ -5312,7 +5316,7 @@ async function fetchVentesTheoriquesFromAPI(estimation) {
         const externalApiKey = process.env.EXTERNAL_API_KEY || 'b326e72b67a9b508c88270b9954c5ca1';
         // Use the correct base URL for the environment
         const baseUrl = process.env.NODE_ENV === 'production' 
-            ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+            ? (process.env.BASE_URL || 'https://keur-bali.onrender.com')
             : 'http://localhost:3000';
         const externalResponse = await fetch(`${baseUrl}/api/external/reconciliation?date=${encodeURIComponent(estimation.date)}`, {
             method: 'GET',
@@ -11434,7 +11438,7 @@ async function fetchWeightedPurchasePrices(startDate, endDate) {
         
         // Call achats-boeuf API
         const baseUrl = process.env.NODE_ENV === 'production' 
-            ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+            ? (process.env.BASE_URL || 'https://keur-bali.onrender.com')
             : 'http://localhost:3000';
         const achatsUrl = `${baseUrl}/api/external/achats-boeuf?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
         console.log(`🔍 Calling achats-boeuf API: ${achatsUrl}`);
@@ -11615,7 +11619,7 @@ async function fetchSellingPricesFromVentes(startDate, endDate, pointVente) {
         // Call the existing ventes API (same as analytics container)
         const fetch = require('node-fetch');
         const baseUrl = process.env.NODE_ENV === 'production' 
-            ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+            ? (process.env.BASE_URL || 'https://keur-bali.onrender.com')
             : 'http://localhost:3000';
         const response = await fetch(`${baseUrl}/api/external/ventes?dateDebut=${dateDebutAPI}&dateFin=${dateFinAPI}&pointVente=${encodeURIComponent(pointVenteAPI)}`, {
             method: 'GET',
@@ -12664,7 +12668,7 @@ app.get('/api/external/analytics', validateApiKey, async (req, res) => {
 // Helper function to retry achats-boeuf API call with decremented startDate until data is found
 async function fetchAchatsBoeufWithRetry(initialStartDate, endDate, maxRetries = 30) {
     const baseUrl = process.env.NODE_ENV === 'production' 
-        ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+        ? (process.env.BASE_URL || 'https://keur-bali.onrender.com')
         : 'http://localhost:3000';
     
     // Helper to decrement date by N days
@@ -12786,7 +12790,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             console.log(`🔍 Getting reconciliation data for ratios calculation...`);
             
             const baseUrl = process.env.NODE_ENV === 'production' 
-                ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+                ? (process.env.BASE_URL || 'https://keur-bali.onrender.com')
                 : 'http://localhost:3000';
             const reconciliationUrl = `${baseUrl}/api/external/reconciliation/aggregated?startDate=${startDate}&endDate=${endDate}&pointVente=${encodeURIComponent(pointVente)}`;
             console.log(`🔍 Calling reconciliation API: ${reconciliationUrl}`);
@@ -12878,7 +12882,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 
                 try {
                     const baseUrlAchats = process.env.NODE_ENV === 'production' 
-                        ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+                        ? (process.env.BASE_URL || 'https://keur-bali.onrender.com')
                         : 'http://localhost:3000';
                     const achatsUrl = `${baseUrlAchats}/api/external/achats-boeuf?startDate=${startDate}&endDate=${endDate}`;
                     const achatsResponse = await fetch(achatsUrl, {
@@ -12902,7 +12906,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 }
                 
                 const baseUrlStock = process.env.NODE_ENV === 'production' 
-                    ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+                    ? (process.env.BASE_URL || 'https://keur-bali.onrender.com')
                     : 'http://localhost:3000';
                 const stockSoirUrl = `${baseUrlStock}/api/external/stock-soir-marge?startDate=${adjustedStartDate}&endDate=${endDate}&pointVente=${encodeURIComponent(pointVente)}&prixMoyenBoeuf=${boeufPrice}&prixMoyenVeau=${veauPrice}`;
                 console.log(`🔍 Calling stock-soir-marge API with adjusted start date and correct prices: ${stockSoirUrl}`);
@@ -13027,7 +13031,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             
             try {
                 const baseUrlPack = process.env.NODE_ENV === 'production' 
-                    ? (process.env.BASE_URL || 'https://mata-lgzy.onrender.com')
+                    ? (process.env.BASE_URL || 'https://keur-bali.onrender.com')
                     : 'http://localhost:3000';
                 
                 // Convert dates from DD/MM/YYYY to YYYY-MM-DD for pack API

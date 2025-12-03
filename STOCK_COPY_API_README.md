@@ -71,7 +71,7 @@ POST /api/external/stock/copy
 
 **Dry Run Test:**
 ```bash
-curl -X POST https://mata-lgzy.onrender.com/api/external/stock/copy \
+curl -X POST https://keur-bali.onrender.com/api/external/stock/copy \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-api-key" \
   -d '{
@@ -82,7 +82,7 @@ curl -X POST https://mata-lgzy.onrender.com/api/external/stock/copy \
 
 **Production Execution:**
 ```bash
-curl -X POST https://mata-lgzy.onrender.com/api/external/stock/copy \
+curl -X POST https://keur-bali.onrender.com/api/external/stock/copy \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-api-key" \
   -d '{
@@ -93,7 +93,7 @@ curl -X POST https://mata-lgzy.onrender.com/api/external/stock/copy \
 
 **Auto-detect Date:**
 ```bash
-curl -X POST https://mata-lgzy.onrender.com/api/external/stock/copy \
+curl -X POST https://keur-bali.onrender.com/api/external/stock/copy \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-api-key" \
   -d '{
@@ -104,7 +104,7 @@ curl -X POST https://mata-lgzy.onrender.com/api/external/stock/copy \
 ### 2. JavaScript/Node.js Example
 
 ```javascript
-const response = await fetch('https://mata-lgzy.onrender.com/api/stock/copy', {
+const response = await fetch('https://keur-bali.onrender.com/api/stock/copy', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -126,7 +126,7 @@ console.log(result);
 import requests
 
 response = requests.post(
-    'https://mata-lgzy.onrender.com/api/external/stock/copy',
+    'https://keur-bali.onrender.com/api/external/stock/copy',
     headers={
         'Content-Type': 'application/json',
         'X-API-Key': 'your-api-key'

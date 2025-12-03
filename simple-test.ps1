@@ -1,4 +1,4 @@
-$uri = "https://mata-lgzy.onrender.com/api/external/stock/copy"
+$uri = "https://keur-bali.onrender.com/api/external/stock/copy"
 $headers = @{
     'Content-Type' = 'application/json'
     'X-API-Key' = 'mata-stock-copy-2025-secure-key'

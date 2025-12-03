@@ -877,7 +877,7 @@ Cette logique est **parfaitement cohérente** car :
 ```javascript
 // Appel API
 const response = await fetch(
-  'https://mata-lgzy.onrender.com/api/external/analytics?pointVente=Dahra&startDate=01-10-2025&endDate=03-10-2025',
+  'https://keur-bali.onrender.com/api/external/analytics?pointVente=Dahra&startDate=01-10-2025&endDate=03-10-2025',
   { headers: { 'X-API-Key': 'your-api-key' } }
 );
 
