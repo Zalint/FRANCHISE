@@ -92,7 +92,6 @@ function reloadProduitsConfig() {
     }
 }
 
-const path = require('path');
 let produits = require(path.join(__dirname, 'data', 'by-date', 'produits'));
 let produitsInventaire = require(path.join(__dirname, 'data', 'by-date', 'produitsInventaire'));
 const bcrypt = require('bcrypt');
