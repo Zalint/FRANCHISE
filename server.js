@@ -92,8 +92,35 @@ function reloadProduitsConfig() {
     }
 }
 
-let produits = require(path.join(__dirname, 'data', 'by-date', 'produits'));
-let produitsInventaire = require(path.join(__dirname, 'data', 'by-date', 'produitsInventaire'));
+// Load produits with fallback
+let produits;
+try {
+    produits = require('./data/by-date/produits');
+    console.log('Produits chargés depuis data/by-date/produits.js');
+} catch (e) {
+    try {
+        produits = require('./produits');
+        console.log('Produits chargés depuis produits.js (fallback)');
+    } catch (e2) {
+        console.error('ERREUR: Impossible de charger produits.js:', e2.message);
+        produits = {}; // Empty fallback to prevent crash
+    }
+}
+
+// Load produitsInventaire with fallback
+let produitsInventaire;
+try {
+    produitsInventaire = require('./data/by-date/produitsInventaire');
+    console.log('ProduitsInventaire chargés depuis data/by-date/produitsInventaire.js');
+} catch (e) {
+    try {
+        produitsInventaire = require('./produitsInventaire');
+        console.log('ProduitsInventaire chargés depuis produitsInventaire.js (fallback)');
+    } catch (e2) {
+        console.error('ERREUR: Impossible de charger produitsInventaire.js:', e2.message);
+        produitsInventaire = {}; // Empty fallback to prevent crash
+    }
+}
 const bcrypt = require('bcrypt');
 const fsPromises = require('fs').promises;
 const { Vente, Stock, Transfert, Reconciliation, CashPayment, AchatBoeuf, Depense, WeightParams, Precommande, ClientAbonne, PaiementAbonnement, PerformanceAchat } = require('./db/models');
