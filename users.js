@@ -59,15 +59,15 @@ const defaultUsers = [
     },
     {
         username: 'NADOU',
-        password: '$2b$10$K7k5RmHjo.z52EWo8UdQBufVmFS65BS1by85QVzNk8x2w8faFoluW',
-        role: 'user',
+        password: '$2b$10$YHeqE/YTHDW9PCW7F5u7tOgdGQQl6d32KEhxMe92PCzOuWSOh669m',
+        role: 'superutilisateur',
         pointVente: 'tous',
         active: true
     },
     {
         username: 'OUSMANE',
-        password: '$2b$10$C7/yS945tfuFFe8VoaL8E.YyzakG5HqmHh9D79spRiVcq8/ASI./6',
-        role: 'user',
+        password: '$2b$10$Z7o56oLtPF1hwX1TCryUuuTgbTCBfzpY/58Lb0/ZEAA9Azo5GNr2i',
+        role: 'superviseur',
         pointVente: 'tous',
         active: true
     },
@@ -80,8 +80,15 @@ const defaultUsers = [
     },
     {
         username: 'SALIOU',
-        password: '$2b$10$XM0wQV5kI0lJqld3aMwlmuNSmTivlFAEKXDwZEg0ePIcG6o9/jVmu',
-        role: 'user',
+        password: '$2b$10$IlcAh43xYqhprICFx2oIv.FLgbsMPso7vHgGsXc9H81VNCTiA/TWq',
+        role: 'superviseur',
+        pointVente: 'tous',
+        active: true
+    },
+    {
+        username: 'SALY',
+        password: '$2b$10$WTamvq1T/09402ftX3yuYOGOIXyotCWHuOK08UQKuuBJPJBVYC8Zy',
+        role: 'superviseur',
         pointVente: 'tous',
         active: true
     },

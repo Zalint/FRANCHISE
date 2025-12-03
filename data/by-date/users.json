@@ -16,7 +16,7 @@
   
   {
     "username": "NADOU",
-    "password": "$2b$10$bPlSRCSp6G6/5sSzd3NOUOAlgoLstS33QvfeH8ZGDPFHhGr772iUK",
+    "password": "$2b$10$YHeqE/YTHDW9PCW7F5u7tOgdGQQl6d32KEhxMe92PCzOuWSOh669m",
     "role": "superutilisateur",
     "pointVente": [
       "tous"
@@ -25,21 +25,21 @@
   },
   {
     "username": "OUSMANE",
-    "password": "$2b$10$FA7jPgo/pzPFBz6BgHkk3eDa2nK0AFAgqbvLcoOYoaEV9uf2NRDMm",
+    "password": "$2b$10$Z7o56oLtPF1hwX1TCryUuuTgbTCBfzpY/58Lb0/ZEAA9Azo5GNr2i",
     "role": "superviseur",
     "pointVente": "tous",
     "active": true
   },
   {
     "username": "SALIOU",
-    "password": "$2b$10$jPhgA.cIqO.5B6u2/CeV1OqBDSNYGSDVbwTc4d3gks2wBoSEkV2zq",
+    "password": "$2b$10$IlcAh43xYqhprICFx2oIv.FLgbsMPso7vHgGsXc9H81VNCTiA/TWq",
     "role": "superviseur",
     "pointVente": "tous",
     "active": true
   },
   {
     "username": "SALY",
-    "password": "$2b$10$jPhgA.cIqO.5B6u2/CeV1OqBDSNYGSDVbwTc4d3gks2wBoSEkV2zq",
+    "password": "$2b$10$WTamvq1T/09402ftX3yuYOGOIXyotCWHuOK08UQKuuBJPJBVYC8Zy",
     "role": "superviseur",
     "pointVente": "tous",
     "active": true
