@@ -135,7 +135,20 @@ const { updateSchema } = require('./db/update-schema');
 const { updateVenteSchema } = require('./db/update-vente-schema');
 // Note: updateVenteSchemaAbonnement is handled by SQL queries below (lines 42-77)
 // const { updateVenteSchemaAbonnement } = require('./db/update-vente-schema-abonnement');
-let produitsAbonnement = require('./data/by-date/produitsAbonnement');
+// Load produitsAbonnement with fallback
+let produitsAbonnement;
+try {
+    produitsAbonnement = require('./data/by-date/produitsAbonnement');
+    console.log('ProduitsAbonnement chargés depuis data/by-date/produitsAbonnement.js');
+} catch (e) {
+    try {
+        produitsAbonnement = require('./produitsAbonnement');
+        console.log('ProduitsAbonnement chargés depuis produitsAbonnement.js (fallback)');
+    } catch (e2) {
+        console.error('ERREUR: Impossible de charger produitsAbonnement.js:', e2.message);
+        produitsAbonnement = {}; // Empty fallback to prevent crash
+    }
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
