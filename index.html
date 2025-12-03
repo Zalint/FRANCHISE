@@ -2595,68 +2595,6 @@
         });
     </script>
     
-    <script defer data-relevanceai-share-id="d7b62b/454efacc47da-463b-877a-66e43c7b454a/ebb0f674-400d-4843-b6b9-b9c327246419" src="https://app.relevanceai.com/embed/chat-bubble.js" data-share-styles="starting_message_prompts=Lancer+un+rapport+pour+aujourd%27hui&starting_message_prompts=Analyser+les+ventes+et+les+depenses+pour+BOVIN+du+mois+en+cours+%3F&starting_message_prompts=Analyser+les+ventes+et+les+depenses+pour+OVIN+du+mois+en+cours+%3F&hide_tool_steps=false&hide_file_uploads=false&hide_conversation_list=false&bubble_style=agent&primary_color=%23685FFF&bubble_icon=pd%2Fchat&input_placeholder_text=Type+your+message...&hide_logo=true&hide_description=false" ></script>
-    
-    <!-- Boutons de contrôle du chat -->
-    <style>
-        .chat-control-btn {
-            position: fixed;
-            right: 20px;
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            background: rgba(104, 95, 255, 0.8);
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-size: 10px;
-            font-weight: bold;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-            z-index: 999998;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-            line-height: 1;
-        }
-        .chat-control-btn:hover {
-            background: rgba(104, 95, 255, 1);
-            transform: scale(1.1);
-        }
-        #open-chat-fullscreen {
-            bottom: 110px;
-            font-size: 10px;
-        }
-        #toggle-chat-bubble {
-            bottom: 90px;
-            font-size: 12px;
-        }
-    </style>
-    <button id="open-chat-fullscreen" class="chat-control-btn" title="Ouvrir le chat en plein écran">⤢</button>
-    <button id="toggle-chat-bubble" class="chat-control-btn" title="Cacher la bulle de chat">×</button>
-    <script>
-        // Ouvrir le chat en plein écran
-        document.getElementById('open-chat-fullscreen').addEventListener('click', function() {
-            window.open('chat.html', '_blank');
-        });
-        
-        // Toggle chat bubble visibility
-        let chatBubbleVisible = true;
-        document.getElementById('toggle-chat-bubble').addEventListener('click', function() {
-            const chatElements = document.querySelectorAll('[class*="relevance"], [id*="relevance"], iframe[src*="relevanceai"]');
-            
-            chatBubbleVisible = !chatBubbleVisible;
-            
-            chatElements.forEach(element => {
-                element.style.display = chatBubbleVisible ? '' : 'none';
-            });
-            
-            // Update button icon
-            this.innerHTML = chatBubbleVisible ? '×' : '○';
-            this.title = chatBubbleVisible ? 'Cacher la bulle de chat' : 'Afficher la bulle de chat';
-        });
-    </script>
-    
     <!-- Overlay de chargement -->
     <div id="loading-overlay" class="loading-overlay">
         <div class="spinner-container">
