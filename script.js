@@ -1718,7 +1718,13 @@ document.getElementById('vente-form').addEventListener('submit', async function(
     const clientNom = document.getElementById('client-nom').value;
     const clientNumero = document.getElementById('client-numero').value;
     const clientAdresse = document.getElementById('client-adresse').value;
-    const clientCreance = document.getElementById('client-creance').value === 'true';
+    const clientCreanceElement = document.getElementById('client-creance');
+    const clientCreanceRawValue = clientCreanceElement ? clientCreanceElement.value : 'undefined';
+    const clientCreance = clientCreanceRawValue === 'true';
+    
+    console.log(`[CREANCE DEBUG] Select element exists: ${!!clientCreanceElement}`);
+    console.log(`[CREANCE DEBUG] Raw value from select: "${clientCreanceRawValue}"`);
+    console.log(`[CREANCE DEBUG] Final boolean value: ${clientCreance}`);
     
     const entries = [];
     
@@ -2436,7 +2442,7 @@ function afficherDernieresVentes(ventes) {
         row.insertCell().textContent = vente.nomClient || "";
         row.insertCell().textContent = vente.numeroClient || "";
         row.insertCell().textContent = vente.adresseClient || "";
-        row.insertCell().textContent = (vente.Creance === true || vente.Creance === 'true' || vente.Creance === 'Oui') ? 'Oui' : 'Non';
+        row.insertCell().textContent = (vente.creance === true || vente.creance === 'true' || vente.Creance === true || vente.Creance === 'true' || vente.Creance === 'Oui') ? 'Oui' : 'Non';
 
         const actionsCell = row.insertCell();
         actionsCell.style.textAlign = 'center';
@@ -6169,6 +6175,7 @@ async function calculerReconciliationParPointVente(date, stockMatin, stockSoir, 
     
     // Récupérer les ventes saisies pour la date sélectionnée (Internal fetch)
     let ventesSaisies = {};
+    let creancesParPointVente = {}; // Nouveau: stocker les créances par point de vente
     try {
         // Use dateSelectionnee (which now directly comes from the function parameter)
         const response = await fetch(`/api/ventes-date?date=${dateSelectionnee}`, {
@@ -6183,6 +6190,7 @@ async function calculerReconciliationParPointVente(date, stockMatin, stockSoir, 
             ventesSaisies = data.totaux;
             
             // Organiser les ventes par point de vente pour les détails de débogage
+            // ET calculer les créances par point de vente
             if (data.ventes && Array.isArray(data.ventes)) {
                 const ventesParPointVente = {};
                 data.ventes.forEach(vente => {
@@ -6196,6 +6204,14 @@ async function calculerReconciliationParPointVente(date, stockMatin, stockSoir, 
                         nombre: vente.Nombre,
                         montant: vente.Montant
                     });
+                    
+                    // Calculer les créances par point de vente
+                    if (vente.creance === true || vente.creance === 'true' || vente.Creance === true || vente.Creance === 'true') {
+                        if (!creancesParPointVente[pointVente]) {
+                            creancesParPointVente[pointVente] = 0;
+                        }
+                        creancesParPointVente[pointVente] += parseFloat(vente.Montant || 0);
+                    }
                 });
                 // Stocker les ventes regroupées dans debugInfo s'il existe
                 if (debugInfo) {
@@ -6207,6 +6223,7 @@ async function calculerReconciliationParPointVente(date, stockMatin, stockSoir, 
         console.error('[DEBUG calcReconPV] Error fetching internal sales:', error);
     }
     console.log('[DEBUG calcReconPV] Ventes Saisies (Internal Fetch):', ventesSaisies);
+    console.log('[DEBUG calcReconPV] Créances par Point de Vente:', creancesParPointVente);
     
     // Initialiser les totaux pour chaque point de vente
     POINTS_VENTE_PHYSIQUES.forEach(pointVente => {
@@ -6218,6 +6235,7 @@ async function calculerReconciliationParPointVente(date, stockMatin, stockSoir, 
             transferts: 0,
             ventes: 0,
             ventesSaisies: ventesSaisies[pointVente] || 0, // Use internal fetch result
+            creances: creancesParPointVente[pointVente] || 0, // Total des créances pour ce point de vente
             difference: 0,
             pourcentageEcart: 0,
             cashPayment: 0,
@@ -8094,6 +8112,7 @@ async function chargerReconciliationMensuelle(forceRecalcul = false) {
         // --- Récupérer les éléments des totaux ---
         const totalVentesTheoriquesEl = document.getElementById('total-ventes-theoriques-mois');
         const totalVentesSaisiesEl = document.getElementById('total-ventes-saisies-mois');
+        const totalCreancesEl = document.getElementById('total-creances-mois');
         const totalVersementsEl = document.getElementById('total-versements-mois');
         // --- Récupérer l'élément pour l'estimation ---
         const estimationVersementsEl = document.getElementById('estimation-versements-mois');
@@ -8101,6 +8120,7 @@ async function chargerReconciliationMensuelle(forceRecalcul = false) {
         // --- Réinitialiser les totaux affichés ---
         if (totalVentesTheoriquesEl) totalVentesTheoriquesEl.textContent = formatMonetaire(0);
         if (totalVentesSaisiesEl) totalVentesSaisiesEl.textContent = formatMonetaire(0);
+        if (totalCreancesEl) totalCreancesEl.textContent = formatMonetaire(0);
         if (totalVersementsEl) totalVersementsEl.textContent = formatMonetaire(0);
         // --- Réinitialiser l'estimation ---
         if (estimationVersementsEl) estimationVersementsEl.textContent = formatMonetaire(0);
@@ -8108,6 +8128,7 @@ async function chargerReconciliationMensuelle(forceRecalcul = false) {
         // --- Initialiser les variables de calcul des totaux ---
         let totalVentesTheoriquesMois = 0;
         let totalVentesSaisiesMois = 0;
+        let totalCreancesMois = 0;
         let totalVersementsMois = 0;
         let dernierJourAvecDonnees = 0; // Pour l'estimation
         // --- Fin initialisation totaux ---
@@ -8287,6 +8308,7 @@ async function chargerReconciliationMensuelle(forceRecalcul = false) {
              Object.values(dailyReconciliation).forEach(data => {
                  totalVentesTheoriquesMois += parseFloat(data.ventes) || 0;
                  totalVentesSaisiesMois += parseFloat(data.ventesSaisies) || 0;
+                 totalCreancesMois += parseFloat(data.creances) || 0;
                  totalVersementsMois += parseFloat(data.cashPayment) || 0;
              });
              // --- Fin accumulation totaux ---
@@ -8315,6 +8337,7 @@ async function chargerReconciliationMensuelle(forceRecalcul = false) {
                      { key: 'transferts', format: 'currency' },
                      { key: 'ventes', format: 'currency' }, // Theoretical Sales
                      { key: 'ventesSaisies', format: 'currency' },
+                     { key: 'creances', format: 'currency' }, // Créances
                      { key: 'difference', format: 'currency' }, // Ecart
                      { key: 'cashPayment', format: 'currency' },
                      { key: 'pourcentageEcart', format: 'percentage' }, // Ecart %
@@ -8344,6 +8367,12 @@ async function chargerReconciliationMensuelle(forceRecalcul = false) {
 
                          if ((columnInfo.key === 'difference' || columnInfo.key === 'ecartCash') && currencyValue !== 0) {
                              cell.classList.add(currencyValue < 0 ? 'negative' : 'positive');
+                         }
+                         
+                         // Style pour les créances
+                         if (columnInfo.key === 'creances' && currencyValue > 0) {
+                             cell.style.color = '#dc3545';
+                             cell.style.fontWeight = 'bold';
                          }
                      }
                      row.appendChild(cell);
@@ -8416,6 +8445,7 @@ async function chargerReconciliationMensuelle(forceRecalcul = false) {
             // --- Mettre à jour les totaux affichés si des données existent ---
             if (totalVentesTheoriquesEl) totalVentesTheoriquesEl.textContent = formatMonetaire(totalVentesTheoriquesMois);
             if (totalVentesSaisiesEl) totalVentesSaisiesEl.textContent = formatMonetaire(totalVentesSaisiesMois);
+            if (totalCreancesEl) totalCreancesEl.textContent = formatMonetaire(totalCreancesMois);
             if (totalVersementsEl) totalVersementsEl.textContent = formatMonetaire(totalVersementsMois);
             // Estimation déjà mise à jour ci-dessus
         }
@@ -9217,6 +9247,20 @@ async function exportReconciliationMoisToExcel() {
                 ]);
 
                 const ventesSaisies = ventesData.success && ventesData.totaux ? ventesData.totaux : {};
+                
+                // Calculer les créances par point de vente
+                const creancesParPV = {};
+                if (ventesData.success && ventesData.ventes && Array.isArray(ventesData.ventes)) {
+                    ventesData.ventes.forEach(vente => {
+                        const pv = vente['Point de Vente'];
+                        if (vente.creance === true || vente.creance === 'true' || vente.Creance === true || vente.Creance === 'true') {
+                            if (!creancesParPV[pv]) {
+                                creancesParPV[pv] = 0;
+                            }
+                            creancesParPV[pv] += parseFloat(vente.Montant || 0);
+                        }
+                    });
+                }
 
                 // DEBUG: Log the data received
                 console.log(`=== DEBUG pour ${dateStr} ===`);
@@ -9312,6 +9356,7 @@ async function exportReconciliationMoisToExcel() {
                         transferts: transfertsValue,
                         ventes: ventesTheoriques,
                         ventesSaisies: ventesSaisiesValue,
+                        creances: creancesParPV[pointVente] || 0,
                         difference: difference,
                         cashPayment: cashPayment,
                         pourcentageEcart: pourcentageEcart,
@@ -9336,6 +9381,7 @@ async function exportReconciliationMoisToExcel() {
                         'Transferts': data.transferts,
                         'Ventes Théoriques': data.ventes,
                         'Ventes Saisies': data.ventesSaisies,
+                        'Créances': data.creances || 0,
                         'Écart': data.difference,
                         'Montant Total Cash': data.cashPayment,
                         'Écart %': data.pourcentageEcart,
@@ -9378,7 +9424,8 @@ async function exportReconciliationMoisToExcel() {
                 if (worksheet[cell_ref] && typeof worksheet[cell_ref].v === 'number') {
                     if (header.includes('Stock') || header.includes('Transfert') || 
                         header.includes('Vente') || header.includes('Montant') || 
-                        header.includes('Cash') || header.includes('Ecart')) {
+                        header.includes('Cash') || header.includes('Ecart') || 
+                        header.includes('Créances')) {
                         
                         if (header.includes('%') || header.includes('Écart %')) {
                             worksheet[cell_ref].t = 'n';

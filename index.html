@@ -1853,7 +1853,7 @@
                             <div class="card-body">
                                 <!-- Totaux mensuels -->
                                 <div class="row mb-4">
-                                    <div class="col-md-3">
+                                    <div class="col">
                                         <div class="card text-white bg-primary h-100">
                                             <div class="card-body">
                                                 <h5 class="card-title">Total Ventes Théoriques (Mois)</h5>
@@ -1861,7 +1861,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col">
                                         <div class="card text-white bg-success h-100">
                                             <div class="card-body">
                                                 <h5 class="card-title">Total Ventes Saisies (Mois)</h5>
@@ -1869,7 +1869,15 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-3 cash-module-card">
+                                    <div class="col">
+                                        <div class="card text-white bg-danger h-100">
+                                            <div class="card-body">
+                                                <h5 class="card-title">Total Créances (Mois)</h5>
+                                                <p class="card-text fs-4 fw-bold" id="total-creances-mois">0 FCFA</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col cash-module-card">
                                         <div class="card text-white bg-info h-100">
                                             <div class="card-body">
                                                 <h5 class="card-title">Total Versements (Cash) (Mois)</h5>
@@ -1877,7 +1885,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-3 cash-module-card">
+                                    <div class="col cash-module-card">
                                          <div class="card text-dark bg-warning h-100">
                                              <div class="card-body">
                                                  <h5 class="card-title">Estimation Versements (Mois)</h5>
@@ -1946,6 +1954,7 @@
                                                 <th class="text-end">Transferts</th>
                                                 <th class="text-end">Ventes Théoriques</th>
                                                 <th class="text-end">Ventes Saisies</th>
+                                                <th class="text-end" style="color: #dc3545;">Créances</th>
                                                 <th class="text-end">Écart</th>
                                                 <th class="text-end cash-module-col">Montant Total Cash</th>
                                                 <th class="text-end">Écart %</th>

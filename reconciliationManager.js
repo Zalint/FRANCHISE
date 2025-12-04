@@ -19,6 +19,7 @@ const ReconciliationManager = (function() {
         { id: 'transferts', label: 'Transferts', isNumeric: true },
         { id: 'ventesTheoriques', label: 'Ventes Théoriques', isNumeric: true },
         { id: 'ventesSaisies', label: 'Ventes Saisies', isNumeric: true },
+        { id: 'creances', label: 'Créances', isNumeric: true },
         { id: 'ecart', label: 'Écart', isNumeric: true },
         { id: 'cashPayment', label: 'Montant Total Cash', isNumeric: true },
         { id: 'ecartPourcentage', label: 'Écart %', isNumeric: true },
@@ -456,6 +457,17 @@ const ReconciliationManager = (function() {
                     cell.textContent = formatMonetaire(data.ventesSaisies);
                     cell.classList.add('currency');
                     totals.ventesSaisies += data.ventesSaisies;
+                    break;
+                    
+                case 'creances':
+                    const creancesValue = data.creances || 0;
+                    cell.textContent = formatMonetaire(creancesValue);
+                    cell.classList.add('currency');
+                    if (creancesValue > 0) {
+                        cell.style.color = '#dc3545'; // Rouge pour indiquer des créances
+                        cell.style.fontWeight = 'bold';
+                    }
+                    totals.creances = (totals.creances || 0) + creancesValue;
                     break;
                     
                 case 'ecart':

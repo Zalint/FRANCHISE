@@ -1197,6 +1197,19 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
             const prixUnit = parseFloat(parseFloat(entry.prixUnit).toFixed(2)) || 0;
             const montant = parseFloat(parseFloat(entry.total).toFixed(2)) || 0;
             
+            // DEBUG: Log creance value
+            console.log(`[VENTE DEBUG] entry.creance = "${entry.creance}" (type: ${typeof entry.creance})`);
+            
+            // Convertir explicitement en boolean (gérer les strings "true"/"false")
+            let creanceValue = false;
+            if (typeof entry.creance === 'boolean') {
+                creanceValue = entry.creance;
+            } else if (typeof entry.creance === 'string') {
+                creanceValue = entry.creance.toLowerCase() === 'true';
+            }
+            
+            console.log(`[VENTE DEBUG] creanceValue final = ${creanceValue}`);
+            
             const venteData = {
                 mois: entry.mois,
                 date: dateStandardisee,
@@ -1211,7 +1224,7 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                 nomClient: entry.nomClient || null,
                 numeroClient: entry.numeroClient || null,
                 adresseClient: entry.adresseClient || null,
-                creance: entry.creance || false
+                creance: creanceValue
             };
             
             // Ajouter les données d'abonnement si présentes
