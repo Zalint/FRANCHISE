@@ -13,112 +13,78 @@ const session = require('express-session');
 const axios = require('axios');
 const users = require('./users');
 const PaymentLink = require('./db/models/PaymentLink');
-const pointsVentePaymentRef = require('./points-vente-payment-ref');
-// Charger les points de vente avec fallback
-let pointsVente;
-try {
-    // Essayer d'abord le nouveau chemin
-    pointsVente = require('./data/by-date/points-vente');
-    console.log('Points de vente chargés depuis data/by-date/points-vente.js');
-} catch (error) {
+
+// =====================================================
+// CONFIGURATION DEPUIS LA BASE DE DONNÉES
+// =====================================================
+const configService = require('./db/config-service');
+
+// Variables globales pour la configuration (chargées depuis la BDD)
+let pointsVente = {};
+let produits = {};
+let produitsInventaire = {};
+let produitsAbonnement = {};
+
+// Fonction pour charger la configuration depuis la BDD
+async function loadConfigFromDB() {
     try {
-        // Fallback vers l'ancien chemin
-        pointsVente = require('./points-vente');
-        console.log('Points de vente chargés depuis points-vente.js (ancien emplacement)');
-    } catch (fallbackError) {
-        console.error('Erreur lors du chargement des points de vente:', fallbackError);
+        console.log('📦 Chargement de la configuration depuis la base de données...');
+        
+        // Charger les points de vente
+        pointsVente = await configService.getPointsVenteAsLegacy();
+        console.log(`  ✅ Points de vente: ${Object.keys(pointsVente).length} chargés`);
+        
+        // Charger les produits vente
+        produits = await configService.getProduitsAsLegacy('vente');
+        const nbProduitsVente = Object.values(produits).filter(v => typeof v === 'object' && !Array.isArray(v)).reduce((acc, cat) => acc + Object.keys(cat).length, 0);
+        console.log(`  ✅ Produits vente: ${nbProduitsVente} chargés`);
+        
+        // Charger les produits inventaire
+        produitsInventaire = await configService.getProduitsAsLegacy('inventaire');
+        const nbProduitsInv = Object.keys(produitsInventaire).filter(k => typeof produitsInventaire[k] === 'object' && produitsInventaire[k].prixDefault !== undefined).length;
+        console.log(`  ✅ Produits inventaire: ${nbProduitsInv} chargés`);
+        
+        // Charger les produits abonnement
+        produitsAbonnement = await configService.getProduitsAsLegacy('abonnement');
+        const nbProduitsAbo = Object.values(produitsAbonnement).filter(v => typeof v === 'object' && !Array.isArray(v)).reduce((acc, cat) => acc + Object.keys(cat).length, 0);
+        console.log(`  ✅ Produits abonnement: ${nbProduitsAbo} chargés`);
+        
+        // Mettre à jour les variables globales
+        global.produits = produits;
+        global.produitsInventaire = produitsInventaire;
+        global.produitsAbonnement = produitsAbonnement;
+        global.pointsVente = pointsVente;
+        
+        console.log('✅ Configuration chargée depuis la base de données');
+        return true;
+    } catch (error) {
+        console.error('❌ Erreur lors du chargement de la configuration:', error.message);
         // Configuration par défaut en cas d'erreur
         pointsVente = {
-            "Mbao": { active: true },
-            "O.Foire": { active: true },
-            "Keur Massar": { active: true },
-            "Linguere": { active: true },
-            "Dahra": { active: true },
-            "Abattage": { active: true },
-            "Sacre Coeur": { active: true }
+            "Keur Bali": { active: true },
+            "Abattage": { active: true }
         };
-        console.log('Utilisation de la configuration par défaut des points de vente');
+        produits = {};
+        produitsInventaire = {};
+        produitsAbonnement = {};
+        return false;
     }
 }
-// Function to reload products configuration
-function reloadProduitsConfig() {
+
+// Fonction pour recharger la configuration (remplace reloadProduitsConfig)
+async function reloadProduitsConfig() {
     try {
-        const produitsPath = path.join(__dirname, 'data', 'by-date', 'produits');
-        const produitsInventairePath = path.join(__dirname, 'data', 'by-date', 'produitsInventaire');
+        // Invalider le cache du service
+        configService.invalidateCache();
         
-        // Clear the require cache for products files
-        delete require.cache[require.resolve(produitsPath)];
-        delete require.cache[require.resolve(produitsInventairePath)];
+        // Recharger depuis la BDD
+        await loadConfigFromDB();
         
-        // Clear cache for points de vente (both locations)
-        try {
-            delete require.cache[require.resolve(path.join(__dirname, 'data', 'by-date', 'points-vente'))];
-        } catch (e) {
-            // Ignore if file doesn't exist
-        }
-        try {
-            delete require.cache[require.resolve(path.join(__dirname, 'points-vente'))];
-        } catch (e) {
-            // Ignore if file doesn't exist
-        }
-        
-        // Reload the modules
-        const newProduits = require(produitsPath);
-        const newProduitsInventaire = require(produitsInventairePath);
-        
-        // Reload points de vente with fallback
-        let newPointsVente;
-        try {
-            newPointsVente = require('./data/by-date/points-vente');
-        } catch (error) {
-            try {
-                newPointsVente = require('./points-vente');
-            } catch (fallbackError) {
-                console.warn('Impossible de recharger les points de vente, utilisation de la version actuelle');
-                newPointsVente = pointsVente;
-            }
-        }
-        
-        // Update the global variables
-        global.produits = newProduits;
-        global.produitsInventaire = newProduitsInventaire;
-        global.pointsVente = newPointsVente;
-        
-        console.log('Products and points de vente configuration reloaded successfully');
+        console.log('Configuration rechargée avec succès depuis la BDD');
         return { success: true, message: 'Configuration rechargée avec succès' };
     } catch (error) {
         console.error('Error reloading configuration:', error);
         return { success: false, message: 'Erreur lors du rechargement de la configuration' };
-    }
-}
-
-// Load produits with fallback
-let produits;
-try {
-    produits = require('./data/by-date/produits');
-    console.log('Produits chargés depuis data/by-date/produits.js');
-} catch (e) {
-    try {
-        produits = require('./produits');
-        console.log('Produits chargés depuis produits.js (fallback)');
-    } catch (e2) {
-        console.error('ERREUR: Impossible de charger produits.js:', e2.message);
-        produits = {}; // Empty fallback to prevent crash
-    }
-}
-
-// Load produitsInventaire with fallback
-let produitsInventaire;
-try {
-    produitsInventaire = require('./data/by-date/produitsInventaire');
-    console.log('ProduitsInventaire chargés depuis data/by-date/produitsInventaire.js');
-} catch (e) {
-    try {
-        produitsInventaire = require('./produitsInventaire');
-        console.log('ProduitsInventaire chargés depuis produitsInventaire.js (fallback)');
-    } catch (e2) {
-        console.error('ERREUR: Impossible de charger produitsInventaire.js:', e2.message);
-        produitsInventaire = {}; // Empty fallback to prevent crash
     }
 }
 const bcrypt = require('bcrypt');
@@ -133,22 +99,6 @@ const { spawn } = require('child_process');
 // Import the schema update scripts
 const { updateSchema } = require('./db/update-schema');
 const { updateVenteSchema } = require('./db/update-vente-schema');
-// Note: updateVenteSchemaAbonnement is handled by SQL queries below (lines 42-77)
-// const { updateVenteSchemaAbonnement } = require('./db/update-vente-schema-abonnement');
-// Load produitsAbonnement with fallback
-let produitsAbonnement;
-try {
-    produitsAbonnement = require('./data/by-date/produitsAbonnement');
-    console.log('ProduitsAbonnement chargés depuis data/by-date/produitsAbonnement.js');
-} catch (e) {
-    try {
-        produitsAbonnement = require('./produitsAbonnement');
-        console.log('ProduitsAbonnement chargés depuis produitsAbonnement.js (fallback)');
-    } catch (e2) {
-        console.error('ERREUR: Impossible de charger produitsAbonnement.js:', e2.message);
-        produitsAbonnement = {}; // Empty fallback to prevent crash
-    }
-}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -285,10 +235,11 @@ app.use(session({
 }));
 
 
-app.get('/api/points-vente', (req, res) => {
+app.get('/api/points-vente', async (req, res) => {
     try {
-        // The `pointsVente` object is already required at the top of server.js
-        const activePointsVente = Object.entries(pointsVente)
+        // Récupérer les points de vente depuis la base de données
+        const pointsVenteData = await configService.getPointsVenteAsLegacy();
+        const activePointsVente = Object.entries(pointsVenteData)
             .filter(([_, properties]) => properties.active)
             .map(([name, _]) => name);
         res.json(activePointsVente);
@@ -302,21 +253,52 @@ app.get('/api/points-vente', (req, res) => {
 
 
 
-// Route pour obtenir tous les points de vente (physiques + virtuels) pour les transferts
-app.get('/api/points-vente/transferts', (req, res) => {
+// Route pour obtenir les produits depuis la base de données
+app.get('/api/produits', async (req, res) => {
     try {
-        // The `pointsVente` object is already required at the top of server.js
-        const activePointsVente = Object.entries(pointsVente)
+        const { type } = req.query; // 'vente', 'abonnement', ou 'inventaire'
+        const typeCatalogue = type || 'vente';
+        const produitsData = await configService.getProduitsAsLegacy(typeCatalogue);
+        res.json(produitsData);
+    } catch (error) {
+        console.error("Erreur lors de la lecture des produits :", error);
+        res.status(500).json({ success: false, message: "Erreur serveur" });
+    }
+});
+
+// Route pour obtenir les produits inventaire
+app.get('/api/produits-inventaire', async (req, res) => {
+    try {
+        const produitsData = await configService.getProduitsAsLegacy('inventaire');
+        res.json(produitsData);
+    } catch (error) {
+        console.error("Erreur lors de la lecture des produits inventaire :", error);
+        res.status(500).json({ success: false, message: "Erreur serveur" });
+    }
+});
+
+// Route pour obtenir les produits abonnement
+app.get('/api/produits-abonnement', async (req, res) => {
+    try {
+        const produitsData = await configService.getProduitsAsLegacy('abonnement');
+        res.json(produitsData);
+    } catch (error) {
+        console.error("Erreur lors de la lecture des produits abonnement :", error);
+        res.status(500).json({ success: false, message: "Erreur serveur" });
+    }
+});
+
+// Route pour obtenir tous les points de vente (physiques + virtuels) pour les transferts
+app.get('/api/points-vente/transferts', async (req, res) => {
+    try {
+        // Récupérer les points de vente depuis la base de données
+        const pointsVenteData = await configService.getPointsVenteAsLegacy();
+        const activePointsVente = Object.entries(pointsVenteData)
             .filter(([_, properties]) => properties.active)
             .map(([name, _]) => name);
         
-        // Ajouter les points de vente virtuels pour les transferts
-        const tousPointsVente = [
-            ...activePointsVente,
-            'Abattage', 'Depot', 'Gros Client'
-        ];
-        
-        res.json(tousPointsVente);
+        // Retourner seulement les points de vente définis dans la BDD
+        res.json(activePointsVente);
     } catch (error) {
         console.error("Erreur lors de la lecture des points de vente pour transferts :", error);
         res.status(500).json({ success: false, message: "Erreur serveur" });
@@ -361,6 +343,7 @@ const clientConfig = require('./config/client-config');
 // Importer les routes
 const paymentsGeneratedRouter = require('./routes/payments-generated');
 const modulesRouter = require('./routes/modules');
+const configAdminRouter = require('./routes/config-admin');
 
 // Route pour obtenir la liste des points de vente (admin seulement)
 app.get('/api/admin/points-vente', checkAuth, checkAdmin, (req, res) => {
@@ -374,6 +357,9 @@ app.get('/api/admin/points-vente', checkAuth, checkAdmin, (req, res) => {
 
 // Routes des paiements générés
 app.use('/api/payments/generated', paymentsGeneratedRouter);
+
+// Routes d'administration de la configuration (users, produits, points de vente)
+app.use('/api/admin/config', configAdminRouter);
 
 // =================== ROUTES CONFIGURATION CLIENT ===================
 // GET /api/client-config - Obtenir la configuration du client (public)
@@ -425,55 +411,44 @@ console.log('✅ Routes de gestion des modules chargées');
 app.post('/api/admin/points-vente', checkAuth, checkAdmin, async (req, res) => {
     try {
         const { nom, action } = req.body;
+        const { PointVente } = require('./db/models');
         
         if (action === 'add') {
-            // Ajouter un nouveau point de vente
+            // Ajouter un nouveau point de vente dans la BDD
             if (!nom || nom.trim() === '') {
                 return res.status(400).json({ success: false, message: 'Le nom du point de vente est requis' });
             }
             
-            if (pointsVente[nom]) {
+            const existing = await PointVente.findOne({ where: { nom: nom.trim() } });
+            if (existing) {
                 return res.status(400).json({ success: false, message: 'Ce point de vente existe déjà' });
             }
             
-            pointsVente[nom] = { active: true };
+            await PointVente.create({ nom: nom.trim(), active: true });
             
         } else if (action === 'toggle') {
             // Activer/désactiver un point de vente
-            if (!nom || !pointsVente[nom]) {
+            const pv = await PointVente.findOne({ where: { nom } });
+            if (!pv) {
                 return res.status(400).json({ success: false, message: 'Point de vente non trouvé' });
             }
             
-            pointsVente[nom].active = !pointsVente[nom].active;
+            await pv.update({ active: !pv.active });
             
         } else if (action === 'delete') {
             // Supprimer un point de vente
-            if (!nom || !pointsVente[nom]) {
+            const pv = await PointVente.findOne({ where: { nom } });
+            if (!pv) {
                 return res.status(400).json({ success: false, message: 'Point de vente non trouvé' });
             }
             
-            delete pointsVente[nom];
+            await pv.destroy();
         }
         
-        // Sauvegarder dans le fichier (nouveau emplacement)
-        const fs = require('fs');
-        const path = require('path');
-        const pointsVentePath = path.join(__dirname, 'data/by-date/points-vente.js');
-        
-        const content = `const pointsVente = ${JSON.stringify(pointsVente, null, 4)};
-
-module.exports = pointsVente;`;
-        
-        try {
-            fs.writeFileSync(pointsVentePath, content, 'utf8');
-            console.log('Points de vente sauvegardés dans data/by-date/points-vente.js');
-        } catch (error) {
-            console.error('Erreur lors de la sauvegarde dans data/by-date, tentative dans l\'ancien emplacement:', error);
-            // Fallback vers l'ancien emplacement
-            const oldPath = path.join(__dirname, 'points-vente.js');
-            fs.writeFileSync(oldPath, content, 'utf8');
-            console.log('Points de vente sauvegardés dans points-vente.js (ancien emplacement)');
-        }
+        // Invalider le cache et mettre à jour les variables globales
+        configService.invalidateCache();
+        pointsVente = await configService.getPointsVenteAsLegacy();
+        global.pointsVente = pointsVente;
         
         res.json({ success: true, message: 'Point de vente mis à jour avec succès' });
         
@@ -514,24 +489,20 @@ const checkStrictAdminOnly = (req, res, next) => {
     }
 };
 
+// Mapping des codes de référence de paiement vers les noms de points de vente
+const PAYMENT_REF_MAPPING = {
+    'V_TB': 'Touba',
+    'V_DHR': 'Dahra',
+    'V_LGR': 'Linguere',
+    'V_MBA': 'Mbao',
+    'V_OSF': 'O.Foire',
+    'V_SAC': 'Sacre Coeur',
+    'V_ABATS': 'Abattage'
+};
+
 // Fonction utilitaire pour charger le mapping des références de paiement
 const getPaymentRefMapping = () => {
-    try {
-        // Invalider le cache pour avoir toujours la version la plus récente
-        delete require.cache[require.resolve('./data/by-date/paymentRefMapping.js')];
-        return require('./data/by-date/paymentRefMapping.js');
-    } catch (error) {
-        // Fallback to root folder
-        try {
-            delete require.cache[require.resolve('./paymentRefMapping.js')];
-            console.log('PaymentRefMapping chargé depuis paymentRefMapping.js (fallback)');
-            return require('./paymentRefMapping.js');
-        } catch (e2) {
-            console.error('Erreur lors du chargement du mapping des références:', e2);
-            // Fallback vers le fichier centralisé
-            return pointsVentePaymentRef;
-        }
-    }
+    return PAYMENT_REF_MAPPING;
 };
 
 // Middleware d'authentification par API key pour services externes comme Relevance AI
@@ -584,9 +555,8 @@ const STOCK_SOIR_PATH = path.join(__dirname, 'data', 'stock-soir.json');
 const TRANSFERTS_PATH = path.join(__dirname, 'data', 'transferts.json');
 
 // Constantes pour le mappage des références de paiement aux points de vente
-// Utilise le fichier centralisé et ajoute les références supplémentaires
 const PAYMENT_REF_TO_PDV = {
-  ...pointsVentePaymentRef,
+  ...PAYMENT_REF_MAPPING,
   'V_ALS': 'Aliou Sow',
   'V_KM': 'Keur Massar'
 };
@@ -788,25 +758,7 @@ app.get('/api/check-health', (req, res) => {
     res.json({ success: true, message: 'Application en cours d\'exécution' });
 });
 
-// Routes pour l'administration
-app.post('/api/admin/points-vente', checkAuth, checkAdmin, (req, res) => {
-    const { nom, action } = req.body;
-    
-    if (action === 'add') {
-        if (pointsVente[nom]) {
-            return res.status(400).json({ success: false, message: 'Ce point de vente existe déjà' });
-        }
-        pointsVente[nom] = { active: true };
-    } else if (action === 'toggle') {
-        if (!pointsVente[nom]) {
-            return res.status(400).json({ success: false, message: 'Point de vente non trouvé' });
-        }
-        pointsVente[nom].active = !pointsVente[nom].active;
-    }
-    
-    console.log('Points de vente mis à jour:', pointsVente); // Ajout d'un log pour le débogage
-    res.json({ success: true, pointsVente });
-});
+// Routes pour l'administration (Note: /api/admin/points-vente est défini plus haut)
 
 app.post('/api/admin/prix', checkAuth, checkSuperAdmin, (req, res) => {
     const { categorie, produit, nouveauPrix } = req.body;
@@ -859,185 +811,175 @@ app.get('/api/admin/produits', checkAuth, checkAdmin, (req, res) => {
     res.json({ success: true, produits });
 });
 
-// ==== ROUTES DE CONFIGURATION DES PRODUITS (ADMIN UNIQUEMENT) ====
+// ==== ROUTES DE CONFIGURATION DES PRODUITS (ADMIN UNIQUEMENT) - via BDD ====
 
-// Route pour lire la configuration des produits généraux
-app.get('/api/admin/config/produits', checkAuth, checkAdmin, (req, res) => {
+// Fonction utilitaire pour filtrer les fonctions d'un objet (pour JSON)
+function filterFunctions(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const result = {};
+    for (const key of Object.keys(obj)) {
+        if (typeof obj[key] !== 'function') {
+            if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                result[key] = filterFunctions(obj[key]);
+            } else {
+                result[key] = obj[key];
+            }
+        }
+    }
+    return result;
+}
+
+// Route pour lire la configuration des produits (depuis la BDD)
+app.get('/api/admin/config/produits', checkAuth, checkAdmin, async (req, res) => {
     try {
-        const produitsPath = path.join(__dirname, 'data/by-date/produits.js');
-        const produitsContent = fs.readFileSync(produitsPath, 'utf8');
+        console.log('📋 GET /api/admin/config/produits - Chargement depuis BDD...');
         
-        // Extraire l'objet produits du fichier JavaScript
-        const produitsMatch = produitsContent.match(/const produits = ({[\s\S]*?});/);
-        if (!produitsMatch) {
-            return res.status(500).json({ success: false, message: 'Format de fichier produits invalide' });
+        // Charger depuis la BDD
+        const { Produit, Category, PrixPointVente, PointVente } = require('./db/models');
+        
+        const dbProduits = await Produit.findAll({
+            where: { type_catalogue: 'vente' },
+            include: [
+                { model: Category, as: 'categorie' },
+                { 
+                    model: PrixPointVente, 
+                    as: 'prixParPointVente',
+                    include: [{ model: PointVente, as: 'pointVente' }]
+                }
+            ]
+        });
+        
+        console.log('📋 Produits trouvés dans BDD:', dbProduits.length);
+        
+        // Construire l'objet de réponse
+        const produitsResult = {};
+        
+        for (const produit of dbProduits) {
+            const categorieName = produit.categorie ? produit.categorie.nom : 'Autres';
+            
+            if (!produitsResult[categorieName]) {
+                produitsResult[categorieName] = {};
+            }
+            
+            const config = {
+                default: parseFloat(produit.prix_defaut) || 0,
+                alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : []
+            };
+            
+            // Ajouter les prix par point de vente
+            if (produit.prixParPointVente) {
+                for (const prix of produit.prixParPointVente) {
+                    if (prix.pointVente) {
+                        config[prix.pointVente.nom] = parseFloat(prix.prix);
+                    }
+                }
+            }
+            
+            produitsResult[categorieName][produit.nom] = config;
         }
         
-        // Évaluer l'objet JavaScript de manière sécurisée
-        const produitsObj = eval('(' + produitsMatch[1] + ')');
-        
-        res.json({ success: true, produits: produitsObj });
+        console.log('📋 Catégories:', Object.keys(produitsResult));
+        res.json({ success: true, produits: produitsResult });
     } catch (error) {
-        console.error('Erreur lors de la lecture des produits:', error);
-        res.status(500).json({ success: false, message: 'Erreur lors de la lecture de la configuration des produits' });
+        console.error('❌ Erreur lors de la lecture des produits:', error);
+        res.status(500).json({ success: false, message: error.message, produits: {} });
     }
 });
 
-// Route pour sauvegarder la configuration des produits généraux
-app.post('/api/admin/config/produits', checkAuth, checkAdmin, (req, res) => {
+// Route pour lire la configuration des produits d'inventaire (depuis la BDD)
+app.get('/api/admin/config/produits-inventaire', checkAuth, checkAdmin, async (req, res) => {
     try {
-        const { produits: nouveauxProduits } = req.body;
+        console.log('📋 GET /api/admin/config/produits-inventaire - Chargement depuis BDD...');
         
-        if (!nouveauxProduits || typeof nouveauxProduits !== 'object') {
-            return res.status(400).json({ success: false, message: 'Configuration de produits invalide' });
+        const { Produit, PrixPointVente, PointVente } = require('./db/models');
+        
+        const dbProduits = await Produit.findAll({
+            where: { type_catalogue: 'inventaire' },
+            include: [{ 
+                model: PrixPointVente, 
+                as: 'prixParPointVente',
+                include: [{ model: PointVente, as: 'pointVente' }]
+            }]
+        });
+        
+        console.log('📋 Produits inventaire trouvés:', dbProduits.length);
+        
+        const inventaireResult = {};
+        
+        for (const produit of dbProduits) {
+            const config = {
+                prixDefault: parseFloat(produit.prix_defaut) || 0,
+                alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : []
+            };
+            
+            if (produit.prixParPointVente) {
+                for (const prix of produit.prixParPointVente) {
+                    if (prix.pointVente) {
+                        config[prix.pointVente.nom] = parseFloat(prix.prix);
+                    }
+                }
+            }
+            
+            inventaireResult[produit.nom] = config;
         }
         
-        const produitsPath = path.join(__dirname, 'data/by-date/produits.js');
-        
-        // Créer une sauvegarde
-        const backupPath = `${produitsPath}.backup.${Date.now()}`;
-        fs.copyFileSync(produitsPath, backupPath);
-        
-        // Lire le contenu actuel pour préserver les fonctions utilitaires
-        const produitsContent = fs.readFileSync(produitsPath, 'utf8');
-        const functionsMatch = produitsContent.match(/(\/\/ Fonctions utilitaires[\s\S]*)/);
-        const functionsContent = functionsMatch ? functionsMatch[1] : '';
-        
-        // Générer le nouveau contenu
-        const newContent = `const produits = ${JSON.stringify(nouveauxProduits, null, 4)};
-
-${functionsContent}`;
-        
-        // Écrire le nouveau fichier
-        fs.writeFileSync(produitsPath, newContent, 'utf8');
-        
-        // Recharger le module dans le cache Node.js
-        delete require.cache[require.resolve('./data/by-date/produits')];
-        
-        res.json({ success: true, message: 'Configuration des produits sauvegardée avec succès' });
-    } catch (error) {
-        console.error('Erreur lors de la sauvegarde des produits:', error);
-        res.status(500).json({ success: false, message: 'Erreur lors de la sauvegarde de la configuration des produits' });
-    }
-});
-
-// Route pour lire la configuration des produits d'inventaire
-app.get('/api/admin/config/produits-inventaire', checkAuth, checkAdmin, (req, res) => {
-    try {
-        const inventairePath = path.join(__dirname, 'data/by-date/produitsInventaire.js');
-        const inventaireContent = fs.readFileSync(inventairePath, 'utf8');
-        
-        // Extraire l'objet produitsInventaire du fichier JavaScript
-        const inventaireMatch = inventaireContent.match(/const produitsInventaire = ({[\s\S]*?});/);
-        if (!inventaireMatch) {
-            return res.status(500).json({ success: false, message: 'Format de fichier produitsInventaire invalide' });
-        }
-        
-        // Évaluer l'objet JavaScript de manière sécurisée
-        const inventaireObj = eval('(' + inventaireMatch[1] + ')');
-        
-        res.json({ success: true, produitsInventaire: inventaireObj });
+        res.json({ success: true, produitsInventaire: inventaireResult });
     } catch (error) {
         console.error('Erreur lors de la lecture des produits d\'inventaire:', error);
-        res.status(500).json({ success: false, message: 'Erreur lors de la lecture de la configuration des produits d\'inventaire' });
+        res.status(500).json({ success: false, message: error.message, produitsInventaire: {} });
     }
 });
 
-// Route pour sauvegarder la configuration des produits d'inventaire
-app.post('/api/admin/config/produits-inventaire', checkAuth, checkAdmin, (req, res) => {
+// Route pour lire la configuration des produits d'abonnement (depuis la BDD)
+app.get('/api/admin/config/produits-abonnement', checkAuth, checkAdmin, async (req, res) => {
     try {
-        const { produitsInventaire: nouveauxProduitsInventaire } = req.body;
+        console.log('📋 GET /api/admin/config/produits-abonnement - Chargement depuis BDD...');
         
-        if (!nouveauxProduitsInventaire || typeof nouveauxProduitsInventaire !== 'object') {
-            return res.status(400).json({ success: false, message: 'Configuration de produits d\'inventaire invalide' });
+        const { Produit, Category, PrixPointVente, PointVente } = require('./db/models');
+        
+        const dbProduits = await Produit.findAll({
+            where: { type_catalogue: 'abonnement' },
+            include: [
+                { model: Category, as: 'categorie' },
+                { 
+                    model: PrixPointVente, 
+                    as: 'prixParPointVente',
+                    include: [{ model: PointVente, as: 'pointVente' }]
+                }
+            ]
+        });
+        
+        console.log('📋 Produits abonnement trouvés:', dbProduits.length);
+        
+        const abonnementResult = {};
+        
+        for (const produit of dbProduits) {
+            const categorieName = produit.categorie ? produit.categorie.nom : 'Autres';
+            
+            if (!abonnementResult[categorieName]) {
+                abonnementResult[categorieName] = {};
+            }
+            
+            const config = {
+                default: parseFloat(produit.prix_defaut) || 0,
+                alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : []
+            };
+            
+            if (produit.prixParPointVente) {
+                for (const prix of produit.prixParPointVente) {
+                    if (prix.pointVente) {
+                        config[prix.pointVente.nom] = parseFloat(prix.prix);
+                    }
+                }
+            }
+            
+            abonnementResult[categorieName][produit.nom] = config;
         }
         
-        const inventairePath = path.join(__dirname, 'data/by-date/produitsInventaire.js');
-        
-        // Créer une sauvegarde
-        const backupPath = `${inventairePath}.backup.${Date.now()}`;
-        fs.copyFileSync(inventairePath, backupPath);
-        
-        // Lire le contenu actuel pour préserver les fonctions utilitaires
-        const inventaireContent = fs.readFileSync(inventairePath, 'utf8');
-        const functionsMatch = inventaireContent.match(/(\/\/ Fonctions utilitaires[\s\S]*)/);
-        const functionsContent = functionsMatch ? functionsMatch[1] : '';
-        
-        // Générer le nouveau contenu
-        const newContent = `const produitsInventaire = ${JSON.stringify(nouveauxProduitsInventaire, null, 4)};
-
-${functionsContent}`;
-        
-        // Écrire le nouveau fichier
-        fs.writeFileSync(inventairePath, newContent, 'utf8');
-        
-        // Recharger le module dans le cache Node.js
-        delete require.cache[require.resolve('./data/by-date/produitsInventaire')];
-        
-        res.json({ success: true, message: 'Configuration des produits d\'inventaire sauvegardée avec succès' });
-    } catch (error) {
-        console.error('Erreur lors de la sauvegarde des produits d\'inventaire:', error);
-        res.status(500).json({ success: false, message: 'Erreur lors de la sauvegarde de la configuration des produits d\'inventaire' });
-    }
-});
-
-// Route pour lire la configuration des produits d'abonnement
-app.get('/api/admin/config/produits-abonnement', checkAuth, checkAdmin, (req, res) => {
-    try {
-        const abonnementPath = path.join(__dirname, 'data/by-date/produitsAbonnement.js');
-        const abonnementContent = fs.readFileSync(abonnementPath, 'utf8');
-        
-        // Extraire l'objet produitsAbonnement du fichier JavaScript
-        const abonnementMatch = abonnementContent.match(/const produitsAbonnement = ({[\s\S]*?});/);
-        if (!abonnementMatch) {
-            return res.status(500).json({ success: false, message: 'Format de fichier produitsAbonnement invalide' });
-        }
-        
-        // Évaluer l'objet JavaScript de manière sécurisée
-        const abonnementObj = eval('(' + abonnementMatch[1] + ')');
-        
-        res.json({ success: true, produitsAbonnement: abonnementObj });
+        res.json({ success: true, produitsAbonnement: abonnementResult });
     } catch (error) {
         console.error('Erreur lors de la lecture des produits d\'abonnement:', error);
-        res.status(500).json({ success: false, message: 'Erreur lors de la lecture de la configuration des produits d\'abonnement' });
-    }
-});
-
-// Route pour sauvegarder la configuration des produits d'abonnement
-app.post('/api/admin/config/produits-abonnement', checkAuth, checkAdmin, (req, res) => {
-    try {
-        const { produitsAbonnement: nouveauxProduitsAbonnement } = req.body;
-        
-        if (!nouveauxProduitsAbonnement || typeof nouveauxProduitsAbonnement !== 'object') {
-            return res.status(400).json({ success: false, message: 'Configuration de produits d\'abonnement invalide' });
-        }
-        
-        const abonnementPath = path.join(__dirname, 'data/by-date/produitsAbonnement.js');
-        
-        // Créer une sauvegarde
-        const backupPath = `${abonnementPath}.backup.${Date.now()}`;
-        fs.copyFileSync(abonnementPath, backupPath);
-        
-        // Lire le contenu actuel pour préserver les fonctions utilitaires
-        const abonnementContent = fs.readFileSync(abonnementPath, 'utf8');
-        const functionsMatch = abonnementContent.match(/(\/\/ Fonctions utilitaires[\s\S]*)/);
-        const functionsContent = functionsMatch ? functionsMatch[1] : '';
-        
-        // Générer le nouveau contenu
-        const newContent = `const produitsAbonnement = ${JSON.stringify(nouveauxProduitsAbonnement, null, 4)};
-
-${functionsContent}`;
-        
-        // Écrire le nouveau fichier
-        fs.writeFileSync(abonnementPath, newContent, 'utf8');
-        
-        // Recharger le module dans le cache Node.js
-        delete require.cache[require.resolve('./data/by-date/produitsAbonnement')];
-        
-        res.json({ success: true, message: 'Configuration des produits d\'abonnement sauvegardée avec succès' });
-    } catch (error) {
-        console.error('Erreur lors de la sauvegarde des produits d\'abonnement:', error);
-        res.status(500).json({ success: false, message: 'Erreur lors de la sauvegarde de la configuration des produits d\'abonnement' });
+        res.status(500).json({ success: false, message: error.message, produitsAbonnement: {} });
     }
 });
 
@@ -4003,8 +3945,8 @@ app.post('/api/cash-payments/manual', checkAuth, checkAdminOnly, async (req, res
         }
         
         // Vérifier que le point de vente existe et est actif
-        const pointsVente = require('./points-vente.js');
-        if (!pointsVente[pointVente] || !pointsVente[pointVente].active) {
+        const pointsVenteData = await configService.getPointsVenteAsLegacy();
+        if (!pointsVenteData[pointVente] || !pointsVenteData[pointVente].active) {
             return res.status(400).json({
                 success: false,
                 message: `Le point de vente "${pointVente}" n'existe pas ou n'est pas actif`
@@ -6138,27 +6080,23 @@ const bictorys = axios.create({
             }
         }
 
-// Mapping des références de paiement aux points de vente
-// Utilise le fichier centralisé points-vente-payment-ref.js et ajoute Keur Massar
-const PAYMENT_REF_MAPPING = {
-    ...pointsVentePaymentRef,
-    'V_KM': 'Keur Massar'      // ✅ Actif (non inclus dans le fichier de base)
-};
-
 // Mapping inverse pour obtenir la référence à partir du point de vente
 const POINT_VENTE_TO_REF = {};
 Object.entries(PAYMENT_REF_MAPPING).forEach(([ref, pointVente]) => {
     POINT_VENTE_TO_REF[pointVente] = ref;
 });
+// Ajouter Keur Massar
+POINT_VENTE_TO_REF['Keur Massar'] = 'V_KM';
 
 // Route pour obtenir les points de vente accessibles par l'utilisateur
-app.get('/api/payment-links/points-vente', checkAuth, (req, res) => {
+app.get('/api/payment-links/points-vente', checkAuth, async (req, res) => {
     try {
         const user = req.user;
         let accessiblePointsVente = [];
         
-        // Obtenir les points de vente actifs depuis points-vente.js
-        const activePointsVente = Object.entries(pointsVente)
+        // Obtenir les points de vente actifs depuis la base de données
+        const pointsVenteData = await configService.getPointsVenteAsLegacy();
+        const activePointsVente = Object.entries(pointsVenteData)
             .filter(([_, properties]) => properties.active)
             .map(([name, _]) => name);
         
@@ -7302,8 +7240,11 @@ app.get('/api/audit-client', checkAuth, async (req, res) => {
 console.log('✅ Route proxy audit client chargée');
 
 // Démarrage du serveur
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Serveur démarré sur le port ${PORT}`);
+    
+    // Charger la configuration depuis la base de données
+    await loadConfigFromDB();
     console.log('Routes de paiement disponibles:');
     console.log('- GET /api/payment-links/points-vente');
     console.log('- POST /api/payment-links/create');
@@ -12593,8 +12534,9 @@ app.get('/api/external/analytics', validateApiKey, async (req, res) => {
         
         console.log(`📅 Final dates: ${finalStartDate} to ${finalEndDate}`);
         
-        // Get active points of sale (excluding Abattage)
-        const activePointsVente = Object.entries(pointsVente)
+        // Get active points of sale (excluding Abattage) from database
+        const pointsVenteData = await configService.getPointsVenteAsLegacy();
+        const activePointsVente = Object.entries(pointsVenteData)
             .filter(([name, properties]) => properties.active && name !== 'Abattage')
             .map(([name, _]) => name);
         
@@ -13928,15 +13870,3 @@ function formatProductData(margeResult, productName) {
 }
 
 // ... existing code ...
-
-app.get('/api/points-vente', (req, res) => {
-    try {
-        const activePointsVente = Object.entries(pointsVente)
-            .filter(([_, properties]) => properties.active)
-            .map(([name, _]) => name);
-        res.json(activePointsVente);
-    } catch (error) {
-        console.error("Erreur lors de la lecture des points de vente :", error);
-        res.status(500).json({ success: false, message: "Erreur serveur" });
-    }
-});

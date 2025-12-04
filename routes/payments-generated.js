@@ -2,9 +2,19 @@ const express = require('express');
 const { Op } = require('sequelize');
 const axios = require('axios');
 const PaymentLink = require('../db/models/PaymentLink');
-const pointsVente = require('../points-vente');
-const pointsVentePaymentRef = require('../points-vente-payment-ref');
+const configService = require('../db/config-service');
 const { checkAuth, checkReadAccess } = require('../middlewares/auth');
+
+// Mapping des codes de référence de paiement vers les noms de points de vente
+const PAYMENT_REF_MAPPING = {
+    'V_TB': 'Touba',
+    'V_DHR': 'Dahra',
+    'V_LGR': 'Linguere',
+    'V_MBA': 'Mbao',
+    'V_OSF': 'O.Foire',
+    'V_SAC': 'Sacre Coeur',
+    'V_ABATS': 'Abattage'
+};
 
 const router = express.Router();
 
@@ -100,14 +110,15 @@ router.get('/', checkAuthOrApiKey, async (req, res) => {
         }
 
         // 3. Validation du point de vente
-        if (!pointsVente[pointVente]) {
+        const pointsVenteData = await configService.getPointsVenteAsLegacy();
+        if (!pointsVenteData[pointVente]) {
             return res.status(400).json({
                 success: false,
                 message: `Point de vente "${pointVente}" non trouvé`
             });
         }
 
-        if (!pointsVente[pointVente].active) {
+        if (!pointsVenteData[pointVente].active) {
             return res.status(400).json({
                 success: false,
                 message: `Point de vente "${pointVente}" n'est pas actif`
@@ -256,10 +267,9 @@ router.get('/bictorys/source', checkAuthOrApiKey, async (req, res) => {
         }
 
         // 3. Mapping des points de vente vers les références Bictorys
-        // Généré dynamiquement depuis pointsVentePaymentRef + extensions
         const POINT_VENTE_TO_REFS = {};
-        // Ajouter les références depuis le fichier centralisé
-        Object.entries(pointsVentePaymentRef).forEach(([ref, pointVenteName]) => {
+        // Ajouter les références depuis le mapping local
+        Object.entries(PAYMENT_REF_MAPPING).forEach(([ref, pointVenteName]) => {
             const gRef = ref.replace('V_', 'G_');
             POINT_VENTE_TO_REFS[pointVenteName] = [ref, gRef];
         });

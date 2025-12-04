@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { ClientAbonne, PaiementAbonnement } = require('../db/models');
 const { Op } = require('sequelize');
+const configService = require('../db/config-service');
 
 // Mapping des points de vente vers les références de paiement Bictorys pour abonnements
 // Format: A_[CODE] (A pour Abonnement)
@@ -779,22 +780,24 @@ router.get('/clients/:id/ventes', async (req, res) => {
 
 /**
  * GET /api/abonnements/config
- * Récupérer la configuration des prix abonnement
+ * Récupérer la configuration des prix abonnement (depuis la BDD)
  */
-router.get('/config', (req, res) => {
+router.get('/config', async (req, res) => {
     try {
-        const produitsAbonnement = require('../data/by-date/produitsAbonnement');
+        const produitsAbonnement = await configService.getProduitsAsLegacy('abonnement');
+        
+        const produitsList = produitsAbonnement.getTousProduits ? produitsAbonnement.getTousProduits() : Object.keys(produitsAbonnement).filter(k => typeof produitsAbonnement[k] === 'object');
         
         res.json({
             success: true,
             data: {
-                config: produitsAbonnement.config,
-                produits: produitsAbonnement.getTousProduits().map(nom => ({
+                config: produitsAbonnement.config || {},
+                produits: produitsList.map(nom => ({
                     nom,
-                    prixAbonne: produitsAbonnement.getPrixAbonne(nom),
-                    prixNormal: produitsAbonnement.getPrixNormal(nom),
-                    rabais: produitsAbonnement.getRabais(nom),
-                    unite: produitsAbonnement.getUnite(nom)
+                    prixAbonne: produitsAbonnement.getPrixAbonne ? produitsAbonnement.getPrixAbonne(nom) : produitsAbonnement[nom]?.prixAbonne,
+                    prixNormal: produitsAbonnement.getPrixNormal ? produitsAbonnement.getPrixNormal(nom) : produitsAbonnement[nom]?.prixNormal,
+                    rabais: produitsAbonnement.getRabais ? produitsAbonnement.getRabais(nom) : produitsAbonnement[nom]?.rabais,
+                    unite: produitsAbonnement.getUnite ? produitsAbonnement.getUnite(nom) : produitsAbonnement[nom]?.unite
                 }))
             }
         });
@@ -809,14 +812,18 @@ router.get('/config', (req, res) => {
 
 /**
  * GET /api/abonnements/prix/:produit
- * Récupérer le prix abonné pour un produit spécifique
+ * Récupérer le prix abonné pour un produit spécifique (depuis la BDD)
  */
-router.get('/prix/:produit', (req, res) => {
+router.get('/prix/:produit', async (req, res) => {
     try {
         const { produit } = req.params;
-        const produitsAbonnement = require('../data/by-date/produitsAbonnement');
+        const produitsAbonnement = await configService.getProduitsAsLegacy('abonnement');
         
-        if (!produitsAbonnement.produitEligible(produit)) {
+        const eligible = produitsAbonnement.produitEligible ? 
+            produitsAbonnement.produitEligible(produit) : 
+            produitsAbonnement[produit] !== undefined;
+        
+        if (!eligible) {
             return res.status(404).json({
                 success: false,
                 message: 'Produit non éligible à l\'abonnement'
@@ -827,10 +834,10 @@ router.get('/prix/:produit', (req, res) => {
             success: true,
             data: {
                 produit,
-                prixAbonne: produitsAbonnement.getPrixAbonne(produit),
-                prixNormal: produitsAbonnement.getPrixNormal(produit),
-                rabais: produitsAbonnement.getRabais(produit),
-                unite: produitsAbonnement.getUnite(produit)
+                prixAbonne: produitsAbonnement.getPrixAbonne ? produitsAbonnement.getPrixAbonne(produit) : produitsAbonnement[produit]?.prixAbonne,
+                prixNormal: produitsAbonnement.getPrixNormal ? produitsAbonnement.getPrixNormal(produit) : produitsAbonnement[produit]?.prixNormal,
+                rabais: produitsAbonnement.getRabais ? produitsAbonnement.getRabais(produit) : produitsAbonnement[produit]?.rabais,
+                unite: produitsAbonnement.getUnite ? produitsAbonnement.getUnite(produit) : produitsAbonnement[produit]?.unite
             }
         });
     } catch (error) {

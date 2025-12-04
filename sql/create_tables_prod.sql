@@ -426,6 +426,166 @@ CREATE INDEX IF NOT EXISTS idx_audit_client_logs_phone ON audit_client_logs(phon
 CREATE INDEX IF NOT EXISTS idx_audit_client_logs_timestamp ON audit_client_logs(search_timestamp);
 
 -- =====================================================
+-- TABLE: users
+-- Description: Utilisateurs de l'application
+-- =====================================================
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('admin', 'superutilisateur', 'superviseur', 'user');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    role user_role NOT NULL DEFAULT 'user',
+    acces_tous_points BOOLEAN NOT NULL DEFAULT FALSE,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index pour améliorer les performances de recherche
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
+-- Insérer l'utilisateur ADMIN par défaut (mot de passe: Mata@2024)
+INSERT INTO users (username, password, role, acces_tous_points, active)
+VALUES ('ADMIN', '$2b$10$xguWJPdt1P2WhUXi1ZpfWuG2OrcaIj52G.lbLpR2Y1SVSAh2g2.lS', 'admin', TRUE, TRUE)
+ON CONFLICT (username) DO NOTHING;
+
+-- =====================================================
+-- TABLE: points_vente
+-- Description: Points de vente de l'entreprise
+-- =====================================================
+CREATE TABLE IF NOT EXISTS points_vente (
+    id SERIAL PRIMARY KEY,
+    nom VARCHAR(100) NOT NULL UNIQUE,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index pour améliorer les performances de recherche
+CREATE UNIQUE INDEX IF NOT EXISTS idx_points_vente_nom ON points_vente(nom);
+
+-- Insérer les points de vente par défaut
+INSERT INTO points_vente (nom, active) VALUES ('Keur Bali', TRUE) ON CONFLICT (nom) DO NOTHING;
+INSERT INTO points_vente (nom, active) VALUES ('Abattage', TRUE) ON CONFLICT (nom) DO NOTHING;
+
+-- =====================================================
+-- TABLE: user_points_vente
+-- Description: Association N:N entre utilisateurs et points de vente
+-- =====================================================
+CREATE TABLE IF NOT EXISTS user_points_vente (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    point_vente_id INTEGER NOT NULL REFERENCES points_vente(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_user_point_vente UNIQUE (user_id, point_vente_id)
+);
+
+-- Index pour améliorer les performances de recherche
+CREATE INDEX IF NOT EXISTS idx_user_points_vente_user_id ON user_points_vente(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_points_vente_point_vente_id ON user_points_vente(point_vente_id);
+
+-- =====================================================
+-- TABLE: categories
+-- Description: Catégories de produits (Bovin, Ovin, Volaille, etc.)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS categories (
+    id SERIAL PRIMARY KEY,
+    nom VARCHAR(50) NOT NULL UNIQUE,
+    ordre INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index pour améliorer les performances de recherche
+CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_nom ON categories(nom);
+
+-- Insérer les catégories par défaut
+INSERT INTO categories (nom, ordre) VALUES ('Bovin', 1) ON CONFLICT (nom) DO NOTHING;
+INSERT INTO categories (nom, ordre) VALUES ('Ovin', 2) ON CONFLICT (nom) DO NOTHING;
+INSERT INTO categories (nom, ordre) VALUES ('Volaille', 3) ON CONFLICT (nom) DO NOTHING;
+INSERT INTO categories (nom, ordre) VALUES ('Pack', 4) ON CONFLICT (nom) DO NOTHING;
+INSERT INTO categories (nom, ordre) VALUES ('Caprin', 5) ON CONFLICT (nom) DO NOTHING;
+INSERT INTO categories (nom, ordre) VALUES ('Autres', 6) ON CONFLICT (nom) DO NOTHING;
+
+-- =====================================================
+-- TABLE: produits
+-- Description: Catalogue de produits (vente, abonnement, inventaire)
+-- =====================================================
+DO $$ BEGIN
+    CREATE TYPE type_catalogue AS ENUM ('vente', 'abonnement', 'inventaire');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS produits (
+    id SERIAL PRIMARY KEY,
+    nom VARCHAR(100) NOT NULL,
+    categorie_id INTEGER REFERENCES categories(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    type_catalogue type_catalogue NOT NULL,
+    prix_defaut DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    prix_alternatifs DECIMAL(10, 2)[] DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_produit_type UNIQUE (nom, type_catalogue)
+);
+
+-- Index pour améliorer les performances de recherche
+CREATE INDEX IF NOT EXISTS idx_produits_categorie_id ON produits(categorie_id);
+CREATE INDEX IF NOT EXISTS idx_produits_type_catalogue ON produits(type_catalogue);
+
+-- =====================================================
+-- TABLE: prix_point_vente
+-- Description: Prix spécifiques par point de vente
+-- =====================================================
+CREATE TABLE IF NOT EXISTS prix_point_vente (
+    id SERIAL PRIMARY KEY,
+    produit_id INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    point_vente_id INTEGER NOT NULL REFERENCES points_vente(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    prix DECIMAL(10, 2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_prix_produit_point_vente UNIQUE (produit_id, point_vente_id)
+);
+
+-- Index pour améliorer les performances de recherche
+CREATE INDEX IF NOT EXISTS idx_prix_point_vente_produit_id ON prix_point_vente(produit_id);
+CREATE INDEX IF NOT EXISTS idx_prix_point_vente_point_vente_id ON prix_point_vente(point_vente_id);
+
+-- =====================================================
+-- TABLE: prix_historique
+-- Description: Historique des modifications de prix
+-- =====================================================
+DO $$ BEGIN
+    CREATE TYPE type_modification_prix AS ENUM ('creation', 'modification', 'suppression');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS prix_historique (
+    id SERIAL PRIMARY KEY,
+    produit_id INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    point_vente_id INTEGER REFERENCES points_vente(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    ancien_prix DECIMAL(10, 2),
+    nouveau_prix DECIMAL(10, 2) NOT NULL,
+    type_modification type_modification_prix NOT NULL DEFAULT 'modification',
+    modifie_par VARCHAR(50),
+    commentaire TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index pour améliorer les performances de recherche
+CREATE INDEX IF NOT EXISTS idx_prix_historique_produit_id ON prix_historique(produit_id);
+CREATE INDEX IF NOT EXISTS idx_prix_historique_point_vente_id ON prix_historique(point_vente_id);
+CREATE INDEX IF NOT EXISTS idx_prix_historique_created_at ON prix_historique(created_at);
+
+-- =====================================================
 -- VÉRIFICATION
 -- =====================================================
 -- Afficher les tables créées

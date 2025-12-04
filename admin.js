@@ -1095,16 +1095,17 @@ async function chargerConfigProduits() {
         });
         const data = await response.json();
         
-        if (data.success) {
+        if (data.success && data.produits) {
             currentProduitsConfig = data.produits;
+            console.log('✅ Produits chargés:', Object.keys(currentProduitsConfig));
             afficherProduitsConfig();
         } else {
-            console.error('Erreur lors du chargement de la configuration des produits:', data.message);
-            alert('Erreur lors du chargement de la configuration des produits');
+            console.error('Erreur lors du chargement de la configuration des produits:', data.message || 'Données vides');
+            currentProduitsConfig = {};
         }
     } catch (error) {
         console.error('Erreur lors du chargement de la configuration des produits:', error);
-        alert('Erreur lors du chargement de la configuration des produits');
+        currentProduitsConfig = {};
     }
 }
 
@@ -1172,7 +1173,19 @@ function afficherProduitsConfig() {
     
     container.innerHTML = '';
     
-    Object.keys(currentProduitsConfig).forEach((categorie, index) => {
+    // Protection contre les données undefined ou null
+    if (!currentProduitsConfig || typeof currentProduitsConfig !== 'object') {
+        container.innerHTML = '<div class="alert alert-warning">Aucune configuration de produits disponible</div>';
+        return;
+    }
+    
+    const categories = Object.keys(currentProduitsConfig);
+    if (categories.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">Aucun produit configuré. Utilisez l\'interface d\'administration pour ajouter des produits.</div>';
+        return;
+    }
+    
+    categories.forEach((categorie, index) => {
         if (typeof currentProduitsConfig[categorie] === 'object' && currentProduitsConfig[categorie] !== null) {
             const categorieHtml = `
                 <div class="accordion-item">
@@ -1760,11 +1773,28 @@ function supprimerPrixSpecial(categorie, produit, pointVente) {
     }
 }
 
-function supprimerProduit(categorie, produit) {
+async function supprimerProduit(categorie, produit) {
     if (confirm(`Êtes-vous sûr de vouloir supprimer le produit "${produit}" ?`)) {
-        if (confirm(`Cette suppression est définitive et supprimera tous les prix associés. Confirmer la suppression du produit "${produit}" ?`)) {
-            delete currentProduitsConfig[categorie][produit];
-            afficherProduitsConfig();
+        try {
+            const response = await fetch('/api/admin/config/produits/by-name', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ nom: produit, type_catalogue: 'vente' })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                delete currentProduitsConfig[categorie][produit];
+                afficherProduitsConfig();
+                alert(`Produit "${produit}" supprimé avec succès`);
+            } else {
+                alert(`Erreur: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Erreur suppression produit:', error);
+            alert('Erreur lors de la suppression du produit');
         }
     }
 }
@@ -2071,11 +2101,28 @@ function modifierAlternativesInventaire(produit, alternativesStr) {
     }
 }
 
-function supprimerProduitInventaire(produit) {
+async function supprimerProduitInventaire(produit) {
     if (confirm(`Êtes-vous sûr de vouloir supprimer le produit d'inventaire "${produit}" ?`)) {
-        if (confirm(`Cette suppression est définitive et supprimera tous les prix associés. Confirmer la suppression du produit "${produit}" ?`)) {
-            delete currentInventaireConfig[produit];
-            afficherInventaireConfig();
+        try {
+            const response = await fetch('/api/admin/config/produits/by-name', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ nom: produit, type_catalogue: 'inventaire' })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                delete currentInventaireConfig[produit];
+                afficherInventaireConfig();
+                alert(`Produit d'inventaire "${produit}" supprimé avec succès`);
+            } else {
+                alert(`Erreur: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Erreur suppression produit inventaire:', error);
+            alert('Erreur lors de la suppression du produit');
         }
     }
 }
@@ -2324,11 +2371,28 @@ function supprimerPrixSpecialAbonnement(categorie, produit, pointVente) {
     }
 }
 
-function supprimerProduitAbonnement(categorie, produit) {
+async function supprimerProduitAbonnement(categorie, produit) {
     if (confirm(`Êtes-vous sûr de vouloir supprimer le produit d'abonnement "${produit}" ?`)) {
-        if (confirm(`Cette suppression est définitive et supprimera tous les prix associés. Confirmer la suppression du produit "${produit}" ?`)) {
-            delete currentAbonnementConfig[categorie][produit];
-            afficherAbonnementConfig();
+        try {
+            const response = await fetch('/api/admin/config/produits/by-name', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ nom: produit, type_catalogue: 'abonnement' })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                delete currentAbonnementConfig[categorie][produit];
+                afficherAbonnementConfig();
+                alert(`Produit d'abonnement "${produit}" supprimé avec succès`);
+            } else {
+                alert(`Erreur: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Erreur suppression produit abonnement:', error);
+            alert('Erreur lors de la suppression du produit');
         }
     }
 }

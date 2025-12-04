@@ -23,6 +23,8 @@
     "db:explore": "node -r dotenv/config explore-db.js",
     "db:migrate:sqlite-to-postgres": "node -r dotenv/config scripts/migrate-sqlite-to-postgres.js",
     "db:update-schema": "node -r dotenv/config db/update-schema.js",
+    "db:migrate-config": "node -r dotenv/config scripts/migrate-config-to-db.js",
+    "db:migrate-config:force": "node -r dotenv/config scripts/migrate-config-to-db.js --force",
     "cy:open": "cypress open",
     "cy:run": "cypress run",
     "cy:reconciliation": "cypress run --spec 'cypress/e2e/reconciliation.cy.js'",

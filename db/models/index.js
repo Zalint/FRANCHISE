@@ -10,9 +10,21 @@ const ClientAbonne = require('./ClientAbonne');
 const PaiementAbonnement = require('./PaiementAbonnement');
 const PerformanceAchat = require('./PerformanceAchat');
 const AuditClientLog = require('./AuditClientLog');
+
+// Nouveaux modèles pour la gestion centralisée
+const User = require('./User');
+const PointVente = require('./PointVente');
+const UserPointVente = require('./UserPointVente');
+const Category = require('./Category');
+const Produit = require('./Produit');
+const PrixPointVente = require('./PrixPointVente');
+const PrixHistorique = require('./PrixHistorique');
+
 const { sequelize } = require('../index');
 
-// Définir les relations entre les modèles si nécessaire
+// =====================================================
+// RELATIONS EXISTANTES
+// =====================================================
 
 // Relations pour les abonnements
 ClientAbonne.hasMany(PaiementAbonnement, {
@@ -24,6 +36,92 @@ PaiementAbonnement.belongsTo(ClientAbonne, {
   foreignKey: 'client_id',
   as: 'client'
 });
+
+// =====================================================
+// NOUVELLES RELATIONS - Gestion centralisée
+// =====================================================
+
+// User <-> PointVente (Many-to-Many via UserPointVente)
+User.belongsToMany(PointVente, {
+  through: UserPointVente,
+  foreignKey: 'user_id',
+  otherKey: 'point_vente_id',
+  as: 'pointsVente'
+});
+
+PointVente.belongsToMany(User, {
+  through: UserPointVente,
+  foreignKey: 'point_vente_id',
+  otherKey: 'user_id',
+  as: 'users'
+});
+
+// Category <-> Produit (One-to-Many)
+Category.hasMany(Produit, {
+  foreignKey: 'categorie_id',
+  as: 'produits'
+});
+
+Produit.belongsTo(Category, {
+  foreignKey: 'categorie_id',
+  as: 'categorie'
+});
+
+// Produit <-> PointVente (Many-to-Many via PrixPointVente)
+Produit.belongsToMany(PointVente, {
+  through: PrixPointVente,
+  foreignKey: 'produit_id',
+  otherKey: 'point_vente_id',
+  as: 'pointsVenteAvecPrix'
+});
+
+PointVente.belongsToMany(Produit, {
+  through: PrixPointVente,
+  foreignKey: 'point_vente_id',
+  otherKey: 'produit_id',
+  as: 'produitsAvecPrix'
+});
+
+// PrixPointVente relations directes
+PrixPointVente.belongsTo(Produit, {
+  foreignKey: 'produit_id',
+  as: 'produit'
+});
+
+PrixPointVente.belongsTo(PointVente, {
+  foreignKey: 'point_vente_id',
+  as: 'pointVente'
+});
+
+Produit.hasMany(PrixPointVente, {
+  foreignKey: 'produit_id',
+  as: 'prixParPointVente'
+});
+
+PointVente.hasMany(PrixPointVente, {
+  foreignKey: 'point_vente_id',
+  as: 'prixProduits'
+});
+
+// PrixHistorique relations
+PrixHistorique.belongsTo(Produit, {
+  foreignKey: 'produit_id',
+  as: 'produit'
+});
+
+PrixHistorique.belongsTo(PointVente, {
+  foreignKey: 'point_vente_id',
+  as: 'pointVente'
+});
+
+Produit.hasMany(PrixHistorique, {
+  foreignKey: 'produit_id',
+  as: 'historiquePrix'
+});
+
+// =====================================================
+// SYNCHRONISATION
+// =====================================================
 
 // Fonction pour synchroniser les modèles avec la base de données
 async function syncDatabase(force = false) {
@@ -37,7 +135,28 @@ async function syncDatabase(force = false) {
   }
 }
 
+// Fonction pour synchroniser seulement les nouveaux modèles (sans toucher aux existants)
+async function syncNewModels(options = { alter: true }) {
+  try {
+    // Synchroniser les nouvelles tables dans l'ordre des dépendances
+    await User.sync(options);
+    await PointVente.sync(options);
+    await UserPointVente.sync(options);
+    await Category.sync(options);
+    await Produit.sync(options);
+    await PrixPointVente.sync(options);
+    await PrixHistorique.sync(options);
+    
+    console.log('Nouveaux modèles synchronisés avec succès');
+    return true;
+  } catch (error) {
+    console.error('Erreur lors de la synchronisation des nouveaux modèles:', error);
+    return false;
+  }
+}
+
 module.exports = {
+  // Modèles existants
   Vente,
   Stock,
   Transfert,
@@ -50,6 +169,18 @@ module.exports = {
   PaiementAbonnement,
   PerformanceAchat,
   AuditClientLog,
+  
+  // Nouveaux modèles
+  User,
+  PointVente,
+  UserPointVente,
+  Category,
+  Produit,
+  PrixPointVente,
+  PrixHistorique,
+  
+  // Fonctions utilitaires
   syncDatabase,
+  syncNewModels,
   sequelize
-}; 
+};

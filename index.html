@@ -2464,9 +2464,106 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
     <!-- Scripts locaux -->
-    <script src="produits.js"></script>
-    <script src="produitsInventaire.js"></script>
-    <script src="produitsAbonnement.js"></script>
+    <!-- Chargement des produits depuis la base de données -->
+    <script>
+        // Variables globales pour les produits (chargées depuis la BDD)
+        var produits = {};
+        var produitsInventaire = {};
+        var produitsAbonnement = {};
+        
+        // Fonctions utilitaires pour les produits (ajoutées après le chargement)
+        function addProduitsUtilityFunctions(obj, isInventaire = false) {
+            if (isInventaire) {
+                // Fonctions pour produitsInventaire
+                obj.getTousLesProduits = function() {
+                    return Object.keys(this).filter(key => 
+                        typeof this[key] === 'object' && 
+                        this[key] !== null && 
+                        this[key].prixDefault !== undefined
+                    );
+                };
+                obj.getPrixDefaut = function(produit, pointVente = null) {
+                    if (this[produit]) {
+                        const produitConfig = this[produit];
+                        if (pointVente && produitConfig[pointVente] !== undefined) {
+                            return produitConfig[pointVente];
+                        }
+                        return produitConfig.prixDefault;
+                    }
+                    return 0;
+                };
+                obj.getPrixAlternatifs = function(produit) {
+                    if (this[produit]) {
+                        return this[produit].alternatives || [];
+                    }
+                    return [];
+                };
+                obj.produitExiste = function(produit) {
+                    return this[produit] && typeof this[produit] === 'object' && this[produit].prixDefault !== undefined;
+                };
+                obj.getSimpleValue = function(produit, pointVente = null) {
+                    return this.getPrixDefaut(produit, pointVente);
+                };
+            } else {
+                // Fonctions pour produits et produitsAbonnement
+                obj.getPrixDefaut = function(categorie, produit, pointVente = null) {
+                    if (this[categorie] && this[categorie][produit]) {
+                        const produitConfig = this[categorie][produit];
+                        if (pointVente && produitConfig[pointVente] !== undefined) {
+                            return produitConfig[pointVente];
+                        }
+                        return produitConfig.default;
+                    }
+                    return 0;
+                };
+                obj.getPrixAlternatifs = function(categorie, produit) {
+                    if (this[categorie] && this[categorie][produit]) {
+                        return this[categorie][produit].alternatives || [];
+                    }
+                    return [];
+                };
+                obj.getSimpleValue = function(categorie, produit, pointVente = null) {
+                    return this.getPrixDefaut(categorie, produit, pointVente);
+                };
+            }
+        }
+        
+        // Charger les produits de manière synchrone au démarrage
+        (async function() {
+            try {
+                // Charger les produits de vente
+                const produitsResponse = await fetch('/api/produits?type=vente');
+                if (produitsResponse.ok) {
+                    produits = await produitsResponse.json();
+                    addProduitsUtilityFunctions(produits, false);
+                    console.log('✅ Produits vente chargés:', Object.keys(produits).filter(k => typeof produits[k] === 'object').length, 'catégories');
+                }
+                
+                // Charger les produits inventaire
+                const inventaireResponse = await fetch('/api/produits-inventaire');
+                if (inventaireResponse.ok) {
+                    produitsInventaire = await inventaireResponse.json();
+                    addProduitsUtilityFunctions(produitsInventaire, true);
+                    console.log('✅ Produits inventaire chargés:', produitsInventaire.getTousLesProduits().length, 'produits');
+                }
+                
+                // Charger les produits abonnement
+                const abonnementResponse = await fetch('/api/produits-abonnement');
+                if (abonnementResponse.ok) {
+                    produitsAbonnement = await abonnementResponse.json();
+                    addProduitsUtilityFunctions(produitsAbonnement, false);
+                    console.log('✅ Produits abonnement chargés');
+                }
+                
+                // ✅ Déclencher un événement pour signaler que les produits sont chargés
+                window.dispatchEvent(new CustomEvent('produitsLoaded'));
+                console.log('🎯 Événement produitsLoaded déclenché');
+                
+            } catch (error) {
+                console.error('❌ Erreur lors du chargement des produits:', error);
+            }
+        })();
+    </script>
     <script src="reconciliationManager.js"></script>
     <script src="cash-payment-function.js"></script>
     <script src="js/vente-abonnement.js"></script>

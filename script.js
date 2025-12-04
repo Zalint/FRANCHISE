@@ -1,4 +1,8 @@
 ﻿// Démarrage du script
+
+// Variables globales pour les points de vente (déclarées en premier pour éviter les erreurs de temporal dead zone)
+var POINTS_VENTE_PHYSIQUES = [];
+
 document.addEventListener('DOMContentLoaded', function() {
     // Vérifier si le gestionnaire de réconciliation est disponible
     if (typeof ReconciliationManager === 'undefined') {
@@ -1292,10 +1296,18 @@ document.querySelectorAll('.quantite, .prix-unit').forEach(input => {
     });
 });
 
+// Écouter l'événement de chargement des produits depuis l'API
+window.addEventListener('produitsLoaded', function() {
+    console.log('📦 Événement produitsLoaded reçu - peuplement des catégories');
+    populateCategories();
+});
+
 // Ajouter un événement pour recalculer le total général quand la date change
 document.addEventListener('DOMContentLoaded', function() {
-    // Peupler les catégories au chargement de la page
-    populateCategories();
+    // Tenter de peupler les catégories (si produits déjà chargés)
+    if (typeof produits !== 'undefined' && produits && Object.keys(produits).length > 0) {
+        populateCategories();
+    }
     
     const dateInput = document.getElementById('date');
     const pointVenteInput = document.getElementById('point-vente');
@@ -5503,7 +5515,7 @@ function initTableauStock() {
 }
 
 // Configuration pour l'inventaire to refac point de vente
-let POINTS_VENTE_PHYSIQUES = [];
+// Note: POINTS_VENTE_PHYSIQUES est déclaré en haut du fichier
 
 // Fonction pour initialiser POINTS_VENTE_PHYSIQUES depuis l'API
 async function initPointsVentePhysiques() {
@@ -5590,18 +5602,12 @@ Object.keys(produits).forEach(categorie => {
     }
 });
 
-// Tous les points de vente (physiques et virtuels)
-let TOUS_POINTS_VENTE = [
-    ...POINTS_VENTE_PHYSIQUES,
-    'Abattage', 'Depot', 'Gros Client'
-];
+// Tous les points de vente (chargés depuis la BDD)
+let TOUS_POINTS_VENTE = [...POINTS_VENTE_PHYSIQUES];
 
 // Fonction pour mettre à jour TOUS_POINTS_VENTE
 function updateTousPointsVente() {
-    TOUS_POINTS_VENTE = [
-        ...POINTS_VENTE_PHYSIQUES,
-        'Abattage', 'Depot', 'Gros Client'
-    ];
+    TOUS_POINTS_VENTE = [...POINTS_VENTE_PHYSIQUES];
     console.log('TOUS_POINTS_VENTE mis à jour:', TOUS_POINTS_VENTE);
 }
 

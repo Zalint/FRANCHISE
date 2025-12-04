@@ -1,210 +1,185 @@
 const bcrypt = require('bcrypt');
-const fs = require('fs').promises;
-const path = require('path');
+const { User, PointVente } = require('./db/models');
 
-// Chemin vers le fichier de sauvegarde des utilisateurs
-const USERS_FILE_PATH = path.join(__dirname, 'data', 'by-date', 'users.json');
-const USERS_FILE_PATH_FALLBACK = path.join(__dirname, 'users.json');
+// Variable globale pour stocker les utilisateurs en cache
+let usersCache = [];
+let cacheLoaded = false;
 
-// Liste des utilisateurs par défaut (doit correspondre à data/by-date/users.json)
-const defaultUsers = [
-    {
-        username: 'ADMIN',
-        password: '$2b$10$jPhgA.cIqO.5B6u2/CeV1OqBDSNYGSDVbwTc4d3gks2wBoSEkV2zq',
-        role: 'admin',
-        pointVente: 'tous',
-        active: true
-    },
-    {
-        username: 'KBA',
-        password: '$2b$10$AjtmT1ZdD9GikjyPTZjRxOaYoIK3KiZWpSGu4iBy9ojoyuMDh0jbW',
-        role: 'user',
-        pointVente: 'tous',
-        active: true
-    },
-    {
-        username: 'NADOU',
-        password: '$2b$10$YHeqE/YTHDW9PCW7F5u7tOgdGQQl6d32KEhxMe92PCzOuWSOh669m',
-        role: 'superutilisateur',
-        pointVente: 'tous',
-        active: true
-    },
-    {
-        username: 'OUSMANE',
-        password: '$2b$10$Z7o56oLtPF1hwX1TCryUuuTgbTCBfzpY/58Lb0/ZEAA9Azo5GNr2i',
-        role: 'superviseur',
-        pointVente: 'tous',
-        active: true
-    },
-    {
-        username: 'SALIOU',
-        password: '$2b$10$IlcAh43xYqhprICFx2oIv.FLgbsMPso7vHgGsXc9H81VNCTiA/TWq',
-        role: 'superviseur',
-        pointVente: 'tous',
-        active: true
-    },
-    {
-        username: 'SALY',
-        password: '$2b$10$WTamvq1T/09402ftX3yuYOGOIXyotCWHuOK08UQKuuBJPJBVYC8Zy',
-        role: 'superviseur',
-        pointVente: 'tous',
-        active: true
-    }
-];
-
-// Variable globale pour stocker les utilisateurs
-let users = [];
-
-// Fonction pour charger les utilisateurs depuis le fichier
+// Fonction pour charger les utilisateurs depuis la base de données
 async function loadUsers() {
-    console.log('=== CHARGEMENT DES UTILISATEURS ===');
-    console.log('Chemin principal (racine):', USERS_FILE_PATH_FALLBACK);
-    console.log('Chemin secondaire:', USERS_FILE_PATH);
+    console.log('=== CHARGEMENT DES UTILISATEURS DEPUIS LA BDD ===');
     
     try {
-        // PRIORITÉ: Charger depuis le fichier racine (plus à jour avec git)
-        try {
-            const data = await fs.readFile(USERS_FILE_PATH_FALLBACK, 'utf8');
-            users = JSON.parse(data);
-            console.log(`✅ Utilisateurs chargés depuis ${USERS_FILE_PATH_FALLBACK}: ${users.length} utilisateurs`);
-            console.log('Utilisateurs disponibles:', users.map(u => u.username).join(', '));
-        } catch (error) {
-            console.log(`❌ Erreur lecture ${USERS_FILE_PATH_FALLBACK}:`, error.message);
-            // Fallback: essayer de charger depuis data/by-date
-            try {
-                const data = await fs.readFile(USERS_FILE_PATH, 'utf8');
-                users = JSON.parse(data);
-                console.log(`✅ Utilisateurs chargés depuis ${USERS_FILE_PATH} (fallback): ${users.length} utilisateurs`);
-                console.log('Utilisateurs disponibles:', users.map(u => u.username).join(', '));
-            } catch (fallbackError) {
-                console.log(`❌ Erreur lecture ${USERS_FILE_PATH}:`, fallbackError.message);
-                // Si aucun fichier n'existe, utiliser les utilisateurs par défaut
-                console.log('⚠️ Fichier utilisateurs non trouvé, utilisation des utilisateurs par défaut');
-                
-                users = [...defaultUsers];
-                console.log('Utilisateurs par défaut:', users.map(u => u.username).join(', '));
-            }
-        }
+        const dbUsers = await User.findAll({
+            include: [{
+                model: PointVente,
+                as: 'pointsVente',
+                attributes: ['nom']
+            }]
+        });
+        
+        usersCache = dbUsers.map(u => ({
+            id: u.id,
+            username: u.username,
+            password: u.password,
+            role: u.role,
+            pointVente: u.acces_tous_points ? 'tous' : (u.pointsVente?.map(pv => pv.nom) || []),
+            active: u.active
+        }));
+        
+        cacheLoaded = true;
+        console.log(`✅ Utilisateurs chargés depuis la BDD: ${usersCache.length} utilisateurs`);
+        console.log('Utilisateurs disponibles:', usersCache.map(u => u.username).join(', '));
+        
+        return usersCache;
     } catch (error) {
-        console.error('❌ Erreur critique lors du chargement des utilisateurs:', error);
-        // En cas d'erreur, utiliser les utilisateurs par défaut
-        users = [...defaultUsers];
-        console.log('Utilisateurs par défaut (fallback):', users.map(u => u.username).join(', '));
+        console.error('❌ Erreur lors du chargement des utilisateurs depuis la BDD:', error.message);
+        // Fallback: liste vide si erreur
+        usersCache = [];
+        cacheLoaded = true;
+        return usersCache;
     }
 }
 
-// Fonction pour sauvegarder les utilisateurs dans le fichier
-async function saveUsers() {
+// S'assurer que les utilisateurs sont chargés
+async function ensureUsersLoaded() {
+    if (!cacheLoaded) {
+        await loadUsers();
+    }
+    return usersCache;
+}
+
+// Charger les utilisateurs au démarrage (appelé après que Sequelize soit initialisé)
+setTimeout(async () => {
     try {
-        await fs.writeFile(USERS_FILE_PATH, JSON.stringify(users, null, 2), 'utf8');
-        console.log(`Utilisateurs sauvegardés dans ${USERS_FILE_PATH}`);
+        await loadUsers();
     } catch (error) {
-        console.error('Erreur lors de la sauvegarde des utilisateurs:', error);
-        throw error;
+        console.error('Erreur lors du chargement initial des utilisateurs:', error);
     }
-}
-
-// Charger les utilisateurs au démarrage
-loadUsers();
+}, 1000);
 
 // Fonction pour vérifier les identifiants
 async function verifyCredentials(username, password) {
     console.log('Tentative de vérification pour:', username);
     
-    const user = users.find(u => u.username === username);
-    if (!user) {
-        console.log('Utilisateur non trouvé:', username);
-        return null;
-    }
-    console.log('Utilisateur trouvé:', user.username);
-
-    // Vérifier si l'utilisateur est actif
-    if (!user.active) {
-        console.log('Utilisateur inactif:', username);
-        return null;
-    }
-
-    const isValid = await bcrypt.compare(password, user.password);
-    console.log('Mot de passe valide:', isValid);
-    
-    if (!isValid) {
-        console.log('Mot de passe invalide pour:', username);
-        return null;
-    }
-
-    console.log('Authentification réussie pour:', username);
-    return {
-        username: user.username,
-        role: user.role,
-        pointVente: user.pointVente,
-        active: user.active,
-        // Rôles hiérarchiques
-        isAdmin: user.role === 'admin',
-        isSuperUtilisateur: user.role === 'superutilisateur',
-        isSuperviseur: user.role === 'superviseur',
-        isUtilisateur: user.role === 'user',
-        isLecteur: user.role === 'lecteur',
-        // Permissions basées sur les droits actuels
-        canRead: ['lecteur', 'user', 'superutilisateur', 'superviseur', 'admin'].includes(user.role),
-        canWrite: ['user', 'superutilisateur', 'superviseur', 'admin'].includes(user.role),
-        canSupervise: ['superviseur', 'admin'].includes(user.role),
-        canManageAdvanced: ['superutilisateur', 'superviseur', 'admin'].includes(user.role),
-        canManageUsers: ['admin'].includes(user.role),
+    // Charger depuis la BDD directement pour avoir les données les plus récentes
+    try {
+        const user = await User.findOne({
+            where: { username },
+            include: [{
+                model: PointVente,
+                as: 'pointsVente',
+                attributes: ['nom']
+            }]
+        });
         
-        // Droits spécifiques selon la hiérarchie actuelle
-        canCopyStock: ['superutilisateur', 'superviseur', 'admin'].includes(user.role),
-        canManageEstimation: ['superutilisateur', 'superviseur', 'admin'].includes(user.role),
-        canAccessAllPointsVente: ['superutilisateur', 'superviseur', 'admin', 'lecteur'].includes(user.role),
-        canManageReconciliation: ['superutilisateur', 'superviseur', 'admin'].includes(user.role),
-        
-        // Droits PRIVILÉGIÉS - Superviseurs (= droits actuels SALIOU/OUSMANE)
-        bypassTimeRestrictions: ['superviseur', 'admin'].includes(user.role),
-        canModifyStockAnytime: ['superviseur', 'admin'].includes(user.role),
-        canAddSalesAnytime: ['superviseur', 'admin'].includes(user.role),
-        canImportSales: ['SALIOU', 'OUSMANE'].includes(user.username) || ['admin'].includes(user.role),
-        canEmptyDatabase: false, // Désactivé pour tous pour sécurité
-        canAccessChat: ['SALIOU', 'OUSMANE'].includes(user.username) || ['superutilisateur', 'superviseur', 'admin'].includes(user.role),
-        canAccessSpecialFeatures: ['superviseur', 'admin'].includes(user.role),
-        // Fonction utilitaire pour vérifier l'accès à un point de vente
-        hasAccessToPointVente: function(pointVente) {
-            // Les rôles élevés ont accès à tous les points de vente
-            if (this.canAccessAllPointsVente) return true;
-            
-            if (!this.pointVente) return false;
-            if (Array.isArray(this.pointVente)) {
-                return this.pointVente.includes('tous') || this.pointVente.includes(pointVente);
-            }
-            return this.pointVente === 'tous' || this.pointVente === pointVente;
+        if (!user) {
+            console.log('Utilisateur non trouvé:', username);
+            return null;
         }
-    };
+        console.log('Utilisateur trouvé:', user.username);
+
+        // Vérifier si l'utilisateur est actif
+        if (!user.active) {
+            console.log('Utilisateur inactif:', username);
+            return null;
+        }
+
+        const isValid = await bcrypt.compare(password, user.password);
+        console.log('Mot de passe valide:', isValid);
+        
+        if (!isValid) {
+            console.log('Mot de passe invalide pour:', username);
+            return null;
+        }
+
+        const pointVente = user.acces_tous_points ? 'tous' : (user.pointsVente?.map(pv => pv.nom) || []);
+        const role = user.role;
+
+        console.log('Authentification réussie pour:', username);
+        return {
+            username: user.username,
+            role: role,
+            pointVente: pointVente,
+            active: user.active,
+            // Rôles hiérarchiques
+            isAdmin: role === 'admin',
+            isSuperUtilisateur: role === 'superutilisateur',
+            isSuperviseur: role === 'superviseur',
+            isUtilisateur: role === 'user',
+            isLecteur: role === 'lecteur',
+            // Permissions basées sur les droits actuels
+            canRead: ['lecteur', 'user', 'superutilisateur', 'superviseur', 'admin'].includes(role),
+            canWrite: ['user', 'superutilisateur', 'superviseur', 'admin'].includes(role),
+            canSupervise: ['superviseur', 'admin'].includes(role),
+            canManageAdvanced: ['superutilisateur', 'superviseur', 'admin'].includes(role),
+            canManageUsers: ['admin'].includes(role),
+            
+            // Droits spécifiques selon la hiérarchie actuelle
+            canCopyStock: ['superutilisateur', 'superviseur', 'admin'].includes(role),
+            canManageEstimation: ['superutilisateur', 'superviseur', 'admin'].includes(role),
+            canAccessAllPointsVente: ['superutilisateur', 'superviseur', 'admin', 'lecteur'].includes(role) || user.acces_tous_points,
+            canManageReconciliation: ['superutilisateur', 'superviseur', 'admin'].includes(role),
+            
+            // Droits PRIVILÉGIÉS - Superviseurs
+            bypassTimeRestrictions: ['superviseur', 'admin'].includes(role),
+            canModifyStockAnytime: ['superviseur', 'admin'].includes(role),
+            canAddSalesAnytime: ['superviseur', 'admin'].includes(role),
+            canImportSales: ['SALIOU', 'OUSMANE'].includes(user.username) || ['admin'].includes(role),
+            canEmptyDatabase: false, // Désactivé pour tous pour sécurité
+            canAccessChat: ['SALIOU', 'OUSMANE'].includes(user.username) || ['superutilisateur', 'superviseur', 'admin'].includes(role),
+            canAccessSpecialFeatures: ['superviseur', 'admin'].includes(role),
+            // Fonction utilitaire pour vérifier l'accès à un point de vente
+            hasAccessToPointVente: function(pv) {
+                // Les rôles élevés ont accès à tous les points de vente
+                if (this.canAccessAllPointsVente) return true;
+                
+                if (!this.pointVente) return false;
+                if (Array.isArray(this.pointVente)) {
+                    return this.pointVente.includes('tous') || this.pointVente.includes(pv);
+                }
+                return this.pointVente === 'tous' || this.pointVente === pv;
+            }
+        };
+    } catch (error) {
+        console.error('Erreur lors de la vérification des identifiants:', error);
+        return null;
+    }
 }
 
 // Fonction pour créer un nouvel utilisateur
 async function createUser(username, password, role, pointVente, active = true) {
-    if (users.some(u => u.username === username)) {
+    const existing = await User.findOne({ where: { username } });
+    if (existing) {
         throw new Error('Username already exists');
     }
 
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    const newUser = {
+    const newUser = await User.create({
         username,
         password: hashedPassword,
         role,
-        pointVente,
+        acces_tous_points: pointVente === 'tous' || (Array.isArray(pointVente) && pointVente.includes('tous')),
         active
-    };
+    });
 
-    users.push(newUser);
-    await saveUsers(); // Sauvegarder après chaque création
-    return newUser;
+    // Recharger le cache
+    await loadUsers();
+    
+    return {
+        username: newUser.username,
+        role: newUser.role,
+        pointVente: newUser.acces_tous_points ? 'tous' : [],
+        active: newUser.active
+    };
 }
 
 // Fonction pour mettre à jour un utilisateur
 async function updateUser(username, updates) {
-    const userIndex = users.findIndex(u => u.username === username);
-    if (userIndex === -1) {
+    const user = await User.findOne({ where: { username } });
+    if (!user) {
         throw new Error('User not found');
     }
 
@@ -213,44 +188,70 @@ async function updateUser(username, updates) {
         updates.password = await bcrypt.hash(updates.password, saltRounds);
     }
 
-    users[userIndex] = { ...users[userIndex], ...updates };
-    await saveUsers(); // Sauvegarder après chaque mise à jour
-    return users[userIndex];
+    if (updates.pointVente !== undefined) {
+        updates.acces_tous_points = updates.pointVente === 'tous' || 
+            (Array.isArray(updates.pointVente) && updates.pointVente.includes('tous'));
+        delete updates.pointVente;
+    }
+
+    await user.update(updates);
+    
+    // Recharger le cache
+    await loadUsers();
+    
+    return user;
 }
 
 // Fonction pour supprimer un utilisateur
 async function deleteUser(username) {
-    const userIndex = users.findIndex(u => u.username === username);
-    if (userIndex === -1) {
+    const user = await User.findOne({ where: { username } });
+    if (!user) {
         throw new Error('User not found');
     }
-    users.splice(userIndex, 1);
-    await saveUsers(); // Sauvegarder après chaque suppression
+    await user.destroy();
+    
+    // Recharger le cache
+    await loadUsers();
 }
 
 // Fonction pour activer/désactiver un utilisateur
 async function toggleUserStatus(username) {
-    const userIndex = users.findIndex(u => u.username === username);
-    if (userIndex === -1) {
+    const user = await User.findOne({ where: { username } });
+    if (!user) {
         throw new Error('User not found');
     }
 
-    users[userIndex].active = !users[userIndex].active;
-    await saveUsers(); // Sauvegarder après chaque changement d'état
-    return users[userIndex];
+    await user.update({ active: !user.active });
+    
+    // Recharger le cache
+    await loadUsers();
+    
+    return {
+        username: user.username,
+        role: user.role,
+        active: user.active
+    };
 }
 
 // Fonction pour obtenir tous les utilisateurs (sans les mots de passe)
 async function getAllUsers() {
+    const users = await User.findAll({
+        include: [{
+            model: PointVente,
+            as: 'pointsVente',
+            attributes: ['nom']
+        }]
+    });
+    
     return users.map(user => ({
         username: user.username,
         role: user.role,
-        pointVente: user.pointVente,
+        pointVente: user.acces_tous_points ? 'tous' : (user.pointsVente?.map(pv => pv.nom) || []),
         active: user.active
     }));
 }
 
-// Fonction pour recharger les utilisateurs depuis le fichier
+// Fonction pour recharger les utilisateurs depuis la BDD
 async function reloadUsers() {
     await loadUsers();
 }
@@ -262,5 +263,7 @@ module.exports = {
     deleteUser,
     toggleUserStatus,
     getAllUsers,
-    reloadUsers
-}; 
+    reloadUsers,
+    loadUsers,
+    ensureUsersLoaded
+};
