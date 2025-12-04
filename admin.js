@@ -193,6 +193,18 @@ function afficherListePointsVente(pointsVente) {
         tdNom.textContent = nom;
         row.appendChild(tdNom);
         
+        // Colonne Référence de paiement
+        const tdPaymentRef = document.createElement('td');
+        const paymentRefInput = document.createElement('input');
+        paymentRefInput.type = 'text';
+        paymentRefInput.className = 'form-control form-control-sm';
+        paymentRefInput.value = config.payment_ref || '';
+        paymentRefInput.placeholder = 'Ex: V_KB';
+        paymentRefInput.style.width = '100px';
+        paymentRefInput.onchange = () => updatePaymentRef(config.id, nom, paymentRefInput.value);
+        tdPaymentRef.appendChild(paymentRefInput);
+        row.appendChild(tdPaymentRef);
+        
         // Colonne Statut
         const tdStatut = document.createElement('td');
         const statusBadge = document.createElement('span');
@@ -212,6 +224,31 @@ function afficherListePointsVente(pointsVente) {
         
         tbody.appendChild(row);
     });
+}
+
+// Mettre à jour la référence de paiement d'un point de vente
+async function updatePaymentRef(id, nom, paymentRef) {
+    try {
+        const response = await fetch(`/api/admin/points-vente/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ nom, payment_ref: paymentRef })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log(`Référence de paiement mise à jour pour ${nom}: ${paymentRef}`);
+        } else {
+            alert(data.error || 'Erreur lors de la mise à jour');
+            chargerPointsVente(); // Recharger pour annuler
+        }
+    } catch (error) {
+        console.error('Erreur:', error);
+        alert('Erreur lors de la mise à jour de la référence');
+        chargerPointsVente();
+    }
 }
 
 // Ajouter un nouveau point de vente

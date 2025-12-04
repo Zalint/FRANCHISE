@@ -39,8 +39,19 @@ const requireAdmin = (req, res, next) => {
  */
 router.get('/points-vente', requireAdmin, async (req, res) => {
   try {
-    const pointsVente = await configService.getPointsVente(false);
-    res.json({ success: true, data: pointsVente });
+    const pointsVente = await PointVente.findAll({ order: [['nom', 'ASC']] });
+    
+    // Formater pour le frontend
+    const result = {};
+    for (const pv of pointsVente) {
+      result[pv.nom] = { 
+        id: pv.id,
+        active: pv.active, 
+        payment_ref: pv.payment_ref 
+      };
+    }
+    
+    res.json({ success: true, pointsVente: result });
   } catch (error) {
     console.error('Erreur récupération points de vente:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -53,13 +64,19 @@ router.get('/points-vente', requireAdmin, async (req, res) => {
  */
 router.post('/points-vente', requireAdmin, async (req, res) => {
   try {
-    const { nom, active = true } = req.body;
+    const { nom, active = true, payment_ref } = req.body;
     
     if (!nom || nom.trim() === '') {
       return res.status(400).json({ success: false, error: 'Le nom est requis' });
     }
     
-    const { pointVente, created } = await configService.upsertPointVente(nom.trim(), active);
+    const [pointVente, created] = await PointVente.upsert({
+      nom: nom.trim(),
+      active,
+      payment_ref: payment_ref ? payment_ref.trim().toUpperCase() : null
+    }, { returning: true });
+    
+    configService.invalidateCache();
     res.json({ success: true, data: pointVente, created });
   } catch (error) {
     console.error('Erreur création point de vente:', error);
@@ -74,14 +91,18 @@ router.post('/points-vente', requireAdmin, async (req, res) => {
 router.put('/points-vente/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nom, active } = req.body;
+    const { nom, active, payment_ref } = req.body;
     
     const pointVente = await PointVente.findByPk(id);
     if (!pointVente) {
       return res.status(404).json({ success: false, error: 'Point de vente non trouvé' });
     }
     
-    await pointVente.update({ nom, active });
+    await pointVente.update({ 
+      nom, 
+      active,
+      payment_ref: payment_ref ? payment_ref.trim().toUpperCase() : null
+    });
     configService.invalidateCache();
     
     res.json({ success: true, data: pointVente });

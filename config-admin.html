@@ -752,12 +752,13 @@
                         <thead>
                             <tr>
                                 <th>Nom</th>
+                                <th>Réf. Paiement</th>
                                 <th>Statut</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="points-vente-table">
-                            <tr><td colspan="3" class="loading"><div class="spinner"></div> Chargement...</td></tr>
+                            <tr><td colspan="4" class="loading"><div class="spinner"></div> Chargement...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1188,13 +1189,20 @@
         function renderPointsVenteTable(pointsVente) {
             const tbody = document.getElementById('points-vente-table');
             if (pointsVente.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Aucun point de vente</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucun point de vente</td></tr>';
                 return;
             }
 
             tbody.innerHTML = pointsVente.map(pv => `
                 <tr>
                     <td><strong>${pv.nom}</strong></td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm" 
+                               value="${pv.payment_ref || ''}" 
+                               placeholder="Ex: V_KB"
+                               style="width: 100px"
+                               onchange="updatePaymentRef(${pv.id}, '${pv.nom}', this.value)">
+                    </td>
                     <td><span class="badge ${pv.active ? 'badge-success' : 'badge-danger'}">${pv.active ? 'Actif' : 'Inactif'}</span></td>
                     <td class="actions">
                         <button class="btn btn-sm btn-secondary" onclick="editPointVente(${pv.id})">Modifier</button>
@@ -1231,6 +1239,19 @@
                 loadPointsVente();
             } catch (error) {
                 showToast(error.message, 'error');
+            }
+        }
+
+        async function updatePaymentRef(id, nom, paymentRef) {
+            try {
+                await apiCall(`/api/admin/points-vente/${id}`, 'PUT', { 
+                    nom, 
+                    payment_ref: paymentRef 
+                });
+                showToast('Référence de paiement mise à jour', 'success');
+            } catch (error) {
+                showToast(error.message, 'error');
+                loadPointsVente(); // Recharger pour annuler
             }
         }
 

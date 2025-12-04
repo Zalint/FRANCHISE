@@ -490,13 +490,9 @@ const checkStrictAdminOnly = (req, res, next) => {
 };
 
 // Mapping des codes de référence de paiement vers les noms de points de vente
+// Note: Seulement les points de vente actifs (Keur Bali et Abattage)
 const PAYMENT_REF_MAPPING = {
-    'V_TB': 'Touba',
-    'V_DHR': 'Dahra',
-    'V_LGR': 'Linguere',
-    'V_MBA': 'Mbao',
-    'V_OSF': 'O.Foire',
-    'V_SAC': 'Sacre Coeur',
+    'V_KB': 'Keur Bali',
     'V_ABATS': 'Abattage'
 };
 
@@ -3954,7 +3950,30 @@ app.post('/api/cash-payments/manual', checkAuth, checkAdminOnly, async (req, res
         }
         
         // Convertir la date au format DD/MM/YYYY pour cohérence avec les données existantes
-        const dateObj = new Date(date);
+        // La date peut arriver en format "2025-12-04", "04-Dec-2025", "04/12/2025", etc.
+        let dateObj;
+        if (date.includes('-') && date.length === 10 && date.indexOf('-') === 4) {
+            // Format ISO: 2025-12-04
+            dateObj = new Date(date);
+        } else if (date.includes('/')) {
+            // Format DD/MM/YYYY
+            const parts = date.split('/');
+            dateObj = new Date(parts[2], parts[1] - 1, parts[0]);
+        } else if (date.includes('-')) {
+            // Format DD-Mon-YYYY (ex: 04-Dec-2025)
+            dateObj = new Date(date);
+        } else {
+            dateObj = new Date(date);
+        }
+        
+        // Vérifier que la date est valide
+        if (isNaN(dateObj.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: `Format de date invalide: ${date}. Utilisez YYYY-MM-DD ou DD/MM/YYYY`
+            });
+        }
+        
         const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
         
         // Vérifier s'il existe déjà un paiement pour cette date et ce point de vente
@@ -3987,6 +4006,7 @@ app.post('/api/cash-payments/manual', checkAuth, checkAdminOnly, async (req, res
         } else {
             // Créer un nouveau paiement
             await CashPayment.create({
+                created_at: new Date(), // Requis par le modèle
                 date: formattedDate,
                 point_de_vente: pointVente,
                 amount: parseFloat(amount),

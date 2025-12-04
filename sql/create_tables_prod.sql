@@ -462,16 +462,18 @@ CREATE TABLE IF NOT EXISTS points_vente (
     id SERIAL PRIMARY KEY,
     nom VARCHAR(100) NOT NULL UNIQUE,
     active BOOLEAN NOT NULL DEFAULT TRUE,
+    payment_ref VARCHAR(20) UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Index pour améliorer les performances de recherche
 CREATE UNIQUE INDEX IF NOT EXISTS idx_points_vente_nom ON points_vente(nom);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_points_vente_payment_ref ON points_vente(payment_ref);
 
--- Insérer les points de vente par défaut
-INSERT INTO points_vente (nom, active) VALUES ('Keur Bali', TRUE) ON CONFLICT (nom) DO NOTHING;
-INSERT INTO points_vente (nom, active) VALUES ('Abattage', TRUE) ON CONFLICT (nom) DO NOTHING;
+-- Insérer les points de vente par défaut avec leurs codes de référence de paiement
+INSERT INTO points_vente (nom, active, payment_ref) VALUES ('Keur Bali', TRUE, 'V_KB') ON CONFLICT (nom) DO UPDATE SET payment_ref = 'V_KB';
+INSERT INTO points_vente (nom, active, payment_ref) VALUES ('Abattage', TRUE, 'V_ABATS') ON CONFLICT (nom) DO UPDATE SET payment_ref = 'V_ABATS';
 
 -- =====================================================
 -- TABLE: user_points_vente

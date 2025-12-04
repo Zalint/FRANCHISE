@@ -83,11 +83,51 @@ async function getPointsVenteAsLegacy() {
   const result = {};
   
   for (const pv of pointsVente) {
-    result[pv.nom] = { active: pv.active };
+    result[pv.nom] = { active: pv.active, payment_ref: pv.payment_ref };
   }
   
   cache.pointsVente = result;
   cache.lastRefresh = Date.now();
+  
+  return result;
+}
+
+/**
+ * Récupère le mapping des références de paiement vers les noms de points de vente
+ * @returns {Promise<Object>} - { 'V_KB': 'Keur Bali', 'V_ABATS': 'Abattage' }
+ */
+async function getPaymentRefMapping() {
+  const pointsVente = await PointVente.findAll({
+    where: { active: true },
+    attributes: ['nom', 'payment_ref']
+  });
+  
+  const result = {};
+  for (const pv of pointsVente) {
+    if (pv.payment_ref) {
+      result[pv.payment_ref] = pv.nom;
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Récupère le mapping inverse: nom du point de vente vers code de référence
+ * @returns {Promise<Object>} - { 'Keur Bali': 'V_KB', 'Abattage': 'V_ABATS' }
+ */
+async function getPointVenteToRefMapping() {
+  const pointsVente = await PointVente.findAll({
+    where: { active: true },
+    attributes: ['nom', 'payment_ref']
+  });
+  
+  const result = {};
+  for (const pv of pointsVente) {
+    if (pv.payment_ref) {
+      result[pv.nom] = pv.payment_ref;
+    }
+  }
   
   return result;
 }
