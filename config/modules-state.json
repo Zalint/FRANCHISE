@@ -15,7 +15,7 @@
     "active": false
   },
   "cash-paiement": {
-    "active": false
+    "active": true
   },
   "suivi-achat-boeuf": {
     "active": false
@@ -33,4 +33,3 @@
     "active": false
   }
 }
-

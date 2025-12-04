@@ -817,45 +817,8 @@ async function saveManualPayment() {
 
 // Initialisation des gestionnaires d'événements
 document.addEventListener('DOMContentLoaded', function() {
-    // Gestionnaire pour l'onglet Cash Paiement
-    const cashPaymentTab = document.getElementById('cash-payment-tab');
-    const cashPaymentSection = document.getElementById('cash-payment-section');
-    
-    if (cashPaymentTab) {
-        cashPaymentTab.addEventListener('click', function(e) {
-            e.preventDefault();
-            // Cacher toutes les sections (appel à la fonction hideAllSections définie dans script.js)
-            if (typeof hideAllSections === 'function') {
-                hideAllSections();
-            } else {
-                // Fallback si hideAllSections n'est pas disponible
-                document.querySelectorAll('.content-section, #saisie-section, #visualisation-section, #import-section, #stock-inventaire-section, #copier-stock-section, #reconciliation-section, #stock-alerte-section').forEach(section => {
-                    section.style.display = 'none';
-                });
-            }
-            
-            // Afficher la section Cash Paiement
-            cashPaymentSection.style.display = 'block';
-            
-            // Désactiver tous les onglets et activer celui-ci
-            document.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
-            cashPaymentTab.classList.add('active');
-            
-            // Charger les données de paiement
-            loadCashPaymentData();
-            
-            // Vérifier les permissions admin pour afficher le bouton "Effacer les données"
-            if (typeof checkCashPaymentAdminPermissions === 'function') {
-                checkCashPaymentAdminPermissions();
-            }
-            
-            // Initialiser le filtre de mois avec le mois en cours
-            initMonthFilterCashPayment();
-            
-            // Initialiser le datepicker si ce n'est pas déjà fait
-            initDatepicker();
-        });
-    }
+    // NOTE: Le gestionnaire de clic pour l'onglet Cash Paiement est dans script.js
+    // Pour éviter les doublons, on n'ajoute plus d'event listener ici
     
     // Gestionnaire pour le bouton d'ajout manuel de paiement
     const addManualPaymentButton = document.getElementById('add-manual-payment');

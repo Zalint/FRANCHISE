@@ -3,18 +3,23 @@ const router = express.Router();
 const { ClientAbonne, PaiementAbonnement } = require('../db/models');
 const { Op } = require('sequelize');
 const configService = require('../db/config-service');
+const PointVente = require('../db/models/PointVente');
 
-// Mapping des points de vente vers les références de paiement Bictorys pour abonnements
-// Format: A_[CODE] (A pour Abonnement)
-const ABONNEMENT_REF_MAPPING = {
-    'Mbao': 'A_MBA',
-    'O.Foire': 'A_OSF',
-    'Keur Massar': 'A_KM',
-    'Linguere': 'A_LGR',
-    'Sacre Coeur': 'A_SAC',
-    'Dahra': 'A_DHR',
-    'Abattage': 'A_ABATS'
-};
+// Fonction pour obtenir le mapping des références d'abonnement depuis la BDD
+// Format: A_[CODE] (A pour Abonnement) - basé sur payment_ref
+async function getAbonnementRefMapping() {
+    const pointsVente = await PointVente.findAll({
+        where: { payment_ref: { [Op.ne]: null } }
+    });
+    const mapping = {};
+    for (const pv of pointsVente) {
+        if (pv.payment_ref) {
+            // Convertir V_ en A_ pour les abonnements
+            mapping[pv.nom] = pv.payment_ref.replace('V_', 'A_');
+        }
+    }
+    return mapping;
+}
 
 // =================== ROUTES CLIENTS ABONNÉS ===================
 
@@ -853,16 +858,17 @@ router.get('/prix/:produit', async (req, res) => {
  * GET /api/abonnements/reference/:pointVente
  * Obtenir la référence de paiement Bictorys pour un point de vente
  */
-router.get('/reference/:pointVente', (req, res) => {
+router.get('/reference/:pointVente', async (req, res) => {
     try {
         const { pointVente } = req.params;
         
+        const ABONNEMENT_REF_MAPPING = await getAbonnementRefMapping();
         const reference = ABONNEMENT_REF_MAPPING[pointVente];
         
         if (!reference) {
             return res.status(404).json({
                 success: false,
-                message: 'Point de vente non reconnu'
+                message: 'Point de vente non reconnu ou sans référence de paiement'
             });
         }
         
@@ -883,5 +889,5 @@ router.get('/reference/:pointVente', (req, res) => {
 });
 
 module.exports = router;
-module.exports.ABONNEMENT_REF_MAPPING = ABONNEMENT_REF_MAPPING;
+module.exports.getAbonnementRefMapping = getAbonnementRefMapping;
 

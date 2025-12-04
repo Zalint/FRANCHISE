@@ -150,17 +150,9 @@ function getUserRoleDisplayName(user) {
     }
 }
 
-// Mapping pour standardiser les noms des points de vente
-const MAPPING_POINTS_VENTE = {
-    'KEUR MASS': 'Keur Massar',
-    'KEUR MASSAR': 'Keur Massar',
-    'O.FOIRE': 'O.Foire',
-    'OUEST FOIRE': 'O.Foire',
-    'MBAO': 'Mbao',
-    'LINGUERE': 'Linguere',
-    'DAHRA': 'Dahra',
-    'TOUBA': 'Touba'
-};
+// Les points de vente sont maintenant gérés depuis la base de données
+// Ce mapping n'est plus nécessaire - les noms sont standardisés dans la BDD
+const MAPPING_POINTS_VENTE = {};
 
 // Mapping pour standardiser les noms des produits
 const MAPPING_PRODUITS = {
@@ -612,6 +604,16 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Vérifier les permissions admin pour afficher le bouton "Effacer les données"
             checkCashPaymentAdminPermissions();
+            
+            // Initialiser le filtre de mois avec le mois en cours
+            if (typeof initMonthFilterCashPayment === 'function') {
+                initMonthFilterCashPayment();
+            }
+            
+            // Initialiser le datepicker si ce n'est pas déjà fait
+            if (typeof initDatepicker === 'function') {
+                initDatepicker();
+            }
         });
     }
 
@@ -7225,15 +7227,10 @@ async function rechercherAlertesAccumulation() {
         console.log(`[DEBUG] ===== Résumé final (après filtre 3 jours) =====`);
         console.log(`[DEBUG] Nombre total d'alertes à afficher: ${finalAlerts.length}`);
         
-        // Trier les alertes finales (facultatif, peut reprendre le tri précédent si nécessaire)
+        // Trier les alertes finales par nom de point de vente puis par date
         finalAlerts.sort((a, b) => {
-             const ordrePointsVente = ["O.Foire", "Mbao"];
-             const indexA = ordrePointsVente.indexOf(a.pointVente);
-             const indexB = ordrePointsVente.indexOf(b.pointVente);
-             if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-             else if (indexA !== -1) return -1;
-             else if (indexB !== -1) return 1;
-             else if (a.pointVente !== b.pointVente) return a.pointVente.localeCompare(b.pointVente);
+             // Tri alphabétique par point de vente, puis par date
+             if (a.pointVente !== b.pointVente) return a.pointVente.localeCompare(b.pointVente);
              return parseDateToMillis(b.date) - parseDateToMillis(a.date); // Trier par date si même PV
         });
         

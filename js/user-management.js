@@ -410,6 +410,51 @@ function setupEditPointVenteCheckboxes() {
     });
 }
 
+// Charger les points de vente dynamiquement depuis la BDD
+async function loadPointsVenteCheckboxes() {
+    try {
+        const response = await fetch('/api/points-vente', { credentials: 'include' });
+        if (!response.ok) throw new Error('Erreur lors du chargement des points de vente');
+        const pointsVente = await response.json();
+        
+        // Générer les checkboxes pour le formulaire de création
+        const container = document.getElementById('points-vente-checkboxes');
+        if (container) {
+            container.innerHTML = '';
+            pointsVente.forEach(pv => {
+                const pvId = pv.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const div = document.createElement('div');
+                div.className = 'form-check';
+                div.innerHTML = `
+                    <input class="form-check-input" type="checkbox" value="${pv}" id="pv-${pvId}" name="pointVente">
+                    <label class="form-check-label" for="pv-${pvId}">${pv}</label>
+                `;
+                container.appendChild(div);
+            });
+        }
+        
+        // Générer les checkboxes pour le modal d'édition
+        const editContainer = document.getElementById('edit-points-vente-checkboxes');
+        if (editContainer) {
+            editContainer.innerHTML = '';
+            pointsVente.forEach(pv => {
+                const pvId = pv.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const div = document.createElement('div');
+                div.className = 'form-check';
+                div.innerHTML = `
+                    <input class="form-check-input" type="checkbox" value="${pv}" id="edit-pv-${pvId}" name="editPointVente">
+                    <label class="form-check-label" for="edit-pv-${pvId}">${pv}</label>
+                `;
+                editContainer.appendChild(div);
+            });
+        }
+        
+        console.log('Points de vente chargés:', pointsVente);
+    } catch (error) {
+        console.error('Erreur lors du chargement des points de vente:', error);
+    }
+}
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', async function() {
     // Initialiser le modal Bootstrap
@@ -418,6 +463,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Vérifier l'authentification
     const isAuthenticated = await checkAuth();
     if (isAuthenticated) {
+        // Charger les points de vente dynamiquement
+        await loadPointsVenteCheckboxes();
+        
         // Charger les utilisateurs
         await loadUsers();
         

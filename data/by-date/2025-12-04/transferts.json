@@ -1,0 +1,22 @@
+[
+  {
+    "date": "04/12/2025",
+    "pointVente": "Keur Bali",
+    "produit": "Boeuf",
+    "impact": 1,
+    "quantite": 1,
+    "prixUnitaire": 3700,
+    "total": 3700,
+    "commentaire": ""
+  },
+  {
+    "date": "04/12/2025",
+    "pointVente": "Abattage",
+    "produit": "Boeuf",
+    "impact": -1,
+    "quantite": 1,
+    "prixUnitaire": 3700,
+    "total": -3700,
+    "commentaire": ""
+  }
+]

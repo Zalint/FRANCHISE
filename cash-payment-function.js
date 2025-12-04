@@ -38,21 +38,20 @@ async function addCashPaymentToReconciliation() {
         return;
     }
     
-    // Mapping des références de paiement aux points de vente
-    // NOTE: La source canonique est points-vente-payment-ref.js - garder synchronisé
-    const PAYMENT_REF_MAPPING = {
-        'V_TB': 'Touba',
-        'V_DHR': 'Dahra',
-        'V_LGR': 'Linguere',
-        'V_MBA': 'Mbao',
-        'V_OSF': 'O.Foire',
-        'V_SAC': 'Sacre Coeur',
-        'V_ABATS': 'Abattage',
-        // Extensions supplémentaires
-        'V_PROD': 'MATA PROD',
-        'V_ALS': 'Aliou Sow',
-        'V_KM': 'Keur Massar'
-    };
+    // Charger le mapping des références de paiement depuis l'API
+    let PAYMENT_REF_MAPPING = {};
+    try {
+        const mappingResponse = await fetch('/api/payment-ref-mapping');
+        if (mappingResponse.ok) {
+            const mappingData = await mappingResponse.json();
+            if (mappingData.success && mappingData.data) {
+                PAYMENT_REF_MAPPING = mappingData.data;
+                console.log('Payment ref mapping chargé depuis la BDD:', PAYMENT_REF_MAPPING);
+            }
+        }
+    } catch (error) {
+        console.error('Erreur lors du chargement du payment ref mapping:', error);
+    }
 
     // Helper function for mapping normalization
     function getNormalizedPointVente(ref) {
@@ -73,10 +72,21 @@ async function addCashPaymentToReconciliation() {
         console.log("Réponse de l'API de paiements en espèces:", result);
         
         if (result.success && result.data && Array.isArray(result.data)) {
+            console.log("Cash payments: recherche pour date", selectedDate, "dans", result.data.length, "entrées");
+            
             // Rechercher les données pour la date sélectionnée
             const dateData = result.data.find(entry => {
                 if (!entry.date) return false;
-                const parts = entry.date.split('-');
+                
+                // Normaliser la date de l'entrée
+                let entryDateStr = entry.date;
+                if (entry.date instanceof Date) {
+                    entryDateStr = entry.date.toISOString().split('T')[0];
+                } else if (typeof entry.date === 'string' && entry.date.includes('T')) {
+                    entryDateStr = entry.date.split('T')[0];
+                }
+                
+                const parts = entryDateStr.split('-');
                 if (parts.length !== 3) return false;
                 
                 const formattedEntryDate = `${parts[2]}/${parts[1]}/${parts[0]}`;

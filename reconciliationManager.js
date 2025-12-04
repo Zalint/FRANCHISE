@@ -26,21 +26,24 @@ const ReconciliationManager = (function() {
         { id: 'commentaire', label: 'Commentaire', isInput: true }
     ];
     
-    // Mapping des références de paiement aux points de vente
-    // NOTE: La source canonique est points-vente-payment-ref.js - garder synchronisé
-    const PAYMENT_REF_MAPPING = {
-        'V_TB': 'Touba',
-        'V_DHR': 'Dahra',
-        'V_LGR': 'Linguere',
-        'V_MBA': 'Mbao',
-        'V_OSF': 'O.Foire',
-        'V_SAC': 'Sacre Coeur',
-        'V_ABATS': 'Abattage',
-        // Extensions supplémentaires
-        'V_PROD': 'MATA PROD',
-        'V_ALS': 'Aliou Sow',
-        'V_KM': 'Keur Massar'
-    };
+    // Mapping des références de paiement aux points de vente - chargé depuis l'API
+    let PAYMENT_REF_MAPPING = {};
+    
+    // Fonction pour charger le mapping depuis l'API
+    async function loadPaymentRefMapping() {
+        try {
+            const response = await fetch('/api/payment-ref-mapping');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.data) {
+                    PAYMENT_REF_MAPPING = data.data;
+                    console.log('Payment ref mapping chargé depuis la BDD:', PAYMENT_REF_MAPPING);
+                }
+            }
+        } catch (error) {
+            console.error('Erreur lors du chargement du payment ref mapping:', error);
+        }
+    }
     
     // Index des colonnes pour accès rapide
     const COLUMN_INDEXES = {};
@@ -49,10 +52,11 @@ const ReconciliationManager = (function() {
     });
     
     // Point d'entrée principal - initialise le module
-    function initialize() {
+    async function initialize() {
         console.log('Initialisation du gestionnaire de réconciliation unifié');
         console.log('Indexes des colonnes:', COLUMN_INDEXES);
         console.log('***** INITIALISATION DU MODULE RECONCILIATION *****');
+        await loadPaymentRefMapping();
         setupEventListeners();
     }
     
@@ -562,14 +566,37 @@ const ReconciliationManager = (function() {
             const result = await response.json();
             
             if (result.success && result.data && Array.isArray(result.data)) {
+                console.log("Données cash payments reçues:", result.data.length, "entrées");
+                console.log("Date sélectionnée pour comparaison:", selectedDate);
+                // Debug: afficher toutes les dates disponibles
+                result.data.forEach((entry, i) => {
+                    console.log(`  Entry ${i}: date brute = "${entry.date}", type = ${typeof entry.date}`);
+                });
+                
                 // Rechercher les données pour la date sélectionnée
                 const dateData = result.data.find(entry => {
                     if (!entry.date) return false;
-                    const parts = entry.date.split('-');
-                    if (parts.length !== 3) return false;
+                    
+                    // Normaliser la date de l'entrée
+                    let entryDateStr = entry.date;
+                    if (entry.date instanceof Date) {
+                        entryDateStr = entry.date.toISOString().split('T')[0];
+                    } else if (typeof entry.date === 'string' && entry.date.includes('T')) {
+                        entryDateStr = entry.date.split('T')[0];
+                    }
+                    
+                    const parts = entryDateStr.split('-');
+                    if (parts.length !== 3) {
+                        console.log("Format de date invalide:", entry.date);
+                        return false;
+                    }
                     
                     const formattedEntryDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                    return formattedEntryDate === selectedDate;
+                    const match = formattedEntryDate === selectedDate;
+                    if (match) {
+                        console.log("✅ Date correspondante trouvée:", formattedEntryDate, "points:", entry.points);
+                    }
+                    return match;
                 });
                 
                 if (dateData && dateData.points) {

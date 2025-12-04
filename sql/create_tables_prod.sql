@@ -471,9 +471,8 @@ CREATE TABLE IF NOT EXISTS points_vente (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_points_vente_nom ON points_vente(nom);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_points_vente_payment_ref ON points_vente(payment_ref);
 
--- Insérer les points de vente par défaut avec leurs codes de référence de paiement
-INSERT INTO points_vente (nom, active, payment_ref) VALUES ('Keur Bali', TRUE, 'V_KB') ON CONFLICT (nom) DO UPDATE SET payment_ref = 'V_KB';
-INSERT INTO points_vente (nom, active, payment_ref) VALUES ('Abattage', TRUE, 'V_ABATS') ON CONFLICT (nom) DO UPDATE SET payment_ref = 'V_ABATS';
+-- Insérer le point de vente Abattage par défaut (les autres peuvent être créés via l'admin)
+INSERT INTO points_vente (nom, active, payment_ref) VALUES ('Abattage', TRUE, 'V_ABATS') ON CONFLICT (nom) DO UPDATE SET active = TRUE, payment_ref = 'V_ABATS';
 
 -- =====================================================
 -- TABLE: user_points_vente
@@ -670,12 +669,26 @@ CREATE INDEX IF NOT EXISTS idx_prix_historique_point_vente_id ON prix_historique
 CREATE INDEX IF NOT EXISTS idx_prix_historique_created_at ON prix_historique(created_at);
 
 -- =====================================================
+-- NETTOYAGE DES DONNÉES HISTORIQUES (optionnel)
+-- =====================================================
+-- Pour nettoyer les données des anciens points de vente, décommentez les lignes suivantes:
+-- DELETE FROM cash_payments 
+-- WHERE point_de_vente IS NOT NULL 
+-- AND point_de_vente NOT IN (SELECT nom FROM points_vente WHERE active = TRUE);
+
+-- Normaliser les références de paiement
+UPDATE cash_payments SET point_de_vente = 'Abattage' WHERE point_de_vente = 'V_ABATS';
+
+-- =====================================================
 -- VÉRIFICATION
 -- =====================================================
 -- Afficher les tables créées
 SELECT table_name FROM information_schema.tables 
 WHERE table_schema = 'public' 
 ORDER BY table_name;
+
+-- Vérifier les points de vente actifs
+SELECT nom, active, payment_ref FROM points_vente ORDER BY nom;
 
 -- =====================================================
 -- FIN DU SCRIPT

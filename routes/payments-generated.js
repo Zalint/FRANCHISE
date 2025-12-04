@@ -5,16 +5,8 @@ const PaymentLink = require('../db/models/PaymentLink');
 const configService = require('../db/config-service');
 const { checkAuth, checkReadAccess } = require('../middlewares/auth');
 
-// Mapping des codes de référence de paiement vers les noms de points de vente
-const PAYMENT_REF_MAPPING = {
-    'V_TB': 'Touba',
-    'V_DHR': 'Dahra',
-    'V_LGR': 'Linguere',
-    'V_MBA': 'Mbao',
-    'V_OSF': 'O.Foire',
-    'V_SAC': 'Sacre Coeur',
-    'V_ABATS': 'Abattage'
-};
+// Le mapping des références de paiement est maintenant géré depuis la base de données
+const PointVente = require('../db/models/PointVente');
 
 const router = express.Router();
 
@@ -266,16 +258,18 @@ router.get('/bictorys/source', checkAuthOrApiKey, async (req, res) => {
             });
         }
 
-        // 3. Mapping des points de vente vers les références Bictorys
+        // 3. Mapping des points de vente vers les références Bictorys depuis la BDD
         const POINT_VENTE_TO_REFS = {};
-        // Ajouter les références depuis le mapping local
-        Object.entries(PAYMENT_REF_MAPPING).forEach(([ref, pointVenteName]) => {
-            const gRef = ref.replace('V_', 'G_');
-            POINT_VENTE_TO_REFS[pointVenteName] = [ref, gRef];
+        const pointsVenteFromDb = await PointVente.findAll({
+            where: { payment_ref: { [Op.ne]: null } }
         });
-        // Ajouter les références supplémentaires non incluses dans le fichier de base
-        POINT_VENTE_TO_REFS['Aliou Sow'] = ['V_ALS', 'G_ALS'];
-        POINT_VENTE_TO_REFS['Keur Massar'] = ['V_KM', 'G_KM'];
+        
+        for (const pv of pointsVenteFromDb) {
+            if (pv.payment_ref) {
+                const gRef = pv.payment_ref.replace('V_', 'G_');
+                POINT_VENTE_TO_REFS[pv.nom] = [pv.payment_ref, gRef];
+            }
+        }
 
         const references = POINT_VENTE_TO_REFS[pointVente];
         

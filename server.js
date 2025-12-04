@@ -532,16 +532,20 @@ const checkStrictAdminOnly = (req, res, next) => {
     }
 };
 
-// Mapping des codes de référence de paiement vers les noms de points de vente
-// Note: Seulement les points de vente actifs (Keur Bali et Abattage)
-const PAYMENT_REF_MAPPING = {
-    'V_KB': 'Keur Bali',
-    'V_ABATS': 'Abattage'
-};
-
-// Fonction utilitaire pour charger le mapping des références de paiement
-const getPaymentRefMapping = () => {
-    return PAYMENT_REF_MAPPING;
+// Fonction utilitaire pour charger le mapping des références de paiement depuis la BDD
+const getPaymentRefMapping = async () => {
+    const { PointVente } = require('./db/models');
+    const { Op } = require('sequelize');
+    const pvList = await PointVente.findAll({ 
+        where: { active: true, payment_ref: { [Op.ne]: null } } 
+    });
+    const mapping = {};
+    for (const pv of pvList) {
+        if (pv.payment_ref) {
+            mapping[pv.payment_ref] = pv.nom;
+        }
+    }
+    return mapping;
 };
 
 // Middleware d'authentification par API key pour services externes comme Relevance AI
@@ -593,11 +597,20 @@ const STOCK_MATIN_PATH = path.join(__dirname, 'data', 'stock-matin.json');
 const STOCK_SOIR_PATH = path.join(__dirname, 'data', 'stock-soir.json');
 const TRANSFERTS_PATH = path.join(__dirname, 'data', 'transferts.json');
 
-// Constantes pour le mappage des références de paiement aux points de vente
-const PAYMENT_REF_TO_PDV = {
-  ...PAYMENT_REF_MAPPING,
-  'V_ALS': 'Aliou Sow',
-  'V_KM': 'Keur Massar'
+// Fonction pour récupérer le mappage des références de paiement depuis la BDD
+const getPaymentRefToPdv = async () => {
+    const { PointVente } = require('./db/models');
+    const { Op } = require('sequelize');
+    const pvList = await PointVente.findAll({ 
+        where: { payment_ref: { [Op.ne]: null } } 
+    });
+    const mapping = {};
+    for (const pv of pvList) {
+        if (pv.payment_ref) {
+            mapping[pv.payment_ref] = pv.nom;
+        }
+    }
+    return mapping;
 };
 
 // Fonction pour obtenir le chemin du fichier en fonction de la date
@@ -3705,15 +3718,25 @@ app.get('/api/cash-payments/aggregated', checkAuth, checkReadAccess, async (req,
         const dateMap = new Map();
         
         result.forEach(row => {
-            if (!dateMap.has(row.date)) {
-                dateMap.set(row.date, {
-                    date: row.date,
-                    points: []
-                });
-                aggregatedData.push(dateMap.get(row.date));
+            // Normaliser la date au format YYYY-MM-DD (chaîne)
+            let dateStr = row.date;
+            if (row.date instanceof Date) {
+                // Si c'est un objet Date, le convertir en chaîne YYYY-MM-DD
+                dateStr = row.date.toISOString().split('T')[0];
+            } else if (typeof row.date === 'string' && row.date.includes('T')) {
+                // Si c'est une chaîne ISO avec l'heure, garder seulement la date
+                dateStr = row.date.split('T')[0];
             }
             
-            dateMap.get(row.date).points.push({
+            if (!dateMap.has(dateStr)) {
+                dateMap.set(dateStr, {
+                    date: dateStr,
+                    points: []
+                });
+                aggregatedData.push(dateMap.get(dateStr));
+            }
+            
+            dateMap.get(dateStr).points.push({
                 point: row.point_de_vente,
                 total: row.total
             });
@@ -3982,14 +4005,14 @@ app.post('/api/cash-payments/manual', checkAuth, checkAdminOnly, async (req, res
             });
         }
         
-        // Convertir la date au format DD/MM/YYYY pour cohérence avec les données existantes
+        // Convertir la date au format ISO YYYY-MM-DD pour PostgreSQL
         // La date peut arriver en format "2025-12-04", "04-Dec-2025", "04/12/2025", etc.
         let dateObj;
         if (date.includes('-') && date.length === 10 && date.indexOf('-') === 4) {
             // Format ISO: 2025-12-04
             dateObj = new Date(date);
         } else if (date.includes('/')) {
-            // Format DD/MM/YYYY
+            // Format DD/MM/YYYY - convertir correctement
             const parts = date.split('/');
             dateObj = new Date(parts[2], parts[1] - 1, parts[0]);
         } else if (date.includes('-')) {
@@ -4007,7 +4030,13 @@ app.post('/api/cash-payments/manual', checkAuth, checkAdminOnly, async (req, res
             });
         }
         
-        const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
+        // Format ISO pour PostgreSQL (YYYY-MM-DD) - IMPORTANT: ne pas utiliser DD/MM/YYYY car PostgreSQL l'interprète mal
+        const formattedDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+        // Format d'affichage pour les messages (DD/MM/YYYY)
+        const displayDate = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
+        
+        // DEBUG: Log pour vérifier les dates
+        console.log(`[CASH PAYMENT DEBUG] Date reçue: "${date}", DateObj: ${dateObj.toISOString()}, formattedDate: "${formattedDate}", displayDate: "${displayDate}"`);
         
         // Vérifier s'il existe déjà un paiement pour cette date et ce point de vente
         const existingPayment = await CashPayment.findOne({
@@ -4035,12 +4064,12 @@ app.post('/api/cash-payments/manual', checkAuth, checkAdminOnly, async (req, res
                 created_by: username
             });
             
-            console.log(`Paiement manuel ajouté - Mise à jour: ${pointVente} ${formattedDate} - Nouveau total: ${newAmount} FCFA (ajout de ${amount} FCFA)`);
+            console.log(`Paiement manuel ajouté - Mise à jour: ${pointVente} ${displayDate} - Nouveau total: ${newAmount} FCFA (ajout de ${amount} FCFA)`);
         } else {
             // Créer un nouveau paiement
             await CashPayment.create({
                 created_at: new Date(), // Requis par le modèle
-                date: formattedDate,
+                date: formattedDate, // Format ISO YYYY-MM-DD pour PostgreSQL
                 point_de_vente: pointVente,
                 amount: parseFloat(amount),
                 reference: reference || '',
@@ -4049,12 +4078,12 @@ app.post('/api/cash-payments/manual', checkAuth, checkAdminOnly, async (req, res
                 created_by: username
             });
             
-            console.log(`Nouveau paiement manuel créé: ${pointVente} ${formattedDate} - ${amount} FCFA`);
+            console.log(`Nouveau paiement manuel créé: ${pointVente} ${displayDate} - ${amount} FCFA`);
         }
         
         res.json({
             success: true,
-            message: `Paiement de ${amount} FCFA ajouté avec succès pour ${pointVente} le ${formattedDate}`
+            message: `Paiement de ${amount} FCFA ajouté avec succès pour ${pointVente} le ${displayDate}`
         });
         
     } catch (error) {
@@ -6133,13 +6162,21 @@ const bictorys = axios.create({
             }
         }
 
-// Mapping inverse pour obtenir la référence à partir du point de vente
-const POINT_VENTE_TO_REF = {};
-Object.entries(PAYMENT_REF_MAPPING).forEach(([ref, pointVente]) => {
-    POINT_VENTE_TO_REF[pointVente] = ref;
-});
-// Ajouter Keur Massar
-POINT_VENTE_TO_REF['Keur Massar'] = 'V_KM';
+// Fonction pour obtenir le mapping inverse (point de vente -> référence) depuis la BDD
+const getPointVenteToRef = async () => {
+    const { PointVente } = require('./db/models');
+    const { Op } = require('sequelize');
+    const pvList = await PointVente.findAll({ 
+        where: { payment_ref: { [Op.ne]: null } } 
+    });
+    const mapping = {};
+    for (const pv of pvList) {
+        if (pv.payment_ref) {
+            mapping[pv.nom] = pv.payment_ref;
+        }
+    }
+    return mapping;
+};
 
 // Route pour obtenir les points de vente accessibles par l'utilisateur
 app.get('/api/payment-links/points-vente', checkAuth, async (req, res) => {
@@ -6242,13 +6279,21 @@ app.post('/api/payment-links/create', checkAuth, async (req, res) => {
             });
         }
         
-        // Obtenir la référence du point de vente
-        let paymentRef = POINT_VENTE_TO_REF[pointVente];
+        // Obtenir la référence du point de vente depuis la BDD
+        const pointVenteToRef = await getPointVenteToRef();
+        let paymentRef = pointVenteToRef[pointVente];
         if (!paymentRef) {
-            return res.status(400).json({
-                success: false,
-                message: 'Point de vente non reconnu'
-            });
+            // Essayer de récupérer directement depuis le point de vente
+            const { PointVente } = require('./db/models');
+            const pvRecord = await PointVente.findOne({ where: { nom: pointVente } });
+            if (pvRecord && pvRecord.payment_ref) {
+                paymentRef = pvRecord.payment_ref;
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Point de vente non reconnu ou sans référence de paiement configurée'
+                });
+            }
         }
         
         // Si c'est un abonnement, remplacer V_ par A_ dans la référence
@@ -9038,26 +9083,8 @@ app.get('/api/external/reconciliation', validateApiKey, async (req, res) => {
                     };
                 }
                 
-                // Add transfer value - consider the impact direction
-                // Transfers should be positive for Mbao and O.Foire (receiving points)
-                // For Abattage (source point), transfers should be negative
-               /* Not needed anymore
-               let impactValue;
-                
-                // Special logic for specific points de vente
-                if (pdv === 'Mbao' || pdv === 'O.Foire') {
-                    // For these PDVs, transfers should be positive values as they are receiving
-                    impactValue = Math.abs(montant);
-                } else if (pdv === 'Abattage') {
-                    // For Abattage (source), transfers should be negative
-                    impactValue = -Math.abs(montant);
-                } else {
-                    // For other PDVs, follow the impact indicator
-                    impactValue = (transfert.impact === 'positif' || transfert.impact === true || transfert.impact === 1) ? 
-                                 montant : -montant;
-                }
-                
-                console.log(`Adding transfer for ${pdv}: ${impactValue} (final value after impact logic)`);*/
+                // Add transfer value - uses the impact indicator from the transfer data
+                // Impact direction is now managed dynamically based on transfer configuration
                 
                 reconciliationByPDV[pdv].transferts += montant;
                 if(detailsByPDV[pdv] && detailsByPDV[pdv][category]) {
@@ -12435,21 +12462,19 @@ app.get('/api/prix-moyen', async (req, res) => {
 // Test endpoint for price calculation
 app.get('/api/test-prix-moyen', checkAuth, async (req, res) => {
     try {
+        // Get active points of sale from DB for examples
+        const { PointVente } = require('./db/models');
+        const pvList = await PointVente.findAll({ where: { active: true }, limit: 2 });
+        const pvNames = pvList.map(pv => pv.nom);
+        
         // Sample data for testing
         const sampleData = {
             success: true,
-            data: [
-                {
-                    date: "2025-03-27",
-                    prix_moyen_pondere: 1250.75,
-                    point_vente: "O.Foire"
-                },
-                {
-                    date: "2025-03-27",
-                    prix_moyen_pondere: 1300.25,
-                    point_vente: "Mbao"
-                }
-            ],
+            data: pvNames.map((pv, i) => ({
+                date: new Date().toISOString().split('T')[0],
+                prix_moyen_pondere: 1250.75 + (i * 50),
+                point_vente: pv
+            })),
             test_info: {
                 endpoint: "/api/prix-moyen",
                 parameters: {
@@ -12459,8 +12484,8 @@ app.get('/api/test-prix-moyen', checkAuth, async (req, res) => {
                 },
                 example_requests: [
                     "/api/prix-moyen?type=boeuf&date=2025-03-27",
-                    "/api/prix-moyen?type=veau&date=2025-03-27&pointVente=O.Foire"
-                ]
+                    pvNames[0] ? `/api/prix-moyen?type=veau&date=2025-03-27&pointVente=${pvNames[0]}` : null
+                ].filter(Boolean)
             }
         };
 

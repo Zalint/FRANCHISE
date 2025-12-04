@@ -651,11 +651,9 @@ function initStocksSection() {
 // Charger les options des filtres
 async function loadFilterOptions() {
     try {
-        // Charger les points de vente
-        const pointsVente = [
-            'Touba', 'Dahra', 'Aliou Sow', 'Linguere', 'Mbao', 
-            'Keur Massar', 'O.Foire', 'Sacre Coeur', 'Abattage'
-        ];
+        // Charger les points de vente depuis l'API (base de données)
+        const response = await fetch('/api/points-vente');
+        const pointsVente = response.ok ? await response.json() : [];
         
         const pointVenteSelect = document.getElementById('point-vente-filter');
         if (pointVenteSelect) {
@@ -2678,7 +2676,6 @@ async function sauvegarderConfigAbonnement() {
             const productName = document.getElementById('newProductName').value.trim();
             const defaultPrice = parseFloat(document.getElementById('newProductDefault').value) || 0;
             const alternativesStr = document.getElementById('newProductAlternatives').value.trim();
-            const sacreCoeurPrice = parseFloat(document.getElementById('newProductSacreCoeur').value);
             
             if (productName && category) {
                 if (!currentProduitsConfig[category][productName]) {
@@ -2689,9 +2686,7 @@ async function sauvegarderConfigAbonnement() {
                             [defaultPrice]
                     };
                     
-                    if (sacreCoeurPrice) {
-                        productConfig['Sacre Coeur'] = sacreCoeurPrice;
-                    }
+                    // Les prix spécifiques par point de vente sont gérés via la BDD
                     
                     currentProduitsConfig[category][productName] = productConfig;
                     afficherProduitsConfig();
@@ -2700,7 +2695,6 @@ async function sauvegarderConfigAbonnement() {
                     document.getElementById('newProductName').value = '';
                     document.getElementById('newProductDefault').value = '';
                     document.getElementById('newProductAlternatives').value = '';
-                    document.getElementById('newProductSacreCoeur').value = '';
                     
                     bootstrap.Modal.getInstance(document.getElementById('addProductModal')).hide();
                 } else {
@@ -2726,8 +2720,6 @@ async function sauvegarderConfigAbonnement() {
             const productName = document.getElementById('newInventaireProductName').value.trim();
             const defaultPrice = parseFloat(document.getElementById('newInventairePrixDefault').value) || 0;
             const alternativesStr = document.getElementById('newInventaireAlternatives').value.trim();
-            const sacreCoeurPrice = parseFloat(document.getElementById('newInventairePrixSacreCoeur').value);
-            const keurMassarPrice = parseFloat(document.getElementById('newInventairePrixKeurMassar').value);
             
             if (productName) {
                 if (!currentInventaireConfig[productName]) {
@@ -2738,13 +2730,7 @@ async function sauvegarderConfigAbonnement() {
                             [defaultPrice]
                     };
                     
-                    if (sacreCoeurPrice) {
-                        productConfig['Sacre Coeur'] = sacreCoeurPrice;
-                    }
-                    
-                    if (keurMassarPrice) {
-                        productConfig['Keur Massar'] = keurMassarPrice;
-                    }
+                    // Les prix spécifiques par point de vente sont gérés via la BDD
                     
                     currentInventaireConfig[productName] = productConfig;
                     afficherInventaireConfig();
@@ -2753,8 +2739,6 @@ async function sauvegarderConfigAbonnement() {
                     document.getElementById('newInventaireProductName').value = '';
                     document.getElementById('newInventairePrixDefault').value = '';
                     document.getElementById('newInventaireAlternatives').value = '';
-                    document.getElementById('newInventairePrixSacreCoeur').value = '';
-                    document.getElementById('newInventairePrixKeurMassar').value = '';
                     
                     bootstrap.Modal.getInstance(document.getElementById('addInventaireProductModal')).hide();
                 } else {
