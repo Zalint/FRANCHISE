@@ -188,6 +188,7 @@ function afficherListePointsVente(pointsVente) {
     pointsVenteTries.forEach(([nom, config]) => {
         const row = document.createElement('tr');
         const pvId = config.id;
+        console.log(`Point de vente: ${nom}, ID: ${pvId}, config:`, config);
         
         // Colonne Nom
         const tdNom = document.createElement('td');

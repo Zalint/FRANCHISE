@@ -345,21 +345,64 @@ const paymentsGeneratedRouter = require('./routes/payments-generated');
 const modulesRouter = require('./routes/modules');
 const configAdminRouter = require('./routes/config-admin');
 
-// Route pour obtenir la liste des points de vente (admin seulement)
-app.get('/api/admin/points-vente', checkAuth, checkAdmin, (req, res) => {
+// Routes des paiements générés
+app.use('/api/payments/generated', paymentsGeneratedRouter);
+
+// Routes d'administration de la configuration (produits, catégories, prix)
+app.use('/api/admin/config', configAdminRouter);
+
+// Route pour obtenir la liste des points de vente avec ID (admin seulement) - depuis BDD
+app.get('/api/admin/points-vente', checkAuth, checkAdmin, async (req, res) => {
     try {
-        res.json({ success: true, pointsVente });
+        const { PointVente } = require('./db/models');
+        const pointsVenteList = await PointVente.findAll({ order: [['nom', 'ASC']] });
+        
+        // Formater pour le frontend
+        const result = {};
+        for (const pv of pointsVenteList) {
+            result[pv.nom] = { 
+                id: pv.id,
+                active: pv.active, 
+                payment_ref: pv.payment_ref 
+            };
+        }
+        
+        res.json({ success: true, pointsVente: result });
     } catch (error) {
         console.error('Erreur lors de la récupération des points de vente:', error);
         res.status(500).json({ success: false, message: 'Erreur serveur' });
     }
 });
 
-// Routes des paiements générés
-app.use('/api/payments/generated', paymentsGeneratedRouter);
-
-// Routes d'administration de la configuration (users, produits, points de vente)
-app.use('/api/admin/config', configAdminRouter);
+// Route pour mettre à jour un point de vente (admin seulement)
+app.put('/api/admin/points-vente/:id', checkAuth, checkAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nom, active, payment_ref } = req.body;
+        
+        const { PointVente } = require('./db/models');
+        const pointVente = await PointVente.findByPk(id);
+        
+        if (!pointVente) {
+            return res.status(404).json({ success: false, error: 'Point de vente non trouvé' });
+        }
+        
+        await pointVente.update({ 
+            nom, 
+            active,
+            payment_ref: payment_ref ? payment_ref.trim().toUpperCase() : null
+        });
+        
+        // Invalider le cache
+        const configService = require('./db/config-service');
+        configService.invalidateCache();
+        
+        res.json({ success: true, data: pointVente });
+    } catch (error) {
+        console.error('Erreur mise à jour point de vente:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 // =================== ROUTES CONFIGURATION CLIENT ===================
 // GET /api/client-config - Obtenir la configuration du client (public)
@@ -796,18 +839,8 @@ app.post('/api/admin/corriger-total', checkAuth, checkSuperAdmin, (req, res) => 
     res.json({ success: true });
 });
 
-// Route pour obtenir les points de vente
-app.get('/api/admin/points-vente', checkAuth, checkAdmin, (req, res) => {
-    console.log('Points de vente demandés:', pointsVente); // Ajout d'un log pour le débogage
-    res.json({ success: true, pointsVente });
-});
-
-// Route pour obtenir la base de données des produits
-app.get('/api/admin/produits', checkAuth, checkAdmin, (req, res) => {
-    res.json({ success: true, produits });
-});
-
 // ==== ROUTES DE CONFIGURATION DES PRODUITS (ADMIN UNIQUEMENT) - via BDD ====
+// Note: Les routes /api/admin/points-vente et /api/admin/produits sont gérées par configAdminRouter
 
 // Fonction utilitaire pour filtrer les fonctions d'un objet (pour JSON)
 function filterFunctions(obj) {
