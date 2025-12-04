@@ -540,6 +540,88 @@ CREATE INDEX IF NOT EXISTS idx_produits_categorie_id ON produits(categorie_id);
 CREATE INDEX IF NOT EXISTS idx_produits_type_catalogue ON produits(type_catalogue);
 
 -- =====================================================
+-- INSERTION DES PRODUITS PAR DÉFAUT
+-- =====================================================
+
+-- Produits de VENTE - Catégorie Bovin
+INSERT INTO produits (nom, categorie_id, type_catalogue, prix_defaut, prix_alternatifs) VALUES 
+    ('Abats', 1, 'vente', 1000, '{1000,1500}'),
+    ('Boeuf en détail', 1, 'vente', 3700, '{3700,3600}'),
+    ('Boeuf en gros', 1, 'vente', 3500, '{3500,3400}'),
+    ('Boeuf sur pied', 1, 'vente', 0, '{}'),
+    ('Coeur', 1, 'vente', 2000, '{2000}'),
+    ('Dechet', 1, 'vente', 1000, '{1000}'),
+    ('Faux Filet', 1, 'vente', 3500, '{3500}'),
+    ('Filet', 1, 'vente', 5000, '{5000,4000,7000}'),
+    ('Foie', 1, 'vente', 3000, '{3000,4000}'),
+    ('Jarret', 1, 'vente', 250, '{250}'),
+    ('Merguez', 1, 'vente', 4500, '{4500}'),
+    ('Peaux', 1, 'vente', 6000, '{6000}'),
+    ('Sans Os', 1, 'vente', 4500, '{4500,4000}'),
+    ('Tete de Boeuf', 1, 'vente', 10000, '{10000}'),
+    ('Veau en détail', 1, 'vente', 3900, '{3900,3800}'),
+    ('Veau en gros', 1, 'vente', 3700, '{3700,3600}'),
+    ('Veau sur pied', 1, 'vente', 0, '{}'),
+    ('Viande hachée', 1, 'vente', 5000, '{5000}'),
+    ('Yell', 1, 'vente', 2000, '{2000,2500}'),
+    ('Faux filet', 1, 'vente', 5000, '{5000}')
+ON CONFLICT (nom, type_catalogue) DO NOTHING;
+
+-- Produits de VENTE - Catégorie Ovin
+INSERT INTO produits (nom, categorie_id, type_catalogue, prix_defaut, prix_alternatifs) VALUES 
+    ('Agneau', 2, 'vente', 4500, '{4500}'),
+    ('Mouton sur pied', 2, 'vente', 0, '{}'),
+    ('Tete Agneau', 2, 'vente', 1000, '{1000,1500}')
+ON CONFLICT (nom, type_catalogue) DO NOTHING;
+
+-- Produits de VENTE - Catégorie Volaille
+INSERT INTO produits (nom, categorie_id, type_catalogue, prix_defaut, prix_alternatifs) VALUES 
+    ('Merguez poulet', 3, 'vente', 5500, '{5500}'),
+    ('Oeuf', 3, 'vente', 2800, '{2800,2900}'),
+    ('Pack Pigeon', 3, 'vente', 2500, '{2500,2000}'),
+    ('Pilon', 3, 'vente', 3500, '{3500}'),
+    ('Poulet en détail', 3, 'vente', 3500, '{3500,3000,3700}'),
+    ('Poulet en gros', 3, 'vente', 3000, '{3000,3300}')
+ON CONFLICT (nom, type_catalogue) DO NOTHING;
+
+-- Produits de VENTE - Catégorie Pack
+INSERT INTO produits (nom, categorie_id, type_catalogue, prix_defaut, prix_alternatifs) VALUES 
+    ('Pack100000', 4, 'vente', 100000, '{100000}'),
+    ('Pack20000', 4, 'vente', 20000, '{20000}'),
+    ('Pack25000', 4, 'vente', 25000, '{25000}'),
+    ('Pack30000', 4, 'vente', 30000, '{30000}'),
+    ('Pack35000', 4, 'vente', 35000, '{35000}'),
+    ('Pack50000', 4, 'vente', 50000, '{50000}'),
+    ('Pack75000', 4, 'vente', 75000, '{75000}')
+ON CONFLICT (nom, type_catalogue) DO NOTHING;
+
+-- Produits de VENTE - Catégorie Caprin
+INSERT INTO produits (nom, categorie_id, type_catalogue, prix_defaut, prix_alternatifs) VALUES 
+    ('Chevre sur pied', 5, 'vente', 4000, '{4000}')
+ON CONFLICT (nom, type_catalogue) DO NOTHING;
+
+-- Produits de VENTE - Catégorie Autres
+INSERT INTO produits (nom, categorie_id, type_catalogue, prix_defaut, prix_alternatifs) VALUES 
+    ('Autre viande', 6, 'vente', 3000, '{3000,4000,5000}'),
+    ('Produit divers', 6, 'vente', 0, '{0}'),
+    ('Service', 6, 'vente', 1000, '{1000,2000,5000,10000}')
+ON CONFLICT (nom, type_catalogue) DO NOTHING;
+
+-- Produits d'INVENTAIRE (sans catégorie)
+INSERT INTO produits (nom, categorie_id, type_catalogue, prix_defaut, prix_alternatifs) VALUES 
+    ('Boeuf', NULL, 'inventaire', 3500, '{3500,3400,3600,3700}'),
+    ('Veau', NULL, 'inventaire', 3700, '{3700,3600,3800,3900}'),
+    ('Agneau', NULL, 'inventaire', 4500, '{4500,4000,5000}'),
+    ('Poulet', NULL, 'inventaire', 3500, '{3500,3000,3700}'),
+    ('Tablette Oeuf', NULL, 'inventaire', 2800, '{2800,2900,3000}'),
+    ('Foie', NULL, 'inventaire', 3000, '{3000,4000}'),
+    ('Abats', NULL, 'inventaire', 1000, '{1000,1500}'),
+    ('Peaux', NULL, 'inventaire', 6000, '{6000}'),
+    ('Yell', NULL, 'inventaire', 2000, '{2000,2500}'),
+    ('Dechet', NULL, 'inventaire', 1000, '{1000}')
+ON CONFLICT (nom, type_catalogue) DO NOTHING;
+
+-- =====================================================
 -- TABLE: prix_point_vente
 -- Description: Prix spécifiques par point de vente
 -- =====================================================
