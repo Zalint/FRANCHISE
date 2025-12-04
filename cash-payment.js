@@ -70,21 +70,37 @@ async function loadCashPaymentData() {
     }
 }
 
-// Fonction pour peupler le filtre de point de vente
-function populatePointVenteFilter() {
+// Fonction pour peupler le filtre de point de vente (uniquement les actifs depuis la BDD)
+async function populatePointVenteFilter() {
     const filterSelect = document.getElementById('point-vente-filter-cash');
     if (!filterSelect) return;
     
     // Garder l'option "Tous les points de vente"
     filterSelect.innerHTML = '<option value="">Tous les points de vente</option>';
     
-    // Ajouter une option pour chaque point de vente unique
-    [...uniquePointsDeVente].sort().forEach(pointVente => {
-        const option = document.createElement('option');
-        option.value = pointVente;
-        option.textContent = pointVente;
-        filterSelect.appendChild(option);
-    });
+    try {
+        // Charger les points de vente actifs depuis l'API
+        const response = await fetch('/api/points-vente');
+        if (response.ok) {
+            const activePointsVente = await response.json();
+            // activePointsVente est un tableau de noms de points de vente actifs
+            activePointsVente.sort().forEach(pointVente => {
+                const option = document.createElement('option');
+                option.value = pointVente;
+                option.textContent = pointVente;
+                filterSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Erreur lors du chargement des points de vente:', error);
+        // Fallback: utiliser les points de vente des données existantes
+        [...uniquePointsDeVente].sort().forEach(pointVente => {
+            const option = document.createElement('option');
+            option.value = pointVente;
+            option.textContent = pointVente;
+            filterSelect.appendChild(option);
+        });
+    }
 }
 
 // Fonction pour appliquer les filtres
