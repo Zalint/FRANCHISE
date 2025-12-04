@@ -187,22 +187,35 @@ function afficherListePointsVente(pointsVente) {
     
     pointsVenteTries.forEach(([nom, config]) => {
         const row = document.createElement('tr');
+        const pvId = config.id;
         
         // Colonne Nom
         const tdNom = document.createElement('td');
         tdNom.textContent = nom;
         row.appendChild(tdNom);
         
-        // Colonne Référence de paiement
+        // Colonne Référence de paiement avec bouton
         const tdPaymentRef = document.createElement('td');
+        const inputGroup = document.createElement('div');
+        inputGroup.className = 'd-flex align-items-center gap-2';
+        
         const paymentRefInput = document.createElement('input');
         paymentRefInput.type = 'text';
         paymentRefInput.className = 'form-control form-control-sm';
         paymentRefInput.value = config.payment_ref || '';
         paymentRefInput.placeholder = 'Ex: V_KB';
         paymentRefInput.style.width = '100px';
-        paymentRefInput.onchange = () => updatePaymentRef(config.id, nom, paymentRefInput.value);
-        tdPaymentRef.appendChild(paymentRefInput);
+        paymentRefInput.id = `payment-ref-${pvId}`;
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn btn-primary btn-sm';
+        saveBtn.innerHTML = '<i class="fas fa-save"></i>';
+        saveBtn.title = 'Sauvegarder';
+        saveBtn.onclick = () => updatePaymentRef(pvId, nom, paymentRefInput.value);
+        
+        inputGroup.appendChild(paymentRefInput);
+        inputGroup.appendChild(saveBtn);
+        tdPaymentRef.appendChild(inputGroup);
         row.appendChild(tdPaymentRef);
         
         // Colonne Statut
@@ -228,6 +241,11 @@ function afficherListePointsVente(pointsVente) {
 
 // Mettre à jour la référence de paiement d'un point de vente
 async function updatePaymentRef(id, nom, paymentRef) {
+    if (!id) {
+        alert('ID du point de vente non trouvé');
+        return;
+    }
+    
     try {
         const response = await fetch(`/api/admin/points-vente/${id}`, {
             method: 'PUT',
@@ -239,10 +257,11 @@ async function updatePaymentRef(id, nom, paymentRef) {
         const data = await response.json();
         
         if (data.success) {
+            alert(`Référence "${paymentRef}" sauvegardée pour ${nom}`);
             console.log(`Référence de paiement mise à jour pour ${nom}: ${paymentRef}`);
         } else {
             alert(data.error || 'Erreur lors de la mise à jour');
-            chargerPointsVente(); // Recharger pour annuler
+            chargerPointsVente();
         }
     } catch (error) {
         console.error('Erreur:', error);
