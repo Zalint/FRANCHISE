@@ -524,6 +524,18 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+DO $$ BEGIN
+    CREATE TYPE mode_stock_type AS ENUM ('manuel', 'automatique');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE unite_stock_type AS ENUM ('unite', 'kilo');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
 CREATE TABLE IF NOT EXISTS produits (
     id SERIAL PRIMARY KEY,
     nom VARCHAR(100) NOT NULL,
@@ -531,10 +543,20 @@ CREATE TABLE IF NOT EXISTS produits (
     type_catalogue type_catalogue NOT NULL,
     prix_defaut DECIMAL(10, 2) NOT NULL DEFAULT 0,
     prix_alternatifs DECIMAL(10, 2)[] DEFAULT '{}',
+    mode_stock mode_stock_type NOT NULL DEFAULT 'manuel',
+    unite_stock unite_stock_type NOT NULL DEFAULT 'unite',
+    categorie_affichage VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_produit_type UNIQUE (nom, type_catalogue)
 );
+
+-- Commentaire pour la colonne categorie_affichage
+COMMENT ON COLUMN produits.categorie_affichage IS 'Catégorie personnalisée pour l''affichage dans l''admin inventaire (ex: Conserve, Boissons)';
+
+-- Commentaires pour les colonnes de gestion de stock
+COMMENT ON COLUMN produits.mode_stock IS 'Mode de gestion: manuel (pesée quotidienne) ou automatique (décrément par vente)';
+COMMENT ON COLUMN produits.unite_stock IS 'Unité de mesure: unite (pièces/bouteilles) ou kilo (poids en kg)';
 
 -- Index pour améliorer les performances de recherche
 CREATE INDEX IF NOT EXISTS idx_produits_categorie_id ON produits(categorie_id);
@@ -623,6 +645,65 @@ INSERT INTO produits (nom, categorie_id, type_catalogue, prix_defaut, prix_alter
 ON CONFLICT (nom, type_catalogue) DO NOTHING;
 
 -- =====================================================
+-- TABLE: stock_auto
+-- Description: Stock actuel des produits en mode automatique
+-- =====================================================
+DO $$ BEGIN
+    CREATE TYPE type_ajustement_stock AS ENUM ('livraison', 'perte', 'inventaire', 'correction', 'transfert_entree', 'transfert_sortie', 'initialisation');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS stock_auto (
+    id SERIAL PRIMARY KEY,
+    produit_id INTEGER NOT NULL REFERENCES produits(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    point_vente_id INTEGER NOT NULL REFERENCES points_vente(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    quantite DECIMAL(10, 3) NOT NULL DEFAULT 0,
+    prix_unitaire DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    dernier_ajustement_type VARCHAR(50),
+    dernier_ajustement_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_stock_auto_produit_point_vente UNIQUE (produit_id, point_vente_id)
+);
+
+-- Index pour améliorer les performances
+CREATE INDEX IF NOT EXISTS idx_stock_auto_produit_id ON stock_auto(produit_id);
+CREATE INDEX IF NOT EXISTS idx_stock_auto_point_vente_id ON stock_auto(point_vente_id);
+
+-- Commentaires
+COMMENT ON TABLE stock_auto IS 'Stock actuel des produits en mode automatique, décrémenté automatiquement lors des ventes';
+COMMENT ON COLUMN stock_auto.quantite IS 'Quantité actuelle (peut être négative si stock à découvert)';
+COMMENT ON COLUMN stock_auto.dernier_ajustement_type IS 'Type du dernier ajustement: livraison, perte, inventaire, etc.';
+
+-- =====================================================
+-- TABLE: stock_ajustements
+-- Description: Historique des ajustements manuels de stock
+-- =====================================================
+CREATE TABLE IF NOT EXISTS stock_ajustements (
+    id SERIAL PRIMARY KEY,
+    stock_auto_id INTEGER NOT NULL REFERENCES stock_auto(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    type_ajustement type_ajustement_stock NOT NULL,
+    quantite_avant DECIMAL(10, 3) NOT NULL,
+    quantite_ajustee DECIMAL(10, 3) NOT NULL,
+    quantite_apres DECIMAL(10, 3) NOT NULL,
+    commentaire TEXT,
+    effectue_par VARCHAR(100) NOT NULL,
+    date_ajustement DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index pour améliorer les performances
+CREATE INDEX IF NOT EXISTS idx_stock_ajustements_stock_auto_id ON stock_ajustements(stock_auto_id);
+CREATE INDEX IF NOT EXISTS idx_stock_ajustements_date ON stock_ajustements(date_ajustement);
+CREATE INDEX IF NOT EXISTS idx_stock_ajustements_type ON stock_ajustements(type_ajustement);
+
+-- Commentaires
+COMMENT ON TABLE stock_ajustements IS 'Historique des ajustements manuels de stock (livraisons, pertes, inventaires, etc.)';
+COMMENT ON COLUMN stock_ajustements.quantite_ajustee IS 'Quantité ajoutée (positif) ou retirée (négatif)';
+
+-- =====================================================
 -- TABLE: prix_point_vente
 -- Description: Prix spécifiques par point de vente
 -- =====================================================
@@ -678,6 +759,30 @@ CREATE INDEX IF NOT EXISTS idx_prix_historique_created_at ON prix_historique(cre
 
 -- Normaliser les références de paiement
 UPDATE cash_payments SET point_de_vente = 'Abattage' WHERE point_de_vente = 'V_ABATS';
+
+-- =====================================================
+-- TABLE HISTORIQUE IMPORTS OCR
+-- =====================================================
+CREATE TABLE IF NOT EXISTS ocr_imports (
+    id SERIAL PRIMARY KEY,
+    date_import TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    date_ventes DATE NOT NULL,
+    point_vente VARCHAR(100) NOT NULL,
+    categorie VARCHAR(100) DEFAULT 'Import OCR',
+    nombre_lignes INTEGER DEFAULT 0,
+    total_montant DECIMAL(15, 2) DEFAULT 0,
+    statut VARCHAR(20) DEFAULT 'completed', -- 'completed', 'partial', 'cancelled'
+    utilisateur VARCHAR(100),
+    image_source TEXT, -- base64 miniature ou référence
+    donnees_json JSONB, -- Données complètes de l'import
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index pour recherche rapide
+CREATE INDEX IF NOT EXISTS idx_ocr_imports_date ON ocr_imports(date_import DESC);
+CREATE INDEX IF NOT EXISTS idx_ocr_imports_point_vente ON ocr_imports(point_vente);
+CREATE INDEX IF NOT EXISTS idx_ocr_imports_date_ventes ON ocr_imports(date_ventes);
 
 -- =====================================================
 -- VÉRIFICATION

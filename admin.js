@@ -1174,6 +1174,13 @@ async function chargerConfigInventaire() {
         
         if (data.success) {
             currentInventaireConfig = data.produitsInventaire;
+            
+            // Mettre à jour les catégories personnalisées depuis le serveur
+            if (data.categoriesPersonnalisees && data.categoriesPersonnalisees.length > 0) {
+                localStorage.setItem('inventaireCategoriesPersonnalisees', JSON.stringify(data.categoriesPersonnalisees));
+                console.log('📁 Catégories personnalisées chargées:', data.categoriesPersonnalisees);
+            }
+            
             afficherInventaireConfig();
         } else {
             console.error('Erreur lors du chargement de la configuration d\'inventaire:', data.message);
@@ -1331,7 +1338,7 @@ function genererLignesProduits(categorie) {
     return html;
 }
 
-// Reorganiser les produits d'inventaire par catégories logiques
+// Reorganiser les produits d'inventaire par catégories logiques + personnalisées
 function reorganiserInventaireParCategories() {
     const inventaireParCategories = {
         "Viandes": {},
@@ -1342,8 +1349,48 @@ function reorganiserInventaireParCategories() {
         "Autres": {}
     };
     
+    // Liste des catégories personnalisées (stockées dans localStorage ou ajoutées manuellement)
+    const categoriesPersonnalisees = JSON.parse(localStorage.getItem('inventaireCategoriesPersonnalisees') || '[]');
+    
+    // Ajouter les catégories personnalisées
+    categoriesPersonnalisees.forEach(cat => {
+        if (!inventaireParCategories[cat]) {
+            inventaireParCategories[cat] = {};
+        }
+    });
+    
     Object.keys(currentInventaireConfig).forEach(produit => {
         const config = currentInventaireConfig[produit];
+        
+        // Si c'est une catégorie personnalisée (objet sans prixDefault contenant des produits)
+        if (typeof config === 'object' && config.prixDefault === undefined) {
+            // Vérifier si c'est une catégorie avec des produits dedans
+            const hasProducts = Object.keys(config).some(key => {
+                const subConfig = config[key];
+                return typeof subConfig === 'object' && subConfig.prixDefault !== undefined;
+            });
+            
+            if (hasProducts || Object.keys(config).length === 0) {
+                // C'est une catégorie personnalisée
+                if (!inventaireParCategories[produit]) {
+                    inventaireParCategories[produit] = {};
+                }
+                // Ajouter les produits de cette catégorie
+                Object.keys(config).forEach(subProduit => {
+                    if (typeof config[subProduit] === 'object' && config[subProduit].prixDefault !== undefined) {
+                        inventaireParCategories[produit][subProduit] = config[subProduit];
+                    }
+                });
+                
+                // Sauvegarder cette catégorie comme personnalisée
+                if (!categoriesPersonnalisees.includes(produit)) {
+                    categoriesPersonnalisees.push(produit);
+                    localStorage.setItem('inventaireCategoriesPersonnalisees', JSON.stringify(categoriesPersonnalisees));
+                }
+                return;
+            }
+        }
+        
         if (typeof config === 'object' && config.prixDefault !== undefined) {
             // Catégoriser les produits selon leur nom
             if (produit.includes('Boeuf') || produit.includes('Veau') || produit.includes('Poulet') || produit.includes('Agneau')) {
@@ -1362,9 +1409,12 @@ function reorganiserInventaireParCategories() {
         }
     });
     
-    // Supprimer les catégories vides
+    // Supprimer les catégories LOGIQUES vides (mais garder les personnalisées)
+    const categoriesLogiques = ["Viandes", "Œufs et Produits Laitiers", "Abats et Sous-produits", "Produits sur Pieds", "Déchets", "Autres"];
+    
     Object.keys(inventaireParCategories).forEach(categorie => {
-        if (Object.keys(inventaireParCategories[categorie]).length === 0) {
+        // Ne supprimer que les catégories logiques vides, garder les personnalisées
+        if (Object.keys(inventaireParCategories[categorie]).length === 0 && categoriesLogiques.includes(categorie)) {
             delete inventaireParCategories[categorie];
         }
     });
@@ -1423,12 +1473,13 @@ function afficherInventaireConfig() {
                                         <th>Produit</th>
                                         <th>Prix Défaut</th>
                                         <th>Alternatives</th>
+                                        <th>Mode Stock</th>
                                         <th>Prix Spéciaux</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${genererLignesProduitsInventaire(produits)}
+                                    ${genererLignesProduitsInventaire(produits, categorie)}
                                 </tbody>
                             </table>
                         </div>
@@ -1441,40 +1492,62 @@ function afficherInventaireConfig() {
 }
 
 // Générer les lignes de produits pour une catégorie d'inventaire
-function genererLignesProduitsInventaire(produits) {
+function genererLignesProduitsInventaire(produits, categorie) {
     let html = '';
+    
+    // Vérifier si c'est une catégorie personnalisée
+    const categoriesPersonnalisees = JSON.parse(localStorage.getItem('inventaireCategoriesPersonnalisees') || '[]');
+    const isCustomCategory = categoriesPersonnalisees.includes(categorie);
+    const catParam = isCustomCategory ? `'${categorie}'` : 'null';
     
     Object.keys(produits).forEach(produit => {
         const config = produits[produit];
         const alternatives = config.alternatives ? config.alternatives.join(', ') : '';
         const prixSpeciaux = Object.keys(config)
-            .filter(key => !['prixDefault', 'alternatives'].includes(key))
+            .filter(key => !['prixDefault', 'alternatives', 'mode_stock', 'unite_stock'].includes(key))
             .map(key => `${key}: ${config[key]}`)
             .join(', ');
+        
+        const modeStock = config.mode_stock || 'manuel';
+        const uniteStock = config.unite_stock || 'unite';
         
         html += `
             <tr>
                 <td>
                     <input type="text" class="form-control form-control-sm" value="${produit}" 
-                           onchange="modifierNomProduitInventaire('${produit}', this.value)">
+                           onchange="modifierNomProduitInventaire('${produit}', this.value, ${catParam})">
                 </td>
                 <td>
                     <input type="number" class="form-control form-control-sm" value="${config.prixDefault}" 
-                           onchange="modifierPrixInventaire('${produit}', 'prixDefault', this.value)">
+                           onchange="modifierPrixInventaire('${produit}', 'prixDefault', this.value, ${catParam})">
                 </td>
                 <td>
                     <input type="text" class="form-control form-control-sm" value="${alternatives}" 
                            placeholder="Ex: 3500,3600"
-                           onchange="modifierAlternativesInventaire('${produit}', this.value)">
+                           onchange="modifierAlternativesInventaire('${produit}', this.value, ${catParam})">
+                </td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <select class="form-select form-select-sm" style="width: 100px;" 
+                                onchange="modifierModeStockInventaire('${produit}', this.value, ${catParam})">
+                            <option value="manuel" ${modeStock === 'manuel' ? 'selected' : ''}>Manuel</option>
+                            <option value="automatique" ${modeStock === 'automatique' ? 'selected' : ''}>Auto</option>
+                        </select>
+                        <select class="form-select form-select-sm" style="width: 80px;" 
+                                onchange="modifierUniteStockInventaire('${produit}', this.value, ${catParam})">
+                            <option value="unite" ${uniteStock === 'unite' ? 'selected' : ''}>Unité</option>
+                            <option value="kilo" ${uniteStock === 'kilo' ? 'selected' : ''}>Kilo</option>
+                        </select>
+                    </div>
                 </td>
                 <td>
                     <small class="text-muted">${prixSpeciaux}</small>
-                    <button class="btn btn-sm btn-outline-primary ms-1" onclick="modifierPrixSpeciauxInventaire('${produit}')">
+                    <button class="btn btn-sm btn-outline-primary ms-1" onclick="modifierPrixSpeciauxInventaire('${produit}', ${catParam})">
                         <i class="fas fa-edit"></i>
                     </button>
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-danger" onclick="supprimerProduitInventaire('${produit}')">
+                    <button class="btn btn-sm btn-danger" onclick="supprimerProduitInventaire('${produit}', ${catParam})">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -1884,11 +1957,32 @@ function ajouterProduitInventaireCategorie(categorie) {
 }
 
 function supprimerCategorieInventaire(categorie) {
-    // Protection pour les catégories d'inventaire - ne pas permettre leur suppression
+    // Protection pour les catégories d'inventaire logiques - ne pas permettre leur suppression
     const categoriesInventairePrincipales = ['Viandes', 'Œufs et Produits Laitiers', 'Abats et Sous-produits', 'Produits sur Pieds', 'Déchets', 'Autres'];
     
     if (categoriesInventairePrincipales.includes(categorie)) {
         alert(`La catégorie "${categorie}" est une catégorie logique du système d'inventaire et ne peut pas être supprimée. Vous pouvez seulement supprimer des produits individuels.`);
+        return;
+    }
+    
+    // Vérifier si c'est une catégorie personnalisée
+    const categoriesPersonnalisees = JSON.parse(localStorage.getItem('inventaireCategoriesPersonnalisees') || '[]');
+    
+    if (categoriesPersonnalisees.includes(categorie)) {
+        if (confirm(`Êtes-vous sûr de vouloir supprimer la catégorie personnalisée "${categorie}" et tous ses produits ?`)) {
+            // Supprimer la catégorie de la config
+            delete currentInventaireConfig[categorie];
+            
+            // Supprimer de la liste des catégories personnalisées
+            const index = categoriesPersonnalisees.indexOf(categorie);
+            if (index > -1) {
+                categoriesPersonnalisees.splice(index, 1);
+                localStorage.setItem('inventaireCategoriesPersonnalisees', JSON.stringify(categoriesPersonnalisees));
+            }
+            
+            afficherInventaireConfig();
+            alert(`Catégorie "${categorie}" supprimée avec succès!`);
+        }
         return;
     }
     
@@ -1927,7 +2021,7 @@ function modifierPrixSpeciauxInventaire(produit) {
     // Récupérer la configuration actuelle du produit
     const config = currentInventaireConfig[produit];
     const prixSpeciaux = Object.keys(config)
-        .filter(key => !['prixDefault', 'alternatives'].includes(key));
+        .filter(key => !['prixDefault', 'alternatives', 'mode_stock', 'unite_stock'].includes(key));
     
     // Créer le modal dynamiquement
     let modalHtml = `
@@ -2002,7 +2096,7 @@ function modifierPrixSpeciauxInventaire(produit) {
 function refreshPrixSpeciauxInventaireTable(produit) {
     const config = currentInventaireConfig[produit];
     const prixSpeciaux = Object.keys(config)
-        .filter(key => !['prixDefault', 'alternatives'].includes(key));
+        .filter(key => !['prixDefault', 'alternatives', 'mode_stock', 'unite_stock'].includes(key));
     
     const tbody = document.getElementById('prixSpeciauxInventaireTableBody');
     if (!tbody) return;
@@ -2130,33 +2224,86 @@ function supprimerPrixSpecialInventaire(produit, pointVente) {
 }
 
 // Fonctions de modification pour les produits d'inventaire
-function modifierNomProduitInventaire(ancienNom, nouveauNom) {
+function modifierNomProduitInventaire(ancienNom, nouveauNom, categorie = null) {
     if (nouveauNom && nouveauNom !== ancienNom) {
-        const config = currentInventaireConfig[ancienNom];
-        delete currentInventaireConfig[ancienNom];
-        currentInventaireConfig[nouveauNom] = config;
+        if (categorie && currentInventaireConfig[categorie]) {
+            // Produit dans une catégorie personnalisée
+            const config = currentInventaireConfig[categorie][ancienNom];
+            delete currentInventaireConfig[categorie][ancienNom];
+            currentInventaireConfig[categorie][nouveauNom] = config;
+        } else {
+            // Produit au niveau racine
+            const config = currentInventaireConfig[ancienNom];
+            delete currentInventaireConfig[ancienNom];
+            currentInventaireConfig[nouveauNom] = config;
+        }
         afficherInventaireConfig();
     }
 }
 
-function modifierPrixInventaire(produit, champ, nouveauPrix) {
-    if (nouveauPrix) {
-        currentInventaireConfig[produit][champ] = parseFloat(nouveauPrix);
-    } else {
-        delete currentInventaireConfig[produit][champ];
+function modifierPrixInventaire(produit, champ, nouveauPrix, categorie = null) {
+    const config = trouverConfigProduitInventaire(produit, categorie);
+    if (config) {
+        if (nouveauPrix) {
+            config[champ] = parseFloat(nouveauPrix);
+        } else {
+            delete config[champ];
+        }
     }
 }
 
-function modifierAlternativesInventaire(produit, alternativesStr) {
-    if (alternativesStr.trim()) {
-        const alternatives = alternativesStr.split(',').map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
-        currentInventaireConfig[produit].alternatives = alternatives;
-    } else {
-        currentInventaireConfig[produit].alternatives = [];
+function modifierAlternativesInventaire(produit, alternativesStr, categorie = null) {
+    const config = trouverConfigProduitInventaire(produit, categorie);
+    if (config) {
+        if (alternativesStr.trim()) {
+            const alternatives = alternativesStr.split(',').map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
+            config.alternatives = alternatives;
+        } else {
+            config.alternatives = [];
+        }
     }
 }
 
-async function supprimerProduitInventaire(produit) {
+function modifierModeStockInventaire(produit, modeStock, categorie = null) {
+    const config = trouverConfigProduitInventaire(produit, categorie);
+    if (config) {
+        config.mode_stock = modeStock;
+        // Si on passe en mode manuel, désactiver le sélecteur d'unité
+        afficherInventaireConfig();
+    }
+}
+
+function modifierUniteStockInventaire(produit, uniteStock, categorie = null) {
+    const config = trouverConfigProduitInventaire(produit, categorie);
+    if (config) {
+        config.unite_stock = uniteStock;
+    }
+}
+
+// Fonction helper pour trouver la config d'un produit (dans catégorie perso ou racine)
+function trouverConfigProduitInventaire(produit, categorie = null) {
+    // Si une catégorie est spécifiée
+    if (categorie && currentInventaireConfig[categorie] && currentInventaireConfig[categorie][produit]) {
+        return currentInventaireConfig[categorie][produit];
+    }
+    
+    // Chercher au niveau racine
+    if (currentInventaireConfig[produit] && currentInventaireConfig[produit].prixDefault !== undefined) {
+        return currentInventaireConfig[produit];
+    }
+    
+    // Chercher dans les catégories personnalisées
+    const categoriesPersonnalisees = JSON.parse(localStorage.getItem('inventaireCategoriesPersonnalisees') || '[]');
+    for (const cat of categoriesPersonnalisees) {
+        if (currentInventaireConfig[cat] && currentInventaireConfig[cat][produit]) {
+            return currentInventaireConfig[cat][produit];
+        }
+    }
+    
+    return null;
+}
+
+async function supprimerProduitInventaire(produit, categorie = null) {
     if (confirm(`Êtes-vous sûr de vouloir supprimer le produit d'inventaire "${produit}" ?`)) {
         try {
             const response = await fetch('/api/admin/config/produits/by-name', {
@@ -2169,7 +2316,11 @@ async function supprimerProduitInventaire(produit) {
             const data = await response.json();
             
             if (data.success) {
-                delete currentInventaireConfig[produit];
+                if (categorie && currentInventaireConfig[categorie]) {
+                    delete currentInventaireConfig[categorie][produit];
+                } else {
+                    delete currentInventaireConfig[produit];
+                }
                 afficherInventaireConfig();
                 alert(`Produit d'inventaire "${produit}" supprimé avec succès`);
             } else {
@@ -2708,7 +2859,38 @@ async function sauvegarderConfigAbonnement() {
     const saveInventaireCategoryBtn = document.getElementById('saveInventaireCategoryBtn');
     if (saveInventaireCategoryBtn) {
         saveInventaireCategoryBtn.addEventListener('click', function() {
-            alert('Les catégories d\'inventaire sont logiques et ne peuvent pas être ajoutées manuellement. Utilisez "Ajouter Produit" dans une catégorie existante.');
+            const categoryName = document.getElementById('newInventaireCategoryName').value.trim();
+            if (categoryName) {
+                // Vérifier si la catégorie existe déjà (dans les logiques ou personnalisées)
+                const categoriesPersonnalisees = JSON.parse(localStorage.getItem('inventaireCategoriesPersonnalisees') || '[]');
+                const categoriesLogiques = ["Viandes", "Œufs et Produits Laitiers", "Abats et Sous-produits", "Produits sur Pieds", "Déchets", "Autres"];
+                
+                if (categoriesLogiques.includes(categoryName) || categoriesPersonnalisees.includes(categoryName)) {
+                    alert('Cette catégorie existe déjà');
+                    return;
+                }
+                
+                // Ajouter la catégorie aux catégories personnalisées
+                categoriesPersonnalisees.push(categoryName);
+                localStorage.setItem('inventaireCategoriesPersonnalisees', JSON.stringify(categoriesPersonnalisees));
+                
+                // Créer la catégorie dans la config
+                currentInventaireConfig[categoryName] = {};
+                
+                afficherInventaireConfig();
+                document.getElementById('newInventaireCategoryName').value = '';
+                
+                // Fermer le modal
+                const modal = document.getElementById('addInventaireCategoryModal');
+                if (modal) {
+                    const bsModal = bootstrap.Modal.getInstance(modal);
+                    if (bsModal) bsModal.hide();
+                }
+                
+                alert('Catégorie "' + categoryName + '" créée avec succès! Vous pouvez maintenant y ajouter des produits.');
+            } else {
+                alert('Veuillez entrer un nom de catégorie');
+            }
         });
     }
     
@@ -2722,28 +2904,46 @@ async function sauvegarderConfigAbonnement() {
             const alternativesStr = document.getElementById('newInventaireAlternatives').value.trim();
             
             if (productName) {
-                if (!currentInventaireConfig[productName]) {
-                    const productConfig = {
-                        prixDefault: defaultPrice,
-                        alternatives: alternativesStr ? 
-                            alternativesStr.split(',').map(p => parseFloat(p.trim())).filter(p => !isNaN(p)) : 
-                            [defaultPrice]
-                    };
-                    
-                    // Les prix spécifiques par point de vente sont gérés via la BDD
-                    
-                    currentInventaireConfig[productName] = productConfig;
-                    afficherInventaireConfig();
-                    
-                    // Réinitialiser le formulaire
-                    document.getElementById('newInventaireProductName').value = '';
-                    document.getElementById('newInventairePrixDefault').value = '';
-                    document.getElementById('newInventaireAlternatives').value = '';
-                    
-                    bootstrap.Modal.getInstance(document.getElementById('addInventaireProductModal')).hide();
+                // Vérifier si c'est une catégorie personnalisée
+                const categoriesPersonnalisees = JSON.parse(localStorage.getItem('inventaireCategoriesPersonnalisees') || '[]');
+                const isCustomCategory = categoriesPersonnalisees.includes(category);
+                
+                const productConfig = {
+                    prixDefault: defaultPrice,
+                    alternatives: alternativesStr ? 
+                        alternativesStr.split(',').map(p => parseFloat(p.trim())).filter(p => !isNaN(p)) : 
+                        [defaultPrice],
+                    mode_stock: 'manuel',
+                    unite_stock: 'unite'
+                };
+                
+                if (isCustomCategory) {
+                    // Pour les catégories personnalisées, stocker dans la sous-structure
+                    if (!currentInventaireConfig[category]) {
+                        currentInventaireConfig[category] = {};
+                    }
+                    if (currentInventaireConfig[category][productName]) {
+                        alert('Ce produit existe déjà dans cette catégorie');
+                        return;
+                    }
+                    currentInventaireConfig[category][productName] = productConfig;
                 } else {
-                    alert('Ce produit existe déjà');
+                    // Pour les catégories logiques, stocker au niveau racine
+                    if (currentInventaireConfig[productName]) {
+                        alert('Ce produit existe déjà');
+                        return;
+                    }
+                    currentInventaireConfig[productName] = productConfig;
                 }
+                
+                afficherInventaireConfig();
+                
+                // Réinitialiser le formulaire
+                document.getElementById('newInventaireProductName').value = '';
+                document.getElementById('newInventairePrixDefault').value = '';
+                document.getElementById('newInventaireAlternatives').value = '';
+                
+                bootstrap.Modal.getInstance(document.getElementById('addInventaireProductModal')).hide();
             }
         });
     }

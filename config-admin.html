@@ -659,13 +659,7 @@
         <nav class="sidebar">
             <div class="nav-section">
                 <div class="nav-section-title">Gestion</div>
-                <div class="nav-item active" data-section="users">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.197-5.197a4 4 0 11-5.292 0"/>
-                    </svg>
-                    <span>Utilisateurs</span>
-                </div>
-                <div class="nav-item" data-section="points-vente">
+                <div class="nav-item active" data-section="points-vente">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -702,42 +696,21 @@
                     </svg>
                     <span>Historique Prix</span>
                 </div>
+                <!-- SUPPRIMÉ - Stock unifié dans les fichiers JSON
+                <div class="nav-item" data-section="stock-auto">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                    <span>Stock Automatique</span>
+                </div>
+                -->
             </div>
         </nav>
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Section Utilisateurs -->
-            <section class="section active" id="section-users">
-                <div class="section-header">
-                    <h2 class="section-title">👤 Gestion des Utilisateurs</h2>
-                    <button class="btn btn-primary" onclick="openUserModal()">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                        </svg>
-                        Ajouter
-                    </button>
-                </div>
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Utilisateur</th>
-                                <th>Rôle</th>
-                                <th>Points de Vente</th>
-                                <th>Statut</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="users-table">
-                            <tr><td colspan="5" class="loading"><div class="spinner"></div> Chargement...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
             <!-- Section Points de Vente -->
-            <section class="section" id="section-points-vente">
+            <section class="section active" id="section-points-vente">
                 <div class="section-header">
                     <h2 class="section-title">📍 Points de Vente</h2>
                     <button class="btn btn-primary" onclick="openPointVenteModal()">
@@ -829,59 +802,11 @@
                     </table>
                 </div>
             </section>
-        </main>
-    </div>
 
-    <!-- Modal Utilisateur -->
-    <div class="modal-overlay" id="user-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3 class="modal-title" id="user-modal-title">Nouvel Utilisateur</h3>
-                <div class="modal-close" onclick="closeModal('user-modal')">&times;</div>
-            </div>
-            <div class="modal-body">
-                <form id="user-form">
-                    <input type="hidden" id="user-id">
-                    <div class="form-group">
-                        <label class="form-label">Nom d'utilisateur</label>
-                        <input type="text" class="form-input" id="user-username" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Mot de passe</label>
-                        <input type="password" class="form-input" id="user-password" placeholder="Laisser vide pour ne pas modifier">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Rôle</label>
-                        <select class="form-input" id="user-role">
-                            <option value="user">Utilisateur</option>
-                            <option value="superviseur">Superviseur</option>
-                            <option value="superutilisateur">Super Utilisateur</option>
-                            <option value="admin">Administrateur</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="checkbox-wrapper">
-                            <input type="checkbox" id="user-acces-tous">
-                            <span>Accès à tous les points de vente</span>
-                        </label>
-                    </div>
-                    <div class="form-group" id="points-vente-select-group">
-                        <label class="form-label">Points de vente autorisés</label>
-                        <div id="points-vente-checkboxes"></div>
-                    </div>
-                    <div class="form-group">
-                        <label class="checkbox-wrapper">
-                            <input type="checkbox" id="user-active" checked>
-                            <span>Compte actif</span>
-                        </label>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('user-modal')">Annuler</button>
-                <button type="button" class="btn btn-primary" onclick="saveUser()">Enregistrer</button>
-            </div>
-        </div>
+            <!-- SUPPRIMÉ - Stock unifié dans les fichiers JSON
+            Section Stock Automatique (lignes 804-848)
+            -->
+        </main>
     </div>
 
     <!-- Modal Point de Vente -->
@@ -949,6 +874,148 @@
         </div>
     </div>
 
+    <!-- Modal Ajustement Stock -->
+    <div class="modal-overlay" id="stock-ajust-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">📦 Ajustement du Stock</h3>
+                <div class="modal-close" onclick="closeModal('stock-ajust-modal')">&times;</div>
+            </div>
+            <div class="modal-body">
+                <form id="stock-ajust-form">
+                    <input type="hidden" id="stock-ajust-id">
+                    
+                    <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="color: var(--text-secondary);">Produit:</span>
+                            <strong id="stock-ajust-produit">-</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="color: var(--text-secondary);">Point de Vente:</span>
+                            <strong id="stock-ajust-pv">-</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">Stock Actuel:</span>
+                            <strong id="stock-ajust-actuel" style="color: var(--accent-info);">-</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Type d'ajustement</label>
+                        <select class="form-input" id="stock-ajust-type" required>
+                            <option value="">Sélectionner...</option>
+                            <option value="livraison">📥 Livraison (entrée)</option>
+                            <option value="perte">📤 Perte / Casse (sortie)</option>
+                            <option value="inventaire">📋 Inventaire (correction)</option>
+                            <option value="correction">🔧 Correction manuelle</option>
+                            <option value="transfert_entree">➡️ Transfert entrant</option>
+                            <option value="transfert_sortie">⬅️ Transfert sortant</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Quantité à ajouter/retirer</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="number" class="form-input" id="stock-ajust-quantite" step="0.1" required style="flex: 1;">
+                            <span id="stock-ajust-unite" style="color: var(--text-secondary);">unités</span>
+                        </div>
+                        <small style="color: var(--text-muted);">Nombre positif = ajout, Nombre négatif = retrait</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Commentaire (obligatoire)</label>
+                        <textarea class="form-input" id="stock-ajust-commentaire" rows="2" required placeholder="Raison de l'ajustement..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('stock-ajust-modal')">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="saveStockAjustement()">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Initialisation Stock -->
+    <div class="modal-overlay" id="stock-init-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">🆕 Initialiser le Stock</h3>
+                <div class="modal-close" onclick="closeModal('stock-init-modal')">&times;</div>
+            </div>
+            <div class="modal-body">
+                <form id="stock-init-form">
+                    <div class="form-group">
+                        <label class="form-label">Produit (mode automatique)</label>
+                        <select class="form-input" id="stock-init-produit" required>
+                            <option value="">Sélectionner un produit...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Point de Vente</label>
+                        <select class="form-input" id="stock-init-pv" required>
+                            <option value="">Sélectionner...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Quantité initiale</label>
+                        <input type="number" class="form-input" id="stock-init-quantite" step="0.1" min="0" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Prix unitaire (FCFA)</label>
+                        <input type="number" class="form-input" id="stock-init-prix" step="1" min="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Commentaire</label>
+                        <input type="text" class="form-input" id="stock-init-commentaire" placeholder="Stock initial...">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('stock-init-modal')">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="saveStockInit()">Initialiser</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Historique Stock -->
+    <div class="modal-overlay" id="stock-historique-modal">
+        <div class="modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 class="modal-title">📜 Historique des Ajustements</h3>
+                <div class="modal-close" onclick="closeModal('stock-historique-modal')">&times;</div>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 1rem;">
+                    <strong id="stock-hist-produit">-</strong> @ <span id="stock-hist-pv">-</span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Avant</th>
+                                <th>+/-</th>
+                                <th>Après</th>
+                                <th>Par</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stock-historique-table">
+                            <tr><td colspan="6">Chargement...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('stock-historique-modal')">Fermer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
@@ -956,7 +1023,7 @@
         // Variables globales
         let pointsVenteList = [];
         let categoriesList = [];
-        let currentSection = 'users';
+        let currentSection = 'points-vente';
 
         // =====================================================
         // NAVIGATION
@@ -988,9 +1055,6 @@
 
         function loadSectionData(section) {
             switch(section) {
-                case 'users':
-                    loadUsers();
-                    break;
                 case 'points-vente':
                     loadPointsVente();
                     break;
@@ -1005,6 +1069,9 @@
                     break;
                 case 'historique':
                     loadHistorique();
+                    break;
+                case 'stock-auto':
+                    chargerStockAuto();
                     break;
             }
         }
@@ -1031,149 +1098,6 @@
         }
 
         // =====================================================
-        // UTILISATEURS
-        // =====================================================
-        async function loadUsers() {
-            try {
-                const { data } = await apiCall('/api/admin/users');
-                renderUsersTable(data);
-            } catch (error) {
-                showToast(error.message, 'error');
-            }
-        }
-
-        function renderUsersTable(users) {
-            const tbody = document.getElementById('users-table');
-            if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Aucun utilisateur</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = users.map(user => `
-                <tr>
-                    <td><strong>${user.username}</strong></td>
-                    <td><span class="badge badge-${getRoleBadgeClass(user.role)}">${user.role}</span></td>
-                    <td>${user.acces_tous_points ? '<span class="badge badge-success">Tous</span>' : (user.pointsVente?.map(pv => pv.nom).join(', ') || '-')}</td>
-                    <td><span class="badge ${user.active ? 'badge-success' : 'badge-danger'}">${user.active ? 'Actif' : 'Inactif'}</span></td>
-                    <td class="actions">
-                        <button class="btn btn-sm btn-secondary" onclick="editUser(${user.id})">Modifier</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id}, '${user.username}')">Supprimer</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function getRoleBadgeClass(role) {
-            switch(role) {
-                case 'admin': return 'danger';
-                case 'superutilisateur': return 'warning';
-                case 'superviseur': return 'info';
-                default: return 'primary';
-            }
-        }
-
-        function openUserModal(user = null) {
-            document.getElementById('user-modal-title').textContent = user ? 'Modifier l\'utilisateur' : 'Nouvel Utilisateur';
-            document.getElementById('user-id').value = user?.id || '';
-            document.getElementById('user-username').value = user?.username || '';
-            document.getElementById('user-password').value = '';
-            document.getElementById('user-role').value = user?.role || 'user';
-            document.getElementById('user-acces-tous').checked = user?.acces_tous_points || false;
-            document.getElementById('user-active').checked = user?.active !== false;
-
-            // Charger les checkboxes de points de vente
-            loadPointsVenteCheckboxes(user?.pointsVente?.map(pv => pv.id) || []);
-
-            togglePointsVenteSelect();
-            document.getElementById('user-modal').classList.add('active');
-        }
-
-        async function loadPointsVenteCheckboxes(selectedIds = []) {
-            if (pointsVenteList.length === 0) {
-                try {
-                    const { data } = await apiCall('/api/admin/points-vente');
-                    pointsVenteList = data;
-                } catch (error) {
-                    console.error('Erreur chargement points de vente:', error);
-                }
-            }
-
-            const container = document.getElementById('points-vente-checkboxes');
-            container.innerHTML = pointsVenteList.map(pv => `
-                <label class="checkbox-wrapper" style="margin-bottom: 0.5rem; display: block;">
-                    <input type="checkbox" name="user-pv" value="${pv.id}" ${selectedIds.includes(pv.id) ? 'checked' : ''}>
-                    <span>${pv.nom}</span>
-                </label>
-            `).join('');
-        }
-
-        document.getElementById('user-acces-tous').addEventListener('change', togglePointsVenteSelect);
-
-        function togglePointsVenteSelect() {
-            const accesTous = document.getElementById('user-acces-tous').checked;
-            document.getElementById('points-vente-select-group').style.display = accesTous ? 'none' : 'block';
-        }
-
-        async function saveUser() {
-            const id = document.getElementById('user-id').value;
-            const userData = {
-                username: document.getElementById('user-username').value,
-                role: document.getElementById('user-role').value,
-                accesTousPoints: document.getElementById('user-acces-tous').checked,
-                active: document.getElementById('user-active').checked
-            };
-
-            const password = document.getElementById('user-password').value;
-            if (password) userData.password = password;
-
-            if (!userData.accesTousPoints) {
-                userData.pointsVente = Array.from(document.querySelectorAll('input[name="user-pv"]:checked'))
-                    .map(cb => pointsVenteList.find(pv => pv.id == cb.value)?.nom)
-                    .filter(Boolean);
-            }
-
-            try {
-                if (id) {
-                    await apiCall(`/api/admin/users/${id}`, 'PUT', userData);
-                    showToast('Utilisateur mis à jour', 'success');
-                } else {
-                    if (!password) {
-                        showToast('Le mot de passe est requis pour un nouvel utilisateur', 'error');
-                        return;
-                    }
-                    await apiCall('/api/admin/users', 'POST', userData);
-                    showToast('Utilisateur créé', 'success');
-                }
-                closeModal('user-modal');
-                loadUsers();
-            } catch (error) {
-                showToast(error.message, 'error');
-            }
-        }
-
-        async function editUser(id) {
-            try {
-                const { data } = await apiCall('/api/admin/users');
-                const user = data.find(u => u.id === id);
-                if (user) openUserModal(user);
-            } catch (error) {
-                showToast(error.message, 'error');
-            }
-        }
-
-        async function deleteUser(id, username) {
-            if (!confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${username}" ?`)) return;
-
-            try {
-                await apiCall(`/api/admin/users/${id}`, 'DELETE');
-                showToast('Utilisateur supprimé', 'success');
-                loadUsers();
-            } catch (error) {
-                showToast(error.message, 'error');
-            }
-        }
-
-        // =====================================================
         // POINTS DE VENTE
         // =====================================================
         async function loadPointsVente() {
@@ -1188,7 +1112,7 @@
 
         function renderPointsVenteTable(pointsVente) {
             const tbody = document.getElementById('points-vente-table');
-            if (pointsVente.length === 0) {
+            if (!pointsVente || pointsVente.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucun point de vente</td></tr>';
                 return;
             }
@@ -1283,19 +1207,87 @@
             try {
                 // Charger les catégories si nécessaire
                 if (categoriesList.length === 0) {
-                    const catResponse = await apiCall('/api/admin/categories');
-                    categoriesList = catResponse.data;
+                    try {
+                        const catResponse = await apiCall('/api/admin/config/categories');
+                        categoriesList = catResponse.data || [];
+                    } catch (e) {
+                        console.warn('Catégories non disponibles:', e);
+                        categoriesList = [];
+                    }
                 }
 
-                const { data } = await apiCall(`/api/admin/produits?type_catalogue=${typeCatalogue}`);
-                renderProduitsTable(data, typeCatalogue, container);
+                let produits = [];
+                
+                if (typeCatalogue === 'inventaire') {
+                    // Utiliser la route spécifique pour l'inventaire
+                    const response = await apiCall('/api/admin/config/produits-inventaire');
+                    const inventaireData = response.produitsInventaire || {};
+                    const categoriesPerso = response.categoriesPersonnalisees || [];
+                    
+                    // Convertir l'objet en tableau
+                    for (const [key, value] of Object.entries(inventaireData)) {
+                        // Vérifier si c'est une catégorie personnalisée
+                        if (categoriesPerso.includes(key) || (typeof value === 'object' && !value.prixDefault)) {
+                            // C'est une catégorie, itérer ses produits
+                            for (const [produitNom, config] of Object.entries(value)) {
+                                if (typeof config === 'object' && config.prixDefault !== undefined) {
+                                    produits.push({
+                                        nom: produitNom,
+                                        prix_defaut: config.prixDefault,
+                                        prix_alternatifs: config.alternatives || [],
+                                        mode_stock: config.mode_stock || 'manuel',
+                                        unite_stock: config.unite_stock || 'unite',
+                                        categorie_affichage: key,
+                                        prixParPointVente: Object.entries(config)
+                                            .filter(([k, v]) => !['prixDefault', 'alternatives', 'mode_stock', 'unite_stock'].includes(k))
+                                            .map(([pvNom, prix]) => ({ pointVente: { nom: pvNom }, prix }))
+                                    });
+                                }
+                            }
+                        } else if (typeof value === 'object' && value.prixDefault !== undefined) {
+                            // C'est un produit au niveau racine
+                            produits.push({
+                                nom: key,
+                                prix_defaut: value.prixDefault,
+                                prix_alternatifs: value.alternatives || [],
+                                mode_stock: value.mode_stock || 'manuel',
+                                unite_stock: value.unite_stock || 'unite',
+                                categorie_affichage: null,
+                                prixParPointVente: Object.entries(value)
+                                    .filter(([k, v]) => !['prixDefault', 'alternatives', 'mode_stock', 'unite_stock'].includes(k))
+                                    .map(([pvNom, prix]) => ({ pointVente: { nom: pvNom }, prix }))
+                            });
+                        }
+                    }
+                } else {
+                    // Pour vente et abonnement, utiliser la route standard
+                    const response = await apiCall(`/api/admin/config/produits?type_catalogue=${typeCatalogue}`);
+                    const produitsData = response.produits || {};
+                    
+                    // Convertir l'objet structuré par catégories en tableau
+                    for (const [catName, catProduits] of Object.entries(produitsData)) {
+                        for (const [produitNom, config] of Object.entries(catProduits)) {
+                            produits.push({
+                                nom: produitNom,
+                                categorie: { nom: catName },
+                                prix_defaut: config.default,
+                                prix_alternatifs: config.alternatives || [],
+                                prixParPointVente: Object.entries(config)
+                                    .filter(([k, v]) => !['default', 'alternatives'].includes(k))
+                                    .map(([pvNom, prix]) => ({ pointVente: { nom: pvNom }, prix }))
+                            });
+                        }
+                    }
+                }
+                
+                renderProduitsTable(produits, typeCatalogue, container);
             } catch (error) {
                 container.innerHTML = `<div class="empty-state">Erreur: ${error.message}</div>`;
             }
         }
 
         function renderProduitsTable(produits, typeCatalogue, container) {
-            if (produits.length === 0) {
+            if (!produits || produits.length === 0) {
                 container.innerHTML = '<div class="empty-state">Aucun produit dans ce catalogue</div>';
                 return;
             }
@@ -1333,25 +1325,67 @@
                     </div>
                 `).join('');
             } else {
-                container.innerHTML = `
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Produit</th>
-                                    <th>Prix par défaut</th>
-                                    <th>Prix alternatifs</th>
-                                    <th>Prix spécifiques</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${produits.map(p => renderProduitRow(p, typeCatalogue)).join('')}
-                            </tbody>
-                        </table>
+                // Pour inventaire, grouper par catégorie d'affichage
+                const grouped = { '📦 Produits Standard': [] };
+                produits.forEach(p => {
+                    const cat = p.categorie_affichage || '📦 Produits Standard';
+                    if (!grouped[cat]) grouped[cat] = [];
+                    grouped[cat].push(p);
+                });
+                
+                container.innerHTML = Object.entries(grouped).map(([catName, prods]) => `
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">${catName}</h3>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Produit</th>
+                                        <th>Mode Stock</th>
+                                        <th>Unité</th>
+                                        <th>Prix par défaut</th>
+                                        <th>Prix spécifiques</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${prods.map(p => renderProduitRowInventaire(p)).join('')}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                `;
+                `).join('');
             }
+        }
+        
+        function renderProduitRowInventaire(produit) {
+            const modeStock = produit.mode_stock || 'manuel';
+            const uniteStock = produit.unite_stock || 'unite';
+            const modeBadge = modeStock === 'automatique' 
+                ? '<span class="badge badge-primary">⚡ Auto</span>' 
+                : '<span class="badge badge-secondary">🔧 Manuel</span>';
+            const uniteBadge = uniteStock === 'kilo' 
+                ? '<span class="badge badge-info">kg</span>' 
+                : '<span class="badge badge-secondary">unité</span>';
+            
+            const prixSpecifiques = produit.prixParPointVente?.map(ppv => 
+                `${ppv.pointVente?.nom}: ${formatPrice(ppv.prix)}`
+            ).join(', ') || '-';
+            
+            return `
+                <tr>
+                    <td><strong>${produit.nom}</strong></td>
+                    <td>${modeBadge}</td>
+                    <td>${uniteBadge}</td>
+                    <td>${formatPrice(produit.prix_defaut)}</td>
+                    <td><small>${prixSpecifiques}</small></td>
+                    <td class="actions">
+                        <button class="btn btn-sm btn-secondary" onclick="editProduitInventaire('${produit.nom}')">Modifier</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteProduit('${produit.nom}', 'inventaire')">Supprimer</button>
+                    </td>
+                </tr>`;
         }
 
         function renderProduitRow(produit, typeCatalogue) {
@@ -1419,10 +1453,10 @@
 
             try {
                 if (id) {
-                    await apiCall(`/api/admin/produits/${id}`, 'PUT', data);
+                    await apiCall(`/api/admin/config/produits/${id}`, 'PUT', data);
                     showToast('Produit mis à jour', 'success');
                 } else {
-                    await apiCall('/api/admin/produits', 'POST', data);
+                    await apiCall('/api/admin/config/produits', 'POST', data);
                     showToast('Produit créé', 'success');
                 }
                 closeModal('produit-modal');
@@ -1458,7 +1492,7 @@
         // =====================================================
         async function loadHistorique() {
             try {
-                const { data } = await apiCall('/api/admin/historique?limit=100');
+                const { data } = await apiCall('/api/admin/config/historique?limit=100');
                 renderHistoriqueTable(data);
             } catch (error) {
                 showToast(error.message, 'error');
@@ -1467,7 +1501,7 @@
 
         function renderHistoriqueTable(historique) {
             const tbody = document.getElementById('historique-table');
-            if (historique.length === 0) {
+            if (!historique || historique.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Aucun historique</td></tr>';
                 return;
             }
@@ -1537,10 +1571,323 @@
         });
 
         // =====================================================
+        // STOCK AUTOMATIQUE
+        // =====================================================
+        let stockAutoData = [];
+
+        async function chargerStockAuto() {
+            const tbody = document.getElementById('stock-auto-table');
+            tbody.innerHTML = '<tr><td colspan="8" class="loading"><div class="spinner"></div> Chargement...</td></tr>';
+            
+            try {
+                // Charger les points de vente pour le filtre
+                const pvResponse = await fetch('/api/points-vente', { credentials: 'include' });
+                const pvData = await pvResponse.json();
+                
+                const filterPv = document.getElementById('stock-auto-filter-pv');
+                filterPv.innerHTML = '<option value="">Tous les points de vente</option>';
+                if (Array.isArray(pvData)) {
+                    pvData.forEach(pv => {
+                        filterPv.innerHTML += `<option value="${pv}">${pv}</option>`;
+                    });
+                }
+                
+                // Charger le stock
+                const pointVenteFilter = filterPv.value;
+                let url = '/api/stock-auto';
+                if (pointVenteFilter) {
+                    url += `?point_vente_id=${pointVenteFilter}`;
+                }
+                
+                const response = await fetch(url, { credentials: 'include' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    stockAutoData = data.data || [];
+                    afficherStockAuto();
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="8" style="color: var(--accent-danger);">Erreur: ${data.error}</td></tr>`;
+                }
+            } catch (error) {
+                console.error('Erreur chargement stock auto:', error);
+                tbody.innerHTML = `<tr><td colspan="8" style="color: var(--accent-danger);">Erreur: ${error.message}</td></tr>`;
+            }
+        }
+
+        function afficherStockAuto() {
+            const tbody = document.getElementById('stock-auto-table');
+            
+            if (!stockAutoData || stockAutoData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 2rem;">
+                            <div style="color: var(--text-muted); margin-bottom: 1rem;">Aucun stock automatique configuré</div>
+                            <button class="btn btn-primary" onclick="openStockInitModal()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                                Initialiser un stock
+                            </button>
+                        </td>
+                    </tr>`;
+                return;
+            }
+            
+            let html = '';
+            stockAutoData.forEach(stock => {
+                const produit = stock.produit || {};
+                const pv = stock.pointVente || {};
+                const quantite = parseFloat(stock.quantite) || 0;
+                const prixUnit = parseFloat(stock.prix_unitaire) || 0;
+                const valeur = quantite * prixUnit;
+                const unite = produit.unite_stock === 'kilo' ? 'kg' : 'unités';
+                
+                // Badge pour stock négatif
+                const stockClass = quantite < 0 ? 'color: var(--accent-danger);' : '';
+                const stockBadge = quantite < 0 ? '<span class="badge badge-danger" style="margin-left: 0.5rem;">Négatif</span>' : '';
+                
+                // Dernier ajustement
+                let dernierAjust = '-';
+                if (stock.dernier_ajustement_type && stock.dernier_ajustement_date) {
+                    const date = new Date(stock.dernier_ajustement_date).toLocaleDateString('fr-FR');
+                    dernierAjust = `${stock.dernier_ajustement_type} (${date})`;
+                }
+                
+                html += `
+                    <tr>
+                        <td><strong>${produit.nom || '-'}</strong></td>
+                        <td>${pv.nom || '-'}</td>
+                        <td style="${stockClass}"><strong>${quantite.toFixed(produit.unite_stock === 'kilo' ? 2 : 0)}</strong>${stockBadge}</td>
+                        <td>${unite}</td>
+                        <td>${prixUnit.toLocaleString('fr-FR')} F</td>
+                        <td style="${valeur < 0 ? 'color: var(--accent-danger);' : ''}">${valeur.toLocaleString('fr-FR')} F</td>
+                        <td style="font-size: 0.8rem; color: var(--text-secondary);">${dernierAjust}</td>
+                        <td>
+                            <div style="display: flex; gap: 0.25rem;">
+                                <button class="btn btn-sm btn-primary" onclick="openAjustementModal(${stock.id})" title="Ajuster">
+                                    ±
+                                </button>
+                                <button class="btn btn-sm btn-secondary" onclick="voirHistorique(${stock.id})" title="Historique">
+                                    📜
+                                </button>
+                            </div>
+                        </td>
+                    </tr>`;
+            });
+            
+            // Ajouter bouton pour initialiser un nouveau stock
+            html += `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 1rem;">
+                        <button class="btn btn-secondary" onclick="openStockInitModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            Ajouter un produit
+                        </button>
+                    </td>
+                </tr>`;
+            
+            tbody.innerHTML = html;
+        }
+
+        function openAjustementModal(stockId) {
+            const stock = stockAutoData.find(s => s.id === stockId);
+            if (!stock) return;
+            
+            const produit = stock.produit || {};
+            const pv = stock.pointVente || {};
+            const unite = produit.unite_stock === 'kilo' ? 'kg' : 'unités';
+            
+            document.getElementById('stock-ajust-id').value = stockId;
+            document.getElementById('stock-ajust-produit').textContent = produit.nom || '-';
+            document.getElementById('stock-ajust-pv').textContent = pv.nom || '-';
+            document.getElementById('stock-ajust-actuel').textContent = `${parseFloat(stock.quantite).toFixed(2)} ${unite}`;
+            document.getElementById('stock-ajust-unite').textContent = unite;
+            document.getElementById('stock-ajust-type').value = '';
+            document.getElementById('stock-ajust-quantite').value = '';
+            document.getElementById('stock-ajust-commentaire').value = '';
+            
+            document.getElementById('stock-ajust-modal').classList.add('active');
+        }
+
+        async function saveStockAjustement() {
+            const stockId = document.getElementById('stock-ajust-id').value;
+            const type = document.getElementById('stock-ajust-type').value;
+            const quantite = parseFloat(document.getElementById('stock-ajust-quantite').value);
+            const commentaire = document.getElementById('stock-ajust-commentaire').value.trim();
+            
+            if (!type || isNaN(quantite) || !commentaire) {
+                showToast('Veuillez remplir tous les champs', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/stock-auto/ajuster', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        stock_auto_id: parseInt(stockId),
+                        type_ajustement: type,
+                        quantite: quantite,
+                        commentaire: commentaire
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Stock ajusté avec succès!', 'success');
+                    closeModal('stock-ajust-modal');
+                    chargerStockAuto();
+                } else {
+                    showToast('Erreur: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Erreur: ' + error.message, 'error');
+            }
+        }
+
+        async function openStockInitModal() {
+            try {
+                // Charger les produits en mode automatique
+                const produitsResponse = await fetch('/api/stock-auto/produits-auto', { credentials: 'include' });
+                const produitsData = await produitsResponse.json();
+                
+                const selectProduit = document.getElementById('stock-init-produit');
+                selectProduit.innerHTML = '<option value="">Sélectionner un produit...</option>';
+                if (produitsData.success && produitsData.data) {
+                    produitsData.data.forEach(p => {
+                        const unite = p.unite_stock === 'kilo' ? '(kg)' : '(unité)';
+                        selectProduit.innerHTML += `<option value="${p.id}" data-prix="${p.prix_defaut}" data-unite="${p.unite_stock}">${p.nom} ${unite}</option>`;
+                    });
+                }
+                
+                // Charger les points de vente
+                const pvResponse = await fetch('/api/admin/points-vente', { credentials: 'include' });
+                const pvData = await pvResponse.json();
+                
+                const selectPv = document.getElementById('stock-init-pv');
+                selectPv.innerHTML = '<option value="">Sélectionner...</option>';
+                if (pvData.success && pvData.pointsVente) {
+                    Object.entries(pvData.pointsVente).forEach(([nom, config]) => {
+                        if (config.active) {
+                            selectPv.innerHTML += `<option value="${config.id}">${nom}</option>`;
+                        }
+                    });
+                }
+                
+                // Réinitialiser les champs
+                document.getElementById('stock-init-quantite').value = '';
+                document.getElementById('stock-init-prix').value = '';
+                document.getElementById('stock-init-commentaire').value = 'Stock initial';
+                
+                // Listener pour pré-remplir le prix
+                selectProduit.onchange = function() {
+                    const option = this.options[this.selectedIndex];
+                    if (option.dataset.prix) {
+                        document.getElementById('stock-init-prix').value = option.dataset.prix;
+                    }
+                };
+                
+                document.getElementById('stock-init-modal').classList.add('active');
+            } catch (error) {
+                showToast('Erreur: ' + error.message, 'error');
+            }
+        }
+
+        async function saveStockInit() {
+            const produitId = document.getElementById('stock-init-produit').value;
+            const pvId = document.getElementById('stock-init-pv').value;
+            const quantite = parseFloat(document.getElementById('stock-init-quantite').value);
+            const prix = parseFloat(document.getElementById('stock-init-prix').value) || 0;
+            const commentaire = document.getElementById('stock-init-commentaire').value.trim();
+            
+            if (!produitId || !pvId || isNaN(quantite)) {
+                showToast('Veuillez remplir tous les champs obligatoires', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/stock-auto/initialiser', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        produit_id: parseInt(produitId),
+                        point_vente_id: parseInt(pvId),
+                        quantite: quantite,
+                        prix_unitaire: prix,
+                        commentaire: commentaire
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Stock initialisé avec succès!', 'success');
+                    closeModal('stock-init-modal');
+                    chargerStockAuto();
+                } else {
+                    showToast('Erreur: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Erreur: ' + error.message, 'error');
+            }
+        }
+
+        async function voirHistorique(stockId) {
+            const stock = stockAutoData.find(s => s.id === stockId);
+            if (!stock) return;
+            
+            const produit = stock.produit || {};
+            const pv = stock.pointVente || {};
+            
+            document.getElementById('stock-hist-produit').textContent = produit.nom || '-';
+            document.getElementById('stock-hist-pv').textContent = pv.nom || '-';
+            
+            const tbody = document.getElementById('stock-historique-table');
+            tbody.innerHTML = '<tr><td colspan="6">Chargement...</td></tr>';
+            
+            document.getElementById('stock-historique-modal').classList.add('active');
+            
+            try {
+                const response = await fetch(`/api/stock-auto/historique/${stockId}`, { credentials: 'include' });
+                const data = await response.json();
+                
+                if (data.success && data.data && data.data.length > 0) {
+                    let html = '';
+                    data.data.forEach(ajust => {
+                        const date = new Date(ajust.date_ajustement).toLocaleDateString('fr-FR');
+                        const diff = parseFloat(ajust.quantite_ajustee);
+                        const diffClass = diff >= 0 ? 'color: var(--accent-success);' : 'color: var(--accent-danger);';
+                        const diffText = diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
+                        
+                        html += `
+                            <tr>
+                                <td>${date}</td>
+                                <td>${ajust.type_ajustement}</td>
+                                <td>${parseFloat(ajust.quantite_avant).toFixed(2)}</td>
+                                <td style="${diffClass}"><strong>${diffText}</strong></td>
+                                <td>${parseFloat(ajust.quantite_apres).toFixed(2)}</td>
+                                <td style="font-size: 0.8rem;">${ajust.effectue_par}</td>
+                            </tr>`;
+                    });
+                    tbody.innerHTML = html;
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Aucun historique</td></tr>';
+                }
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="6" style="color: var(--accent-danger);">Erreur: ${error.message}</td></tr>`;
+            }
+        }
+
+        // =====================================================
         // INIT
         // =====================================================
         document.addEventListener('DOMContentLoaded', () => {
-            loadUsers();
+            loadPointsVente();
         });
     </script>
 </body>

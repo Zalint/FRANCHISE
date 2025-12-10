@@ -446,11 +446,14 @@ router.get('/produits-inventaire', requireAdmin, async (req, res) => {
     });
     
     const inventaireResult = {};
+    const categoriesPersonnalisees = new Set();
     
     for (const produit of produits) {
       const config = {
         prixDefault: parseFloat(produit.prix_defaut) || 0,
-        alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : []
+        alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : [],
+        mode_stock: produit.mode_stock || 'manuel',
+        unite_stock: produit.unite_stock || 'unite'
       };
       
       if (produit.prixParPointVente) {
@@ -461,11 +464,27 @@ router.get('/produits-inventaire', requireAdmin, async (req, res) => {
         }
       }
       
-      inventaireResult[produit.nom] = config;
+      // Si le produit a une catégorie d'affichage personnalisée, le placer dedans
+      if (produit.categorie_affichage) {
+        const catName = produit.categorie_affichage;
+        categoriesPersonnalisees.add(catName);
+        
+        if (!inventaireResult[catName]) {
+          inventaireResult[catName] = {};
+        }
+        inventaireResult[catName][produit.nom] = config;
+      } else {
+        // Produit sans catégorie personnalisée - au niveau racine
+        inventaireResult[produit.nom] = config;
+      }
     }
     
-    console.log('📋 GET /api/admin/config/produits-inventaire - Produits:', Object.keys(inventaireResult).length);
-    res.json({ success: true, produitsInventaire: inventaireResult });
+    console.log('📋 GET /api/admin/config/produits-inventaire - Produits:', produits.length, '- Catégories perso:', [...categoriesPersonnalisees]);
+    res.json({ 
+      success: true, 
+      produitsInventaire: inventaireResult,
+      categoriesPersonnalisees: [...categoriesPersonnalisees]
+    });
   } catch (error) {
     console.error('Erreur récupération produits inventaire:', error);
     res.status(500).json({ success: false, error: error.message, produitsInventaire: {} });
@@ -633,25 +652,38 @@ router.post('/produits-inventaire', requireAdmin, async (req, res) => {
     let updated = 0;
     let created = 0;
     
-    for (const [produitName, config] of Object.entries(produitsInventaire)) {
-      if (typeof config !== 'object') continue;
+    // Fonction helper pour traiter un produit
+    async function traiterProduit(produitName, config, categorieAffichage = null) {
+      if (typeof config !== 'object' || config.prixDefault === undefined) return;
       
       const prixDefaut = config.prixDefault || 0;
       const alternatives = config.alternatives || [];
+      const modeStock = config.mode_stock || 'manuel';
+      const uniteStock = config.unite_stock || 'unite';
       
       let [produit, wasCreated] = await Produit.findOrCreate({
         where: { nom: produitName, type_catalogue: 'inventaire' },
         defaults: {
           prix_defaut: prixDefaut,
-          prix_alternatifs: alternatives
+          prix_alternatifs: alternatives,
+          mode_stock: modeStock,
+          unite_stock: uniteStock,
+          categorie_affichage: categorieAffichage
         }
       });
       
       if (wasCreated) {
         created++;
+        console.log(`  ✅ Produit créé: ${produitName}${categorieAffichage ? ` (catégorie: ${categorieAffichage})` : ''}`);
       } else {
         const oldPrix = parseFloat(produit.prix_defaut);
-        if (oldPrix !== prixDefaut || JSON.stringify(produit.prix_alternatifs) !== JSON.stringify(alternatives)) {
+        const needsUpdate = oldPrix !== prixDefaut || 
+          JSON.stringify(produit.prix_alternatifs) !== JSON.stringify(alternatives) ||
+          produit.mode_stock !== modeStock ||
+          produit.unite_stock !== uniteStock ||
+          produit.categorie_affichage !== categorieAffichage;
+          
+        if (needsUpdate) {
           if (oldPrix !== prixDefaut) {
             await PrixHistorique.create({
               produit_id: produit.id,
@@ -663,15 +695,19 @@ router.post('/produits-inventaire', requireAdmin, async (req, res) => {
           
           await produit.update({
             prix_defaut: prixDefaut,
-            prix_alternatifs: alternatives
+            prix_alternatifs: alternatives,
+            mode_stock: modeStock,
+            unite_stock: uniteStock,
+            categorie_affichage: categorieAffichage
           });
           updated++;
+          console.log(`  🔄 Produit mis à jour: ${produitName}`);
         }
       }
       
       // Prix par point de vente
       for (const [key, value] of Object.entries(config)) {
-        if (key !== 'prixDefault' && key !== 'alternatives' && typeof value === 'number') {
+        if (!['prixDefault', 'alternatives', 'mode_stock', 'unite_stock'].includes(key) && typeof value === 'number') {
           const pointVente = await PointVente.findOne({ where: { nom: key } });
           if (pointVente) {
             await PrixPointVente.upsert({
@@ -679,6 +715,24 @@ router.post('/produits-inventaire', requireAdmin, async (req, res) => {
               point_vente_id: pointVente.id,
               prix: value
             });
+          }
+        }
+      }
+    }
+    
+    for (const [key, config] of Object.entries(produitsInventaire)) {
+      if (typeof config !== 'object') continue;
+      
+      // Vérifier si c'est un produit direct (a prixDefault) ou une catégorie personnalisée
+      if (config.prixDefault !== undefined) {
+        // C'est un produit direct (catégorie logique)
+        await traiterProduit(key, config, null);
+      } else {
+        // C'est une catégorie personnalisée - traiter les sous-produits
+        console.log(`📁 Catégorie personnalisée détectée: ${key}`);
+        for (const [subProduitName, subConfig] of Object.entries(config)) {
+          if (typeof subConfig === 'object' && subConfig.prixDefault !== undefined) {
+            await traiterProduit(subProduitName, subConfig, key);
           }
         }
       }

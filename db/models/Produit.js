@@ -42,6 +42,26 @@ const Produit = sequelize.define('Produit', {
     defaultValue: [],
     field: 'prix_alternatifs',
     comment: 'Liste des prix alternatifs possibles'
+  },
+  mode_stock: {
+    type: DataTypes.ENUM('manuel', 'automatique'),
+    allowNull: false,
+    defaultValue: 'manuel',
+    field: 'mode_stock',
+    comment: 'Mode de gestion du stock: manuel (pesée quotidienne) ou automatique (décrément par vente)'
+  },
+  unite_stock: {
+    type: DataTypes.ENUM('unite', 'kilo'),
+    allowNull: false,
+    defaultValue: 'unite',
+    field: 'unite_stock',
+    comment: 'Unité de mesure pour le stock automatique: unite (pièces) ou kilo (poids)'
+  },
+  categorie_affichage: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    field: 'categorie_affichage',
+    comment: 'Catégorie personnalisée pour l\'affichage dans l\'admin inventaire (ex: Conserve, Boissons)'
   }
 }, {
   tableName: 'produits',
