@@ -4607,6 +4607,9 @@ function formaterDonneesVentes(ventes) {
     return ventesNormalisees;
 }
 
+// SUPPRIMÉ - Stock unifié dans les fichiers JSON
+// async function chargerStockAutomatique() { ... }
+
 // Fonction pour charger les données de stock d'une date spécifique
 async function chargerStock(date, type) {
     console.log('%c=== Chargement des données de stock pour la date ' + date + ' ===', 'background: #222; color: #bada55; font-size: 16px; padding: 5px;');
@@ -4616,6 +4619,8 @@ async function chargerStock(date, type) {
     
     try {
         console.log('%cRécupération des données depuis le serveur pour le type:', 'color: #00aaff;', typeStock);
+        
+        // Charger le stock (manuel ET automatique) depuis le JSON
         const response = await fetch(`/api/stock/${typeStock}?date=${date}`, {
             method: 'GET',
             credentials: 'include'
@@ -4632,12 +4637,25 @@ async function chargerStock(date, type) {
         
         console.log('%cDonnées récupérées:', 'color: #00ff00;', donnees);
 
+        // Convertir la structure imbriquée en Map avec clés plates
+        // Structure JSON: { "Keur Bali": { "Ail": { quantite: -5 } } }
+        // Structure Map: clé = "Keur Bali-Ail", valeur = { quantite: -5 }
+        const flattenedData = new Map();
+        for (const pointVente in donnees) {
+            for (const produit in donnees[pointVente]) {
+                const key = `${pointVente}-${produit}`;
+                flattenedData.set(key, donnees[pointVente][produit]);
+            }
+        }
+
         // Mise à jour de stockData
         if (typeStock === 'matin') {
-            stockData.matin = new Map(Object.entries(donnees));
+            stockData.matin = flattenedData;
         } else {
-            stockData.soir = new Map(Object.entries(donnees));
+            stockData.soir = flattenedData;
         }
+        
+        console.log(`%c📦 Stock chargé: ${flattenedData.size} entrées`, 'color: #00ff00;');
 
         // Si on est dans le contexte d'inventaire (tableau présent)
         const tbody = document.querySelector('#stock-table tbody');
@@ -4959,6 +4977,9 @@ async function afficherOngletsSuivantDroits(userData) {
 async function initInventaire() {
     console.log('%c=== Initialisation de la page inventaire ===', 'background: #222; color: #bada55; font-size: 16px; padding: 5px;');
     
+    // Charger les modes de stock (auto/manuel) depuis l'API
+    await chargerModesStock();
+    
     // Initialiser les filtres de stock
     initFilterStock();
     
@@ -5245,12 +5266,23 @@ async function sauvegarderDonneesStock() {
     // Use for...of for async/await
     const rows = Array.from(document.querySelectorAll('#stock-table tbody tr'));
     for (const row of rows) {
-        const pointVente = row.querySelector('.point-vente-select').value;
-        const produit = row.querySelector('.produit-select').value;
+        const pointVenteSelect = row.querySelector('.point-vente-select');
+        const produitSelect = row.querySelector('.produit-select');
+        
+        // Vérifier que les selects existent
+        if (!pointVenteSelect || !produitSelect) {
+            continue;
+        }
+        
+        const pointVente = pointVenteSelect.value;
+        const produit = produitSelect.value;
         const quantite = parseFloat(row.querySelector('.quantite-input').value) || 0;
         const prixUnitaireInput = row.querySelector('.prix-unitaire-input').value;
         let prixUnitaire = parseFloat(prixUnitaireInput);
-        const commentaire = row.querySelector('.commentaire-input').value || '';
+        const commentaire = row.querySelector('.commentaire-input')?.value || '';
+        
+        // Récupérer le mode depuis la ligne (data attribute)
+        const modeStock = row.dataset.modeStock || PRODUITS_MODE_STOCK[produit] || 'manuel';
 
         // Determine if we need to fetch prix moyen
         let needApi = false;
@@ -5270,7 +5302,6 @@ async function sauvegarderDonneesStock() {
                 fetchedPrix = await fetchPrixMoyen(produit, date, pointVente, isTransfert);
                 prixUnitaire = fetchedPrix !== null ? fetchedPrix : (produitsInventaire.getPrixDefaut(produit, pointVente) || 0);
             }
-            // If user entered a value, keep it (manual override)
         } else {
             if (isNaN(prixUnitaire) || prixUnitaireInput === '') {
                 prixUnitaire = produitsInventaire.getPrixDefaut(produit, pointVente) || 0;
@@ -5279,7 +5310,8 @@ async function sauvegarderDonneesStock() {
 
         const total = quantite * prixUnitaire;
 
-        if (quantite > 0) {  // Ne sauvegarder que les lignes avec une quantité > 0
+        // Sauvegarder si quantité != 0 (même négatif pour les produits auto)
+        if (quantite !== 0 || modeStock === 'automatique') {
             const key = `${pointVente}-${produit}`;
             donnees[key] = {
                 date: date,
@@ -5289,9 +5321,10 @@ async function sauvegarderDonneesStock() {
                 Nombre: quantite.toString(),
                 PU: prixUnitaire.toString(),
                 Montant: total.toString(),
-                Commentaire: commentaire
+                Commentaire: commentaire,
+                mode: modeStock  // Ajouter le mode (manuel ou automatique)
             };
-            resume.push(`${pointVente} - ${produit}: ${quantite} unités à ${prixUnitaire.toLocaleString('fr-FR')} FCFA = ${total.toLocaleString('fr-FR')} FCFA`);
+            resume.push(`${pointVente} - ${produit}: ${quantite} ${modeStock === 'automatique' ? '⚡' : ''} à ${prixUnitaire.toLocaleString('fr-FR')} FCFA = ${total.toLocaleString('fr-FR')} FCFA`);
             totalGeneral += total;
         }
     }
@@ -5349,13 +5382,8 @@ function initTableauStock() {
     const tbody = document.querySelector('#stock-table tbody');
     const typeStock = document.getElementById('type-stock').value;
     console.log('%cType de stock actuel:', 'color: #ff9900; font-weight: bold;', typeStock);
-    console.log('%cÉtat des données stockData:', 'color: #00ff00; font-weight: bold;', {
-        matin: stockData.matin ? stockData.matin.size + ' entrées' : '0 entrées',
-        soir: stockData.soir ? stockData.soir.size + ' entrées' : '0 entrées'
-    });
 
     tbody.innerHTML = '';
-    console.log('%cTableau vidé', 'color: #ff0000;');
 
     // Récupérer les données sauvegardées pour le type de stock actuel
     const donneesSauvegardees = stockData[typeStock];
@@ -5363,19 +5391,42 @@ function initTableauStock() {
         nombreEntrees: donneesSauvegardees ? donneesSauvegardees.size : 0
     });
 
+    // Trier les produits : manuels d'abord, puis automatiques
+    const produitsTries = [...PRODUITS_INVENTAIRE].sort((a, b) => {
+        const modeA = PRODUITS_MODE_STOCK[a] || 'manuel';
+        const modeB = PRODUITS_MODE_STOCK[b] || 'manuel';
+        
+        // 'manuel' vient avant 'automatique' (ordre alphabétique inverse pour ce cas)
+        if (modeA === 'manuel' && modeB === 'automatique') return -1;
+        if (modeA === 'automatique' && modeB === 'manuel') return 1;
+        
+        // Si même mode, trier par nom de produit
+        return a.localeCompare(b, 'fr');
+    });
+    
     // Pour chaque point de vente physique
     POINTS_VENTE_PHYSIQUES.forEach(pointVente => {
-        console.log('%c=== Traitement du point de vente: ' + pointVente + ' ===', 'background: #4a4a4a; color: #fff; padding: 3px;');
-        
-        // Pour chaque produit
-        PRODUITS_INVENTAIRE.forEach(produit => {
+        // Pour chaque produit (dans l'ordre trié)
+        produitsTries.forEach(produit => {
             const key = `${pointVente}-${produit}`;
-            console.log('%cCréation de la ligne pour:', 'color: #00aaff;', key);
+            
+            // Vérifier si le produit est en mode automatique (depuis la table produits)
+            const modeStock = PRODUITS_MODE_STOCK[produit] || 'manuel';
+            const isAutomatic = modeStock === 'automatique';
             
             const row = document.createElement('tr');
             row.dataset.typeStock = typeStock;
+            row.dataset.modeStock = modeStock;
+            row.dataset.pointVente = pointVente;
+            row.dataset.produit = produit;
             
-            // Point de vente (éditable)
+            // Style pour produits automatiques
+            if (isAutomatic) {
+                row.classList.add('stock-auto-row');
+                row.style.backgroundColor = 'rgba(99, 102, 241, 0.05)';
+            }
+            
+            // Point de vente (select pour tous)
             const tdPointVente = document.createElement('td');
             const selectPointVente = document.createElement('select');
             selectPointVente.className = 'form-select form-select-sm point-vente-select';
@@ -5383,87 +5434,109 @@ function initTableauStock() {
                 const option = document.createElement('option');
                 option.value = pv;
                 option.textContent = pv;
-                if (pv === pointVente) {
-                    option.selected = true;
-                }
+                if (pv === pointVente) option.selected = true;
                 selectPointVente.appendChild(option);
             });
             tdPointVente.appendChild(selectPointVente);
             row.appendChild(tdPointVente);
 
-            // Produit (éditable)
+            // Produit (select pour tous, avec badge Auto si automatique)
             const tdProduit = document.createElement('td');
+            
+            // Badge Auto si produit automatique
+            if (isAutomatic) {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-primary me-1';
+                badge.textContent = '⚡ Auto';
+                badge.style.fontSize = '0.65rem';
+                tdProduit.appendChild(badge);
+            }
+            
             const selectProduit = document.createElement('select');
             selectProduit.className = 'form-select form-select-sm produit-select';
-            PRODUITS_INVENTAIRE.forEach(prod => {
+            if (isAutomatic) {
+                selectProduit.style.display = 'inline-block';
+                selectProduit.style.width = 'calc(100% - 50px)';
+            }
+            // Utiliser la liste triée pour les options du select
+            produitsTries.forEach(prod => {
                 const option = document.createElement('option');
                 option.value = prod;
                 option.textContent = prod;
-                if (prod === produit) {
-                    option.selected = true;
-                }
+                if (prod === produit) option.selected = true;
                 selectProduit.appendChild(option);
             });
             tdProduit.appendChild(selectProduit);
+            
+            // Badge unité pour auto
+            if (isAutomatic) {
+                const unite = PRODUITS_UNITE_STOCK[produit] || 'unite';
+                const uniteSpan = document.createElement('span');
+                uniteSpan.className = 'badge bg-secondary ms-1';
+                uniteSpan.textContent = unite === 'kilo' ? 'kg' : 'u';
+                uniteSpan.style.fontSize = '0.6rem';
+                tdProduit.appendChild(uniteSpan);
+            }
             row.appendChild(tdProduit);
 
-            // Quantité (éditable)
+            // Quantité (éditable pour tous)
             const tdQuantite = document.createElement('td');
             const inputQuantite = document.createElement('input');
             inputQuantite.type = 'number';
             inputQuantite.className = 'form-control form-control-sm quantite-input';
             inputQuantite.step = '0.001';
             
-            // Prix unitaire (éditable)
+            // Prix unitaire
             const tdPrixUnitaire = document.createElement('td');
             const inputPrixUnitaire = document.createElement('input');
             inputPrixUnitaire.type = 'number';
             inputPrixUnitaire.className = 'form-control form-control-sm prix-unitaire-input';
             inputPrixUnitaire.step = '0.01';
             inputPrixUnitaire.min = '0';
-            tdPrixUnitaire.appendChild(inputPrixUnitaire);
             
-            // Total (calculé automatiquement)
+            // Total
             const tdTotal = document.createElement('td');
             tdTotal.className = 'total-cell';
             
-            // Commentaire (éditable)
+            // Commentaire
             const tdCommentaire = document.createElement('td');
             const inputCommentaire = document.createElement('input');
             inputCommentaire.type = 'text';
             inputCommentaire.className = 'form-control form-control-sm commentaire-input';
-            tdCommentaire.appendChild(inputCommentaire);
             
-            // Restaurer les valeurs sauvegardées si elles existent
+            // Charger les données depuis le JSON (unifié pour tous les produits)
             if (donneesSauvegardees && donneesSauvegardees.has(key)) {
                 const donnees = donneesSauvegardees.get(key);
-                console.log('%cRestauration des données pour ' + key + ':', 'color: #00ff00;', {
-                    quantite: donnees.Nombre || donnees.quantite,
-                    prixUnitaire: donnees.PU || donnees.prixUnitaire,
-                    commentaire: donnees.Commentaire || donnees.commentaire,
-                    total: (parseFloat(donnees.Nombre || donnees.quantite) * parseFloat(donnees.PU || donnees.prixUnitaire)).toString()
-                });
-                inputQuantite.value = donnees.Nombre || donnees.quantite || '0';
-                inputPrixUnitaire.value = donnees.PU || donnees.prixUnitaire || produitsInventaire.getPrixDefaut(produit, pointVente) || '0';
+                const quantite = parseFloat(donnees.Nombre || donnees.quantite || 0);
+                inputQuantite.value = quantite;
+                inputPrixUnitaire.value = donnees.PU || donnees.prixUnitaire || PRIX_DEFAUT_INVENTAIRE[produit] || 0;
                 inputCommentaire.value = donnees.Commentaire || donnees.commentaire || '';
-                tdTotal.textContent = (parseFloat(inputQuantite.value) * parseFloat(inputPrixUnitaire.value)).toLocaleString('fr-FR');
-        } else {
-                const prixDefaut = produitsInventaire.getPrixDefaut(produit, pointVente);
-                console.log('%cPas de données sauvegardées pour ' + key + ', utilisation des valeurs par défaut:', 'color: #ff9900;', {
-                    quantite: '0',
-                    prixUnitaire: prixDefaut,
-                    commentaire: '',
-                    total: '0'
-                });
+                
+                // Afficher en rouge si quantité négative
+                if (quantite < 0) {
+                    inputQuantite.style.backgroundColor = '#ffcccc';
+                    inputQuantite.style.color = '#cc0000';
+                    inputQuantite.style.fontWeight = 'bold';
+                }
+                
+                const total = quantite * parseFloat(inputPrixUnitaire.value);
+                tdTotal.textContent = total.toLocaleString('fr-FR');
+                if (total < 0) {
+                    tdTotal.style.color = '#cc0000';
+                    tdTotal.style.fontWeight = 'bold';
+                }
+            } else {
                 inputQuantite.value = '0';
-                inputPrixUnitaire.value = prixDefaut || '0';
+                inputPrixUnitaire.value = PRIX_DEFAUT_INVENTAIRE[produit] || produitsInventaire?.getPrixDefaut?.(produit, pointVente) || 0;
                 inputCommentaire.value = '';
                 tdTotal.textContent = '0';
             }
             
             tdQuantite.appendChild(inputQuantite);
+            tdPrixUnitaire.appendChild(inputPrixUnitaire);
+            tdCommentaire.appendChild(inputCommentaire);
             
-            // Actions
+            // Actions (bouton supprimer pour tous)
             const tdActions = document.createElement('td');
             const btnSupprimer = document.createElement('button');
             btnSupprimer.className = 'btn btn-danger btn-sm';
@@ -5471,18 +5544,16 @@ function initTableauStock() {
             btnSupprimer.addEventListener('click', (e) => {
                 e.preventDefault();
                 
-                // Vérifier les restrictions temporelles pour la suppression
                 const dateInput = document.getElementById('date-inventaire');
                 const typeStockSelect = document.getElementById('type-stock');
                 
                 if (dateInput && currentUser && !canModifyStockForDate(dateInput.value, currentUser.username)) {
-                    alert('Vous ne pouvez pas supprimer cette ligne pour cette date. Les utilisateurs peuvent modifier le stock seulement le jour J et jusqu\'au lendemain avant 4h00 du matin. Seuls administrateurs sont exemptés de cette restriction.');
+                    alert('Vous ne pouvez pas supprimer cette ligne pour cette date.');
                     return;
                 }
                 
-                // Vérifier les restrictions spécifiques au stock matin
                 if (typeStockSelect && typeStockSelect.value === 'matin' && currentUser && !canModifyStockMatinFields(currentUser.username)) {
-                    alert('Le stock matin est rempli automatiquement par le système. Seuls les administrateurs peuvent supprimer des lignes manuellement.');
+                    alert('Seuls les administrateurs peuvent supprimer des lignes du stock matin.');
                     return;
                 }
                 
@@ -5492,34 +5563,221 @@ function initTableauStock() {
             });
             tdActions.appendChild(btnSupprimer);
             
-            // Ajouter les cellules à la ligne
             row.append(tdPointVente, tdProduit, tdQuantite, tdPrixUnitaire, tdTotal, tdCommentaire, tdActions);
             
             // Gestionnaire pour le calcul automatique du total
-            const calculateTotal = () => {
-                const quantite = parseFloat(inputQuantite.value) || 0;
-                const prixUnitaire = parseFloat(inputPrixUnitaire.value) || 0;
-                tdTotal.textContent = (quantite * prixUnitaire).toLocaleString('fr-FR');
+            const updateTotal = () => {
+                const q = parseFloat(inputQuantite.value) || 0;
+                const p = parseFloat(inputPrixUnitaire.value) || 0;
+                const total = q * p;
+                tdTotal.textContent = total.toLocaleString('fr-FR');
+                
+                // Style rouge si négatif
+                if (q < 0) {
+                    inputQuantite.style.backgroundColor = '#ffcccc';
+                    inputQuantite.style.color = '#cc0000';
+                    inputQuantite.style.fontWeight = 'bold';
+                    tdTotal.style.color = '#cc0000';
+                    tdTotal.style.fontWeight = 'bold';
+                } else {
+                    inputQuantite.style.backgroundColor = '';
+                    inputQuantite.style.color = '';
+                    inputQuantite.style.fontWeight = '';
+                    tdTotal.style.color = '';
+                    tdTotal.style.fontWeight = '';
+                }
             };
             
-            // Gestionnaire pour la mise à jour du prix unitaire par défaut
-            selectProduit.addEventListener('change', function() {
-                const nouveauProduit = this.value;
-                inputPrixUnitaire.value = PRIX_DEFAUT_INVENTAIRE[nouveauProduit] || '0';
-                calculateTotal();
-            });
+            inputQuantite.addEventListener('input', updateTotal);
+            inputPrixUnitaire.addEventListener('input', updateTotal);
             
-            inputQuantite.addEventListener('input', calculateTotal);
-            inputPrixUnitaire.addEventListener('input', calculateTotal);
+            // Gestionnaire pour le filtre
+            inputQuantite.addEventListener('change', () => {
+                if (document.getElementById('masquer-quantite-zero').checked) {
+                    filtrerStock();
+                }
+            });
             
             tbody.appendChild(row);
         });
     });
     
-    console.log('%c=== Fin initTableauStock ===', 'background: #222; color: #bada55; font-size: 16px; padding: 5px;');
+    // =======================================================================
+    // AJOUT AUTOMATIQUE DES PRODUITS DU JSON QUI NE SONT PAS DANS PRODUITS_INVENTAIRE
+    // (ex: produits importés via OCR)
+    // =======================================================================
+    if (donneesSauvegardees && donneesSauvegardees.size > 0) {
+        const produitsDejaAffiches = new Set();
+        POINTS_VENTE_PHYSIQUES.forEach(pv => {
+            PRODUITS_INVENTAIRE.forEach(prod => {
+                produitsDejaAffiches.add(`${pv}-${prod}`);
+            });
+        });
+        
+        console.log('%c🔍 Recherche de produits supplémentaires dans le JSON...', 'color: #ff9900;');
+        
+        // Parcourir toutes les clés du JSON pour trouver les produits non listés
+        donneesSauvegardees.forEach((donnees, key) => {
+            if (!produitsDejaAffiches.has(key)) {
+                // Extraire pointVente et produit de la clé
+                const [pointVente, ...produitParts] = key.split('-');
+                const produit = produitParts.join('-'); // Si le nom contient des tirets
+                
+                console.log(`%c📦 Ajout produit auto du JSON: ${produit} @ ${pointVente}`, 'color: #00ff00;');
+                
+                // Créer une nouvelle ligne pour ce produit
+                const row = document.createElement('tr');
+                row.dataset.typeStock = typeStock;
+                row.dataset.modeStock = donnees.mode || 'automatique';
+                row.dataset.pointVente = pointVente;
+                row.dataset.produit = produit;
+                
+                // Style pour produits automatiques
+                row.classList.add('stock-auto-row');
+                row.style.backgroundColor = 'rgba(99, 102, 241, 0.1)';
+                
+                // Point de vente (texte simple car pas dans POINTS_VENTE_PHYSIQUES)
+                const tdPointVente = document.createElement('td');
+                const selectPointVente = document.createElement('select');
+                selectPointVente.className = 'form-select form-select-sm point-vente-select';
+                // Ajouter le point de vente actuel + tous les autres
+                const allPointsVente = [...new Set([pointVente, ...POINTS_VENTE_PHYSIQUES])];
+                allPointsVente.forEach(pv => {
+                    const option = document.createElement('option');
+                    option.value = pv;
+                    option.textContent = pv;
+                    if (pv === pointVente) option.selected = true;
+                    selectPointVente.appendChild(option);
+                });
+                tdPointVente.appendChild(selectPointVente);
+                row.appendChild(tdPointVente);
+
+                // Produit avec badge Auto
+                const tdProduit = document.createElement('td');
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-primary me-1';
+                badge.textContent = '⚡ Auto';
+                badge.style.fontSize = '0.65rem';
+                tdProduit.appendChild(badge);
+                
+                const selectProduit = document.createElement('select');
+                selectProduit.className = 'form-select form-select-sm produit-select';
+                selectProduit.style.display = 'inline-block';
+                selectProduit.style.width = 'calc(100% - 50px)';
+                // Ajouter le produit actuel + tous les autres
+                const allProduits = [...new Set([produit, ...PRODUITS_INVENTAIRE])];
+                allProduits.forEach(prod => {
+                    const option = document.createElement('option');
+                    option.value = prod;
+                    option.textContent = prod;
+                    if (prod === produit) option.selected = true;
+                    selectProduit.appendChild(option);
+                });
+                tdProduit.appendChild(selectProduit);
+                
+                // Badge unité
+                const unite = PRODUITS_UNITE_STOCK[produit] || 'kilo';
+                const uniteSpan = document.createElement('span');
+                uniteSpan.className = 'badge bg-secondary ms-1';
+                uniteSpan.textContent = unite === 'kilo' ? 'kg' : 'u';
+                uniteSpan.style.fontSize = '0.6rem';
+                tdProduit.appendChild(uniteSpan);
+                row.appendChild(tdProduit);
+
+                // Quantité
+                const tdQuantite = document.createElement('td');
+                const inputQuantite = document.createElement('input');
+                inputQuantite.type = 'number';
+                inputQuantite.className = 'form-control form-control-sm quantite-input';
+                inputQuantite.step = '0.001';
+                const quantite = parseFloat(donnees.Nombre || donnees.quantite || 0);
+                inputQuantite.value = quantite;
+                
+                // Style rouge si négatif
+                if (quantite < 0) {
+                    inputQuantite.style.backgroundColor = '#ffcccc';
+                    inputQuantite.style.color = '#cc0000';
+                    inputQuantite.style.fontWeight = 'bold';
+                }
+                tdQuantite.appendChild(inputQuantite);
+                row.appendChild(tdQuantite);
+                
+                // Prix unitaire
+                const tdPrixUnitaire = document.createElement('td');
+                const inputPrixUnitaire = document.createElement('input');
+                inputPrixUnitaire.type = 'number';
+                inputPrixUnitaire.className = 'form-control form-control-sm prix-unitaire-input';
+                inputPrixUnitaire.step = '0.01';
+                inputPrixUnitaire.min = '0';
+                inputPrixUnitaire.value = donnees.PU || donnees.prixUnitaire || 0;
+                tdPrixUnitaire.appendChild(inputPrixUnitaire);
+                row.appendChild(tdPrixUnitaire);
+                
+                // Total
+                const tdTotal = document.createElement('td');
+                tdTotal.className = 'total-cell';
+                const total = quantite * parseFloat(inputPrixUnitaire.value);
+                tdTotal.textContent = total.toLocaleString('fr-FR');
+                if (total < 0) {
+                    tdTotal.style.color = '#cc0000';
+                    tdTotal.style.fontWeight = 'bold';
+                }
+                row.appendChild(tdTotal);
+                
+                // Commentaire
+                const tdCommentaire = document.createElement('td');
+                const inputCommentaire = document.createElement('input');
+                inputCommentaire.type = 'text';
+                inputCommentaire.className = 'form-control form-control-sm commentaire-input';
+                inputCommentaire.value = donnees.Commentaire || donnees.commentaire || '';
+                tdCommentaire.appendChild(inputCommentaire);
+                row.appendChild(tdCommentaire);
+                
+                // Actions
+                const tdActions = document.createElement('td');
+                const btnSupprimer = document.createElement('button');
+                btnSupprimer.className = 'btn btn-danger btn-sm';
+                btnSupprimer.innerHTML = '<i class="fas fa-trash"></i>';
+                btnSupprimer.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (confirm('Êtes-vous sûr de vouloir supprimer cette ligne ?')) {
+                        row.remove();
+                    }
+                });
+                tdActions.appendChild(btnSupprimer);
+                row.appendChild(tdActions);
+                
+                // Gestionnaires pour le calcul automatique du total
+                const updateTotal = () => {
+                    const q = parseFloat(inputQuantite.value) || 0;
+                    const p = parseFloat(inputPrixUnitaire.value) || 0;
+                    const newTotal = q * p;
+                    tdTotal.textContent = newTotal.toLocaleString('fr-FR');
+                    
+                    if (q < 0) {
+                        inputQuantite.style.backgroundColor = '#ffcccc';
+                        inputQuantite.style.color = '#cc0000';
+                        inputQuantite.style.fontWeight = 'bold';
+                        tdTotal.style.color = '#cc0000';
+                        tdTotal.style.fontWeight = 'bold';
+                    } else {
+                        inputQuantite.style.backgroundColor = '';
+                        inputQuantite.style.color = '';
+                        inputQuantite.style.fontWeight = '';
+                        tdTotal.style.color = '';
+                        tdTotal.style.fontWeight = '';
+                    }
+                };
+                
+                inputQuantite.addEventListener('input', updateTotal);
+                inputPrixUnitaire.addEventListener('input', updateTotal);
+                
+                tbody.appendChild(row);
+            }
+        });
+    }
     
-    // Mettre à jour l'état des boutons et champs selon les restrictions
-    updateStockButtonsState();
+    console.log('%c=== Fin initTableauStock ===', 'background: #222; color: #bada55;');
 }
 
 // Configuration pour l'inventaire to refac point de vente
@@ -5546,53 +5804,75 @@ async function initPointsVentePhysiques() {
 // Configuration pour l'inventaire - lecture depuis produitsInventaire.js (pour Stock inventaire seulement)
 const PRODUITS_INVENTAIRE = [];
 const PRIX_DEFAUT_INVENTAIRE = {};
+const PRODUITS_MODE_STOCK = {}; // Stocke le mode_stock pour chaque produit ('manuel' ou 'automatique')
+const PRODUITS_UNITE_STOCK = {}; // Stocke l'unite_stock pour chaque produit ('unite' ou 'kilo')
+// Stocke les données de stock (les produits auto sont maintenant dans le JSON)
+let stockAutoData = new Map(); // DEPRECATED - Plus utilisé
 
-// Extraire tous les produits depuis produitsInventaire.js pour la section Stock inventaire
-if (typeof produitsInventaire !== 'undefined' && typeof produitsInventaire.getTousLesProduits === 'function') {
-    const produitsList = produitsInventaire.getTousLesProduits();
-    produitsList.forEach(produit => {
-        PRODUITS_INVENTAIRE.push(produit);
-        PRIX_DEFAUT_INVENTAIRE[produit] = produitsInventaire.getPrixDefaut(produit);
-    });
-} else {
-    // Tentative de chargement différé de produitsInventaire
-    console.warn('produitsInventaire non disponible au chargement initial, tentative de rechargement...');
-    
-    // Réessayer après un délai
-    setTimeout(() => {
-        if (typeof produitsInventaire !== 'undefined' && typeof produitsInventaire.getTousLesProduits === 'function') {
-            console.log('produitsInventaire chargé avec succès après délai');
-            const produitsList = produitsInventaire.getTousLesProduits();
-            PRODUITS_INVENTAIRE.length = 0; // Vider le tableau
-            Object.keys(PRIX_DEFAUT_INVENTAIRE).forEach(key => delete PRIX_DEFAUT_INVENTAIRE[key]); // Vider l'objet prix
-            
-            produitsList.forEach(produit => {
-                PRODUITS_INVENTAIRE.push(produit);
-                PRIX_DEFAUT_INVENTAIRE[produit] = produitsInventaire.getPrixDefaut(produit);
-            });
-            
-            // Recharger les catégories d'estimation si la page est l'estimation
-            if (typeof chargerProduits === 'function') {
-                chargerProduits();
+// Fonction pour charger les modes de stock depuis l'API produits
+async function chargerModesStock() {
+    try {
+        const response = await fetch('/api/admin/config/produits-inventaire', {
+            method: 'GET',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.produitsInventaire) {
+                // L'API retourne un objet qui peut contenir:
+                // - Des produits directs: { "Boeuf": { prixDefault, mode_stock, unite_stock, ... } }
+                // - Des catégories: { "Légumes": { "Ail": { prixDefault, ... }, "Carotte": { ... } } }
+                const produitsInventaire = result.produitsInventaire;
+                
+                // Parcourir chaque clé de premier niveau
+                for (const cle in produitsInventaire) {
+                    const valeur = produitsInventaire[cle];
+                    
+                    // Vérifier si c'est un produit (a prixDefault) ou une catégorie (contient des produits)
+                    if (valeur && typeof valeur === 'object') {
+                        if (valeur.prixDefault !== undefined) {
+                            // C'est un produit direct au niveau racine
+                            const config = valeur;
+                            PRODUITS_MODE_STOCK[cle] = config.mode_stock || 'manuel';
+                            PRODUITS_UNITE_STOCK[cle] = config.unite_stock || 'unite';
+                            
+                            if (!PRODUITS_INVENTAIRE.includes(cle)) {
+                                PRODUITS_INVENTAIRE.push(cle);
+                                PRIX_DEFAUT_INVENTAIRE[cle] = parseFloat(config.prixDefault) || 0;
+                            }
+                        } else {
+                            // C'est une catégorie contenant des produits
+                            for (const nomProduit in valeur) {
+                                const config = valeur[nomProduit];
+                                
+                                // Vérifier que c'est bien un produit (pas une propriété technique)
+                                if (config && typeof config === 'object' && config.prixDefault !== undefined) {
+                                    PRODUITS_MODE_STOCK[nomProduit] = config.mode_stock || 'manuel';
+                                    PRODUITS_UNITE_STOCK[nomProduit] = config.unite_stock || 'unite';
+                                    
+                                    if (!PRODUITS_INVENTAIRE.includes(nomProduit)) {
+                                        PRODUITS_INVENTAIRE.push(nomProduit);
+                                        PRIX_DEFAUT_INVENTAIRE[nomProduit] = parseFloat(config.prixDefault) || 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                console.log('%c📦 Modes de stock chargés:', 'color: #00ff00;', Object.keys(PRODUITS_MODE_STOCK).length, 'produits');
+                console.log('%c📦 PRODUITS_INVENTAIRE:', 'color: #00ff00;', PRODUITS_INVENTAIRE.length, 'produits');
             }
-        } else {
-            console.error('Échec du chargement de produitsInventaire - fallback sur une liste minimale');
-            // Fallback minimal uniquement si vraiment nécessaire
-            const produitsMinimaux = ['Boeuf', 'Veau', 'Poulet'];
-            produitsMinimaux.forEach(produit => {
-                PRODUITS_INVENTAIRE.push(produit);
-                PRIX_DEFAUT_INVENTAIRE[produit] = 0;
-            });
         }
-    }, 1000);
-    
-    // Pour l'instant, utiliser une liste minimale
-    const produitsMinimaux = ['Boeuf', 'Veau', 'Poulet'];
-    produitsMinimaux.forEach(produit => {
-        PRODUITS_INVENTAIRE.push(produit);
-        PRIX_DEFAUT_INVENTAIRE[produit] = 0;
-    });
+    } catch (error) {
+        console.error('%cErreur chargement modes de stock:', 'color: #ff0000;', error);
+    }
 }
+
+// PRODUITS_INVENTAIRE est chargé uniquement depuis chargerModesStock() via l'API
+// pour éviter les doublons. Le chargement depuis produitsInventaire.js est désactivé.
+console.log('%c📦 PRODUITS_INVENTAIRE sera chargé via chargerModesStock()', 'color: #ff9900;');
 
 // Configuration pour les autres sections - lecture depuis produits.js
 const PRODUITS = [];
@@ -5867,6 +6147,56 @@ async function supprimerVente(venteId) {
         alert('Erreur lors de la suppression de la vente');
     }
 }
+
+// Fonction pour supprimer TOUTES les ventes du jour (admin uniquement)
+async function supprimerVentesJour() {
+    // Récupérer la date du jour au format DD/MM/YYYY
+    const today = new Date();
+    const dateFormatted = today.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+    
+    // Double confirmation
+    const firstConfirm = confirm(`⚠️ ATTENTION ⚠️\n\nVous êtes sur le point de supprimer TOUTES les ventes du ${dateFormatted}.\n\nCette action est IRRÉVERSIBLE.\n\nContinuer ?`);
+    
+    if (!firstConfirm) return;
+    
+    const secondConfirm = confirm(`🔴 DERNIÈRE CONFIRMATION 🔴\n\nTapez OK pour confirmer la suppression de TOUTES les ventes du ${dateFormatted}.`);
+    
+    if (!secondConfirm) return;
+    
+    try {
+        // Format date pour API: YYYY-MM-DD
+        const dateApi = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        
+        const response = await fetch(`/api/ventes/jour/${dateApi}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            alert(`✅ ${data.count} ventes supprimées pour le ${dateFormatted}`);
+            chargerDernieresVentes();
+        } else {
+            alert(data.message || 'Erreur lors de la suppression');
+        }
+    } catch (error) {
+        console.error('Erreur suppression en masse:', error);
+        alert('Erreur lors de la suppression des ventes');
+    }
+}
+
+// Initialiser le bouton de suppression des ventes du jour
+document.addEventListener('DOMContentLoaded', function() {
+    const btnSupprimerVentesJour = document.getElementById('btn-supprimer-ventes-jour');
+    if (btnSupprimerVentesJour) {
+        btnSupprimerVentesJour.addEventListener('click', supprimerVentesJour);
+    }
+});
 
 // Gestionnaire d'événements pour l'onglet Réconciliation
 document.getElementById('reconciliation-tab').addEventListener('click', function() {
@@ -7508,14 +7838,35 @@ function filtrerStock() {
     console.log(`Filtrage du stock - Point de vente: ${pointVenteFiltre}, Produit: ${produitFiltre}, Masquer quantité zéro: ${masquerQuantiteZero}`);
     
     rows.forEach(row => {
-        const pointVenteCell = row.querySelector('td:first-child select');
-        const produitCell = row.querySelector('td:nth-child(2) select');
+        // Point de vente: peut être un select (manuel) ou du texte (automatique)
+        const pointVenteSelect = row.querySelector('td:first-child select');
+        const pointVenteCell = row.querySelector('td:first-child');
+        
+        // Produit: peut être un select (manuel) ou du texte avec badge (automatique)
+        const produitSelect = row.querySelector('td:nth-child(2) select');
+        const produitCell = row.querySelector('td:nth-child(2)');
+        
         const quantiteInput = row.querySelector('td:nth-child(3) input');
         
-        if (!pointVenteCell || !produitCell) return;
+        // Récupérer la valeur du point de vente (select ou texte)
+        let pointVente = '';
+        if (pointVenteSelect) {
+            pointVente = pointVenteSelect.value;
+        } else if (pointVenteCell) {
+            pointVente = pointVenteCell.textContent.trim();
+        }
         
-        const pointVente = pointVenteCell.value;
-        const produit = produitCell.value;
+        // Récupérer la valeur du produit (select ou texte sans le badge)
+        let produit = '';
+        if (produitSelect) {
+            produit = produitSelect.value;
+        } else if (produitCell) {
+            // Pour les produits auto, le nom est après le badge "Auto"
+            const text = produitCell.textContent.trim();
+            // Enlever "Auto" et le symbole info au début
+            produit = text.replace(/^Auto\s*/, '').replace(/ℹ️?\s*$/, '').trim();
+        }
+        
         const quantite = quantiteInput ? parseFloat(quantiteInput.value) || 0 : 0;
         
         const matchPointVente = pointVenteFiltre === 'tous' || pointVente === pointVenteFiltre;
@@ -7584,6 +7935,72 @@ function initFilterStock() {
         btnAllerReconciliation.addEventListener('click', function() {
             naviguerVersReconciliation();
         });
+    }
+    
+    // Initialiser les boutons de réinitialisation du stock (admin uniquement)
+    // Utiliser un flag pour éviter les écouteurs dupliqués
+    const btnResetMatin = document.getElementById('btn-reset-stock-matin');
+    if (btnResetMatin && !btnResetMatin.hasAttribute('data-listener-added')) {
+        btnResetMatin.setAttribute('data-listener-added', 'true');
+        btnResetMatin.addEventListener('click', () => resetStock('matin'));
+    }
+    
+    const btnResetSoir = document.getElementById('btn-reset-stock-soir');
+    if (btnResetSoir && !btnResetSoir.hasAttribute('data-listener-added')) {
+        btnResetSoir.setAttribute('data-listener-added', 'true');
+        btnResetSoir.addEventListener('click', () => resetStock('soir'));
+    }
+}
+
+// Fonction pour réinitialiser le stock à 0 (admin uniquement)
+async function resetStock(type) {
+    // Récupérer la date sélectionnée
+    const dateInput = document.getElementById('date-inventaire');
+    if (!dateInput || !dateInput.value) {
+        alert('Veuillez sélectionner une date');
+        return;
+    }
+    
+    const dateFormatted = dateInput.value; // Format DD/MM/YYYY
+    const typeName = type === 'matin' ? 'Stock Matin' : 'Stock Soir';
+    
+    // Double confirmation
+    const firstConfirm = confirm(`⚠️ ATTENTION ⚠️\n\nVous êtes sur le point de mettre TOUTES les quantités du ${typeName} à 0 pour le ${dateFormatted}.\n\nCette action est IRRÉVERSIBLE.\n\nContinuer ?`);
+    
+    if (!firstConfirm) return;
+    
+    const secondConfirm = confirm(`🔴 DERNIÈRE CONFIRMATION 🔴\n\nTapez OK pour confirmer la réinitialisation du ${typeName} du ${dateFormatted}.`);
+    
+    if (!secondConfirm) return;
+    
+    try {
+        // Convertir la date au format YYYY-MM-DD pour l'API
+        const [jour, mois, annee] = dateFormatted.split('/');
+        const dateApi = `${annee}-${mois}-${jour}`;
+        
+        const response = await fetch(`/api/admin/stock-reset/${type}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ date: dateApi })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            let message = `✅ ${data.count} entrées du ${typeName} réinitialisées à 0 pour le ${dateFormatted}`;
+            if (data.countAuto > 0) {
+                message += `\n+ ${data.countAuto} produits automatiques réinitialisés`;
+            }
+            alert(message);
+            // Recharger le stock
+            chargerStock();
+        } else {
+            alert(data.message || 'Erreur lors de la réinitialisation');
+        }
+    } catch (error) {
+        console.error('Erreur réinitialisation stock:', error);
+        alert('Erreur lors de la réinitialisation du stock');
     }
 }
 
