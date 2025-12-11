@@ -187,7 +187,7 @@ async function loadExistingProducts() {
                 Object.entries(obj).forEach(([key, value]) => {
                     if (value && typeof value === 'object' && value.prixDefault !== undefined) {
                         // C'est un produit
-                        const produitNom = prefix ? key : key;
+                        const produitNom = prefix ? `${prefix}.${key}` : key;
                         if (!existingProducts.find(p => p.nom.toLowerCase() === produitNom.toLowerCase())) {
                             existingProducts.push({
                                 nom: produitNom,
@@ -282,12 +282,22 @@ function loadOCRPointsVente() {
     const pointVenteSelect = document.getElementById('ocr-point-vente');
     if (!pointVenteSelect) return;
 
-    pointVenteSelect.innerHTML = '<option value="">Sélectionner un point de vente</option>';
+    // Clear existing options first
+    pointVenteSelect.innerHTML = '';
+    
+    // Add default option
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Sélectionner un point de vente';
+    pointVenteSelect.appendChild(defaultOption);
     
     // Utiliser POINTS_VENTE si disponible (variable globale de script.js)
     if (typeof POINTS_VENTE !== 'undefined' && Array.isArray(POINTS_VENTE)) {
         POINTS_VENTE.forEach(pv => {
-            pointVenteSelect.innerHTML += `<option value="${pv}">${pv}</option>`;
+            const option = document.createElement('option');
+            option.value = pv;
+            option.textContent = pv;
+            pointVenteSelect.appendChild(option);
         });
     } else {
         // Fallback: charger depuis l'API
@@ -296,7 +306,10 @@ function loadOCRPointsVente() {
             .then(data => {
                 if (Array.isArray(data)) {
                     data.forEach(pv => {
-                        pointVenteSelect.innerHTML += `<option value="${pv}">${pv}</option>`;
+                        const option = document.createElement('option');
+                        option.value = pv;
+                        option.textContent = pv;
+                        pointVenteSelect.appendChild(option);
                     });
                 }
             })
@@ -743,9 +756,16 @@ async function importOCRData() {
                           'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
         const mois = moisNoms[dateObj.getMonth()];
         
-        // Calculer le numéro de semaine
-        const startOfYear = new Date(dateObj.getFullYear(), 0, 1);
-        const weekNumber = Math.ceil(((dateObj - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+        // Calculer le numéro de semaine ISO 8601
+        const getISOWeek = (d) => {
+            const target = new Date(d.valueOf());
+            const dayNr = (d.getDay() + 6) % 7; // Monday = 0
+            target.setDate(target.getDate() - dayNr + 3); // Nearest Thursday
+            const jan4 = new Date(target.getFullYear(), 0, 4);
+            const dayDiff = (target - jan4) / 86400000;
+            return 1 + Math.floor(dayDiff / 7);
+        };
+        const weekNumber = getISOWeek(dateObj);
         const semaine = `S${weekNumber}`;
 
         let successCount = 0;
@@ -1146,10 +1166,13 @@ async function viewOCRImport(id) {
  * Supprime un import OCR
  */
 async function deleteOCRImport(id) {
+    // First confirm: ask about deleting associated sales
     const deleteVentes = confirm('Voulez-vous également supprimer les ventes associées ?\n\nOUI = Supprimer import ET ventes\nNON = Supprimer uniquement l\'historique');
     
-    if (!confirm(`Confirmer la suppression de l'import #${id} ?`)) {
-        return;
+    // Second confirm: final confirmation
+    const finalConfirm = confirm(`Confirmer la suppression de l'import #${id} ?${deleteVentes ? '\n⚠️ Les ventes associées seront DÉFINITIVEMENT supprimées !' : ''}`);
+    if (!finalConfirm) {
+        return; // User cancelled, abort the operation
     }
     
     try {

@@ -1383,7 +1383,7 @@
                     <td><small>${prixSpecifiques}</small></td>
                     <td class="actions">
                         <button class="btn btn-sm btn-secondary" onclick="editProduitInventaire('${produit.nom}')">Modifier</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteProduit('${produit.nom}', 'inventaire')">Supprimer</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteProduitByName('${produit.nom}', 'inventaire')">Supprimer</button>
                     </td>
                 </tr>`;
         }
@@ -1482,6 +1482,93 @@
                 await apiCall(`/api/admin/produits/${id}`, 'DELETE');
                 showToast('Produit supprimé', 'success');
                 loadProduits(typeCatalogue);
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        async function deleteProduitByName(nom, typeCatalogue) {
+            if (!confirm(`Êtes-vous sûr de vouloir supprimer le produit "${nom}" ?`)) return;
+
+            try {
+                const response = await fetch('/api/admin/config/produits/by-name', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ nom, type_catalogue: typeCatalogue })
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Erreur lors de la suppression');
+                }
+
+                showToast('Produit supprimé avec succès', 'success');
+                loadProduitsInventaire();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        async function editProduitInventaire(nom) {
+            try {
+                // Fetch product details by name
+                const response = await fetch(`/api/admin/config/produits/by-name?nom=${encodeURIComponent(nom)}&type_catalogue=inventaire`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Produit non trouvé');
+                }
+
+                const produit = result.data;
+
+                // Open modal with product data
+                document.getElementById('produit-modal-title').textContent = 'Modifier produit inventaire';
+                document.getElementById('produit-id').value = produit.id;
+                document.getElementById('produit-nom').value = produit.nom;
+                document.getElementById('produit-nom').disabled = true; // Can't change name in edit mode
+                document.getElementById('produit-prix-defaut').value = produit.prix_defaut;
+                document.getElementById('produit-mode-stock').value = produit.mode_stock || 'manuel';
+                document.getElementById('produit-unite-stock').value = produit.unite_stock || 'unite';
+                document.getElementById('produit-categorie-affichage').value = produit.categorie_affichage || '';
+
+                // Set alternatives
+                const alternativesContainer = document.getElementById('produit-alternatives');
+                alternativesContainer.innerHTML = '';
+                if (produit.prix_alternatifs && produit.prix_alternatifs.length > 0) {
+                    produit.prix_alternatifs.forEach(prix => {
+                        const input = document.createElement('input');
+                        input.type = 'number';
+                        input.className = 'form-control mb-2 alternative-price';
+                        input.value = prix;
+                        input.placeholder = 'Prix alternatif';
+                        alternativesContainer.appendChild(input);
+                    });
+                }
+
+                // Load and set point de vente prices
+                const { data: pointsVente } = await apiCall('/api/admin/points-vente');
+                const prixContainer = document.getElementById('produit-prix-pdv');
+                prixContainer.innerHTML = '';
+                
+                for (const [pvNom, pvConfig] of Object.entries(pointsVente)) {
+                    if (pvConfig.active) {
+                        const prixPdv = produit.prixParPointVente?.find(p => p.pointVente?.nom === pvNom);
+                        const div = document.createElement('div');
+                        div.className = 'mb-2';
+                        div.innerHTML = `
+                            <label class="form-label">${pvNom}</label>
+                            <input type="number" class="form-control pdv-price" data-pdv-id="${pvConfig.id}" 
+                                   value="${prixPdv?.prix || ''}" placeholder="Prix spécifique (optionnel)">
+                        `;
+                        prixContainer.appendChild(div);
+                    }
+                }
+
+                new bootstrap.Modal(document.getElementById('produit-modal')).show();
             } catch (error) {
                 showToast(error.message, 'error');
             }

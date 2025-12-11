@@ -42,7 +42,7 @@ router.get('/', requireAuth, async (req, res) => {
           attributes: ['id', 'nom']
         }
       ],
-      order: [['produit', 'nom', 'ASC']]
+      order: [[{ model: Produit, as: 'produit' }, 'nom', 'ASC']]
     });
     
     res.json({ success: true, data: stocks });
@@ -88,7 +88,7 @@ router.get('/point-vente/:pointVenteId', requireAuth, async (req, res) => {
           attributes: ['id', 'nom', 'mode_stock', 'unite_stock', 'prix_defaut']
         }
       ],
-      order: [['produit', 'nom', 'ASC']]
+      order: [[{ model: Produit, as: 'produit' }, 'nom', 'ASC']]
     });
     
     res.json({ success: true, data: stocks });
@@ -102,12 +102,11 @@ router.get('/point-vente/:pointVenteId', requireAuth, async (req, res) => {
 // POST /api/stock-auto/initialiser - Initialiser le stock d'un produit
 // =====================================================
 router.post('/initialiser', requireAuth, async (req, res) => {
-  const transaction = await sequelize.transaction();
-  
   try {
     const { produit_id, point_vente_id, quantite, prix_unitaire, commentaire } = req.body;
     const username = req.session.user?.username || 'system';
     
+    // Validation first (before creating transaction)
     if (!produit_id || !point_vente_id) {
       return res.status(400).json({ success: false, error: 'produit_id et point_vente_id requis' });
     }
@@ -121,52 +120,59 @@ router.post('/initialiser', requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Ce produit n\'est pas en mode automatique' });
     }
     
-    // Créer ou mettre à jour le stock
-    const [stockAuto, created] = await StockAuto.findOrCreate({
-      where: { produit_id, point_vente_id },
-      defaults: {
-        quantite: quantite || 0,
-        prix_unitaire: prix_unitaire || produit.prix_defaut,
-        dernier_ajustement_type: 'initialisation',
-        dernier_ajustement_date: new Date()
-      },
-      transaction
-    });
+    // Create transaction only after validation passes
+    const transaction = await sequelize.transaction();
     
-    const quantiteAvant = created ? 0 : parseFloat(stockAuto.quantite);
-    const quantiteApres = parseFloat(quantite || 0);
-    
-    if (!created) {
-      // Mettre à jour le stock existant
-      await stockAuto.update({
-        quantite: quantiteApres,
-        prix_unitaire: prix_unitaire || produit.prix_defaut,
-        dernier_ajustement_type: 'initialisation',
-        dernier_ajustement_date: new Date()
+    try {
+      // Créer ou mettre à jour le stock
+      const [stockAuto, created] = await StockAuto.findOrCreate({
+        where: { produit_id, point_vente_id },
+        defaults: {
+          quantite: quantite || 0,
+          prix_unitaire: prix_unitaire || produit.prix_defaut,
+          dernier_ajustement_type: 'initialisation',
+          dernier_ajustement_date: new Date()
+        },
+        transaction
+      });
+      
+      const quantiteAvant = created ? 0 : parseFloat(stockAuto.quantite);
+      const quantiteApres = parseFloat(quantite || 0);
+      
+      if (!created) {
+        // Mettre à jour le stock existant
+        await stockAuto.update({
+          quantite: quantiteApres,
+          prix_unitaire: prix_unitaire || produit.prix_defaut,
+          dernier_ajustement_type: 'initialisation',
+          dernier_ajustement_date: new Date()
+        }, { transaction });
+      }
+      
+      // Créer l'historique de l'ajustement
+      await StockAjustement.create({
+        stock_auto_id: stockAuto.id,
+        type_ajustement: 'initialisation',
+        quantite_avant: quantiteAvant,
+        quantite_ajustee: quantiteApres - quantiteAvant,
+        quantite_apres: quantiteApres,
+        commentaire: commentaire || 'Initialisation du stock',
+        effectue_par: username,
+        date_ajustement: new Date()
       }, { transaction });
+      
+      await transaction.commit();
+      
+      res.json({ 
+        success: true, 
+        message: created ? 'Stock initialisé' : 'Stock mis à jour',
+        data: stockAuto 
+      });
+    } catch (error) {
+      await transaction.rollback();
+      throw error; // Re-throw to outer catch
     }
-    
-    // Créer l'historique de l'ajustement
-    await StockAjustement.create({
-      stock_auto_id: stockAuto.id,
-      type_ajustement: 'initialisation',
-      quantite_avant: quantiteAvant,
-      quantite_ajustee: quantiteApres - quantiteAvant,
-      quantite_apres: quantiteApres,
-      commentaire: commentaire || 'Initialisation du stock',
-      effectue_par: username,
-      date_ajustement: new Date()
-    }, { transaction });
-    
-    await transaction.commit();
-    
-    res.json({ 
-      success: true, 
-      message: created ? 'Stock initialisé' : 'Stock mis à jour',
-      data: stockAuto 
-    });
   } catch (error) {
-    await transaction.rollback();
     console.error('Erreur lors de l\'initialisation du stock:', error);
     res.status(500).json({ success: false, error: error.message });
   }
@@ -176,12 +182,11 @@ router.post('/initialiser', requireAuth, async (req, res) => {
 // POST /api/stock-auto/ajuster - Ajuster le stock manuellement
 // =====================================================
 router.post('/ajuster', requireAuth, async (req, res) => {
-  const transaction = await sequelize.transaction();
-  
   try {
     const { stock_auto_id, type_ajustement, quantite, commentaire } = req.body;
     const username = req.session.user?.username || 'system';
     
+    // Validation first (before creating transaction)
     if (!stock_auto_id || !type_ajustement || quantite === undefined) {
       return res.status(400).json({ 
         success: false, 
@@ -198,48 +203,58 @@ router.post('/ajuster', requireAuth, async (req, res) => {
       });
     }
     
-    // Récupérer le stock
-    const stockAuto = await StockAuto.findByPk(stock_auto_id, { transaction });
-    if (!stockAuto) {
+    // Vérifier que le stock existe (before creating transaction)
+    const stockAutoCheck = await StockAuto.findByPk(stock_auto_id);
+    if (!stockAutoCheck) {
       return res.status(404).json({ success: false, error: 'Stock non trouvé' });
     }
     
-    const quantiteAvant = parseFloat(stockAuto.quantite);
-    const quantiteAjustee = parseFloat(quantite);
-    const quantiteApres = quantiteAvant + quantiteAjustee;
+    // Create transaction only after validation passes
+    const transaction = await sequelize.transaction();
     
-    // Mettre à jour le stock
-    await stockAuto.update({
-      quantite: quantiteApres,
-      dernier_ajustement_type: type_ajustement,
-      dernier_ajustement_date: new Date()
-    }, { transaction });
-    
-    // Créer l'historique de l'ajustement
-    await StockAjustement.create({
-      stock_auto_id: stockAuto.id,
-      type_ajustement,
-      quantite_avant: quantiteAvant,
-      quantite_ajustee: quantiteAjustee,
-      quantite_apres: quantiteApres,
-      commentaire: commentaire || '',
-      effectue_par: username,
-      date_ajustement: new Date()
-    }, { transaction });
-    
-    await transaction.commit();
-    
-    res.json({ 
-      success: true, 
-      message: 'Stock ajusté avec succès',
-      data: {
+    try {
+      // Récupérer le stock avec transaction
+      const stockAuto = await StockAuto.findByPk(stock_auto_id, { transaction });
+      
+      const quantiteAvant = parseFloat(stockAuto.quantite);
+      const quantiteAjustee = parseFloat(quantite);
+      const quantiteApres = quantiteAvant + quantiteAjustee;
+      
+      // Mettre à jour le stock
+      await stockAuto.update({
+        quantite: quantiteApres,
+        dernier_ajustement_type: type_ajustement,
+        dernier_ajustement_date: new Date()
+      }, { transaction });
+      
+      // Créer l'historique de l'ajustement
+      await StockAjustement.create({
+        stock_auto_id: stockAuto.id,
+        type_ajustement,
         quantite_avant: quantiteAvant,
         quantite_ajustee: quantiteAjustee,
+        quantite_apres: quantiteApres,
+        commentaire: commentaire || '',
+        effectue_par: username,
+        date_ajustement: new Date()
+      }, { transaction });
+    
+      await transaction.commit();
+      
+      res.json({ 
+        success: true, 
+        message: 'Stock ajusté avec succès',
+        data: {
+          quantite_avant: quantiteAvant,
+          quantite_ajustee: quantiteAjustee,
         quantite_apres: quantiteApres
       }
     });
+    } catch (error) {
+      await transaction.rollback();
+      throw error; // Re-throw to outer catch
+    }
   } catch (error) {
-    await transaction.rollback();
     console.error('Erreur lors de l\'ajustement du stock:', error);
     res.status(500).json({ success: false, error: error.message });
   }
@@ -270,11 +285,10 @@ router.get('/historique/:stockAutoId', requireAuth, async (req, res) => {
 // POST /api/stock-auto/decrementer - Décrémenter le stock (appelé lors d'une vente)
 // =====================================================
 router.post('/decrementer', requireAuth, async (req, res) => {
-  const transaction = await sequelize.transaction();
-  
   try {
     const { produit_nom, point_vente_nom, quantite } = req.body;
     
+    // Validation first (before creating transaction)
     if (!produit_nom || !point_vente_nom || !quantite) {
       return res.status(400).json({ 
         success: false, 
@@ -312,40 +326,47 @@ router.post('/decrementer', requireAuth, async (req, res) => {
       });
     }
     
-    // Trouver ou créer le stock
-    const [stockAuto, created] = await StockAuto.findOrCreate({
-      where: { 
-        produit_id: produit.id, 
-        point_vente_id: pointVente.id 
-      },
-      defaults: {
-        quantite: 0,
-        prix_unitaire: produit.prix_defaut
-      },
-      transaction
-    });
+    // Create transaction only after validation passes
+    const transaction = await sequelize.transaction();
     
-    // Décrémenter le stock
-    const nouvelleQuantite = parseFloat(stockAuto.quantite) - parseFloat(quantite);
-    await stockAuto.update({
-      quantite: nouvelleQuantite
-    }, { transaction });
-    
-    await transaction.commit();
-    
-    res.json({ 
-      success: true, 
-      message: 'Stock décrémenté',
-      decremented: true,
-      data: {
-        produit: produit.nom,
-        point_vente: pointVente.nom,
-        quantite_vendue: quantite,
-        nouveau_stock: nouvelleQuantite
-      }
-    });
+    try {
+      // Trouver ou créer le stock
+      const [stockAuto, created] = await StockAuto.findOrCreate({
+        where: { 
+          produit_id: produit.id, 
+          point_vente_id: pointVente.id 
+        },
+        defaults: {
+          quantite: 0,
+          prix_unitaire: produit.prix_defaut
+        },
+        transaction
+      });
+      
+      // Décrémenter le stock
+      const nouvelleQuantite = parseFloat(stockAuto.quantite) - parseFloat(quantite);
+      await stockAuto.update({
+        quantite: nouvelleQuantite
+      }, { transaction });
+      
+      await transaction.commit();
+      
+      res.json({ 
+        success: true, 
+        message: 'Stock décrémenté',
+        decremented: true,
+        data: {
+          produit: produit.nom,
+          point_vente: pointVente.nom,
+          quantite_vendue: quantite,
+          nouveau_stock: nouvelleQuantite
+        }
+      });
+    } catch (error) {
+      await transaction.rollback();
+      throw error; // Re-throw to outer catch
+    }
   } catch (error) {
-    await transaction.rollback();
     console.error('Erreur lors du décrément du stock:', error);
     res.status(500).json({ success: false, error: error.message });
   }

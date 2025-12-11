@@ -7993,8 +7993,11 @@ async function resetStock(type) {
                 message += `\n+ ${data.countAuto} produits automatiques réinitialisés`;
             }
             alert(message);
-            // Recharger le stock
-            chargerStock();
+            // Recharger le stock avec la date actuelle
+            const dateInput = document.getElementById('date-inventaire');
+            const currentDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+            const typeStock = document.getElementById('type-stock').value;
+            chargerStock(currentDate, typeStock);
         } else {
             alert(data.message || 'Erreur lors de la réinitialisation');
         }

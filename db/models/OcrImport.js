@@ -42,7 +42,8 @@ const OcrImport = sequelize.define('OcrImport', {
         type: DataTypes.STRING(100)
     },
     image_thumbnail: {
-        type: DataTypes.TEXT // Base64 miniature
+        type: DataTypes.TEXT, // Base64 miniature
+        field: 'image_source' // Maps to the actual DB column name
     },
     donnees_json: {
         type: DataTypes.JSONB // Données complètes de l'import

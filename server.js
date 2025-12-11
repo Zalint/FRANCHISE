@@ -2161,6 +2161,13 @@ function checkTimeRestrictions(req, res, next) {
 }
 
 // Route pour réinitialiser TOUTES les quantités de stock à 0 (admin uniquement)
+// TODO: SECURITY - Implement two-step confirmation with operation ID and audit logging
+// Current implementation is functional but could be improved with:
+// 1. Generate UUID operationId + confirmation token, store in pending-operations table
+// 2. Separate POST /api/admin/stock-reset/confirm/:operationId endpoint
+// 3. Require re-authentication or password confirmation
+// 4. Implement structured audit logging (winston/pino) with append-only storage
+// 5. Add rate limiting on create-request endpoint
 app.post('/api/admin/stock-reset/:type', checkAuth, checkWriteAccess, async (req, res) => {
     try {
         const type = req.params.type; // 'matin' ou 'soir'
@@ -5373,6 +5380,34 @@ STRUCTURE JSON:
 
 IMPORTANT: Retourne UNIQUEMENT le JSON valide, sans markdown, sans backticks, sans texte.`;
 
+        // Define JSON Schema for structured outputs
+        const ocrSchema = {
+            type: 'object',
+            properties: {
+                items: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            article_original: { type: 'string' },
+                            produit: { type: 'string' },
+                            quantite: { type: 'number' },
+                            unite: { type: 'string', enum: ['unite', 'kilo'] },
+                            prix_unitaire: { type: 'number' },
+                            montant: { type: 'number' }
+                        },
+                        required: ['article_original', 'produit', 'quantite', 'unite', 'prix_unitaire', 'montant'],
+                        additionalProperties: false
+                    }
+                },
+                total_general: { type: 'number' },
+                date_ticket: { type: 'string' },
+                source: { type: 'string' }
+            },
+            required: ['items', 'total_general'],
+            additionalProperties: false
+        };
+
         const response = await openai.chat.completions.create({
             model: process.env.OPENAI_MODEL || 'gpt-4o',
             messages: [
@@ -5397,34 +5432,42 @@ IMPORTANT: Retourne UNIQUEMENT le JSON valide, sans markdown, sans backticks, sa
                     ]
                 }
             ],
+            response_format: {
+                type: 'json_schema',
+                json_schema: {
+                    name: 'OCRData',
+                    strict: true,
+                    schema: ocrSchema
+                }
+            },
             max_tokens: 4096,
             temperature: 0.1
         });
 
-        const content = response.choices[0].message.content;
-        console.log('🔍 OCR Raw response:', content.substring(0, 500));
+        // Check finish_reason before using result
+        const finishReason = response.choices[0].finish_reason;
+        if (finishReason === 'length') {
+            console.error('⚠️ OCR response truncated due to length');
+            return res.status(500).json({
+                success: false,
+                error: 'Réponse tronquée - image trop complexe. Essayez avec une image plus simple.',
+                finish_reason: finishReason
+            });
+        }
 
-        // Parser le JSON de la réponse
+        const content = response.choices[0].message.content;
+        console.log('🔍 OCR Raw response:', content.substring(0, 200) + '...');
+
+        // Parser le JSON de la réponse (should be clean JSON with structured outputs)
         let extractedData;
         try {
-            // Nettoyer la réponse (enlever les backticks markdown si présents)
-            let jsonStr = content.trim();
-            if (jsonStr.startsWith('```json')) {
-                jsonStr = jsonStr.slice(7);
-            }
-            if (jsonStr.startsWith('```')) {
-                jsonStr = jsonStr.slice(3);
-            }
-            if (jsonStr.endsWith('```')) {
-                jsonStr = jsonStr.slice(0, -3);
-            }
-            extractedData = JSON.parse(jsonStr.trim());
+            extractedData = JSON.parse(content);
         } catch (parseError) {
             console.error('❌ OCR JSON parse error:', parseError);
             return res.status(500).json({
                 success: false,
                 error: 'Erreur lors du parsing des données extraites',
-                raw_response: content
+                raw_response_preview: content.substring(0, 200) // Truncate for production
             });
         }
 
@@ -5438,16 +5481,23 @@ IMPORTANT: Retourne UNIQUEMENT le JSON valide, sans markdown, sans backticks, sa
         }
 
         // Normaliser les items
-        const normalizedItems = extractedData.items.map((item, index) => ({
-            id: index + 1,
-            article_original: item.article_original || item.article || '',
-            produit: item.produit || (item.article_original || '').replace(/^KG\s+/i, '').trim(),
-            quantite: parseFloat(item.quantite) || 0,
-            unite: item.unite || (item.article_original?.toUpperCase().startsWith('KG') ? 'kilo' : 'unite'),
-            prix_unitaire: parseFloat(item.prix_unitaire) || 0,
-            montant: parseFloat(item.montant) || 0,
-            selected: true
-        }));
+        const normalizedItems = extractedData.items.map((item, index) => {
+            // Derive values robustly
+            const rawArticle = item.article_original || item.article || '';
+            const produit = item.produit || rawArticle.replace(/^KG\s+/i, '').trim();
+            const unite = item.unite || (rawArticle.toUpperCase().startsWith('KG') ? 'kilo' : 'unite');
+            
+            return {
+                id: index + 1,
+                article_original: rawArticle,
+                produit: produit,
+                quantite: parseFloat(item.quantite) || 0,
+                unite: unite,
+                prix_unitaire: parseFloat(item.prix_unitaire) || 0,
+                montant: parseFloat(item.montant) || 0,
+                selected: true
+            };
+        });
 
         console.log(`✅ OCR Extract: ${normalizedItems.length} items extraits`);
 
