@@ -20,10 +20,6 @@ const Produit = require('./Produit');
 const PrixPointVente = require('./PrixPointVente');
 const PrixHistorique = require('./PrixHistorique');
 
-// Modèles pour la gestion du stock automatique
-const StockAuto = require('./StockAuto');
-const StockAjustement = require('./StockAjustement');
-
 // Modèle pour l'historique des imports OCR
 const OcrImport = require('./OcrImport');
 
@@ -127,43 +123,6 @@ Produit.hasMany(PrixHistorique, {
 });
 
 // =====================================================
-// RELATIONS STOCK AUTOMATIQUE
-// =====================================================
-
-// StockAuto <-> Produit
-Produit.hasMany(StockAuto, {
-  foreignKey: 'produit_id',
-  as: 'stocksAuto'
-});
-
-StockAuto.belongsTo(Produit, {
-  foreignKey: 'produit_id',
-  as: 'produit'
-});
-
-// StockAuto <-> PointVente
-PointVente.hasMany(StockAuto, {
-  foreignKey: 'point_vente_id',
-  as: 'stocksAuto'
-});
-
-StockAuto.belongsTo(PointVente, {
-  foreignKey: 'point_vente_id',
-  as: 'pointVente'
-});
-
-// StockAjustement <-> StockAuto
-StockAuto.hasMany(StockAjustement, {
-  foreignKey: 'stock_auto_id',
-  as: 'ajustements'
-});
-
-StockAjustement.belongsTo(StockAuto, {
-  foreignKey: 'stock_auto_id',
-  as: 'stockAuto'
-});
-
-// =====================================================
 // SYNCHRONISATION
 // =====================================================
 
@@ -190,8 +149,6 @@ async function syncNewModels(options = { alter: true }) {
     await Produit.sync(options);
     await PrixPointVente.sync(options);
     await PrixHistorique.sync(options);
-    await StockAuto.sync(options);
-    await StockAjustement.sync(options);
     
     console.log('Nouveaux modèles synchronisés avec succès');
     return true;
@@ -224,10 +181,6 @@ module.exports = {
   Produit,
   PrixPointVente,
   PrixHistorique,
-  
-  // Modèles stock automatique
-  StockAuto,
-  StockAjustement,
   
   // Modèle historique imports OCR
   OcrImport,

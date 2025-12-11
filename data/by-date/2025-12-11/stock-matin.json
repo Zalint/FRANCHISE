@@ -1,0 +1,326 @@
+{
+  "Keur Bali": {
+    "Ail": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Aubergine": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Aubergine Amer": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Poisson Beurre": {
+      "quantite": 0,
+      "prixUnitaire": "1200.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Carotte": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Chou": {
+      "quantite": 0,
+      "prixUnitaire": "350.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Citron": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Concombre": {
+      "quantite": 0,
+      "prixUnitaire": "200.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Crevette - Crue": {
+      "quantite": 0,
+      "prixUnitaire": "8000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Poisson Dorade": {
+      "quantite": 0,
+      "prixUnitaire": "8000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Epice 100f": {
+      "quantite": 0,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Filet De Boeuf": {
+      "quantite": 0,
+      "prixUnitaire": "8000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Foie De Boeuf": {
+      "quantite": 0,
+      "prixUnitaire": "12000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Foie Mouton": {
+      "quantite": 0,
+      "prixUnitaire": "500.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Gombo": {
+      "quantite": 0,
+      "prixUnitaire": "200.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Sachet Guejdj Beurre": {
+      "quantite": 0,
+      "prixUnitaire": "1000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Sachet Guejdj Kong": {
+      "quantite": 0,
+      "prixUnitaire": "1000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Huile Chef Aida Pm": {
+      "quantite": 0,
+      "prixUnitaire": "1000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Lakhass": {
+      "quantite": 0,
+      "prixUnitaire": "150.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Manioc": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Navet": {
+      "quantite": 0,
+      "prixUnitaire": "300.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Noflay En Poudre 250g": {
+      "quantite": 0,
+      "prixUnitaire": "500.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Oignon Local": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Oignon Vert": {
+      "quantite": 0,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Patate": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Piment Projet": {
+      "quantite": 0,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Piment Goana": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Sachet Piment En Poudre": {
+      "quantite": 0,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Sachet Poivre En Poudre 100f": {
+      "quantite": 0,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Poivron Vert": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Pomme De Terre": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Poulet Entier": {
+      "quantite": 0,
+      "prixUnitaire": "3500.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Seude": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Tomate Fraiche": {
+      "quantite": 0,
+      "prixUnitaire": "300.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Tomate Djamb": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Tomate Cerise": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Toufa": {
+      "quantite": 0,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Viande Avec Os": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Viande Mouton": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Viande Hachee 1er Choix": {
+      "quantite": 0,
+      "prixUnitaire": "1000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Wass": {
+      "quantite": 0,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Sachet Yett": {
+      "quantite": 0,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Ma Epice 100f": {
+      "quantite": 0,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Jarret": {
+      "quantite": 0,
+      "prixUnitaire": "400.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Tomate Djambe": {
+      "quantite": 0,
+      "prixUnitaire": "1200.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    },
+    "Gnambi": {
+      "quantite": 0,
+      "prixUnitaire": "200.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": "Stock initial créé lors import"
+    }
+  }
+}

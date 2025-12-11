@@ -5396,7 +5396,7 @@ function initTableauStock() {
         const modeA = PRODUITS_MODE_STOCK[a] || 'manuel';
         const modeB = PRODUITS_MODE_STOCK[b] || 'manuel';
         
-        // 'manuel' vient avant 'automatique' (ordre alphabétique inverse pour ce cas)
+        // 'manuel' vient avant 'automatique'
         if (modeA === 'manuel' && modeB === 'automatique') return -1;
         if (modeA === 'automatique' && modeB === 'manuel') return 1;
         
@@ -5447,8 +5447,9 @@ function initTableauStock() {
             if (isAutomatic) {
                 const badge = document.createElement('span');
                 badge.className = 'badge bg-primary me-1';
-                badge.textContent = '⚡ Auto';
-                badge.style.fontSize = '0.65rem';
+                badge.textContent = '⚡';
+                badge.style.fontSize = '0.75rem';
+                badge.title = 'Produit automatique';
                 tdProduit.appendChild(badge);
             }
             
@@ -5656,8 +5657,9 @@ function initTableauStock() {
                 const tdProduit = document.createElement('td');
                 const badge = document.createElement('span');
                 badge.className = 'badge bg-primary me-1';
-                badge.textContent = '⚡ Auto';
-                badge.style.fontSize = '0.65rem';
+                badge.textContent = '⚡';
+                badge.style.fontSize = '0.75rem';
+                badge.title = 'Produit automatique';
                 tdProduit.appendChild(badge);
                 
                 const selectProduit = document.createElement('select');
@@ -5939,9 +5941,13 @@ async function onTypeStockChange() {
         let donneesRecues = await response.json();
         console.log('%cDonnées brutes reçues du serveur:', 'color: #00ff00;', donneesRecues);
 
-        // Transformer le tableau en objet avec les clés au format "pointVente-produit"
+        // Transformer les données imbriquées en format plat
+        // Structure JSON: { "Keur Bali": { "Ail": { quantite: -5 } } }
+        // Structure attendue: { "Keur Bali-Ail": { quantite: -5 } }
         const donnees = {};
+        
         if (Array.isArray(donneesRecues)) {
+            // Si c'est un tableau (ancien format)
             donneesRecues.forEach(item => {
                 const pointVente = item["Point de Vente"] || item.pointVente;
                 const produit = item.Produit || item.produit;
@@ -5949,9 +5955,15 @@ async function onTypeStockChange() {
                 donnees[key] = item;
             });
         } else {
+            // Si c'est un objet imbriqué (nouveau format JSON)
             donneesRecues = donneesRecues || {};
-            Object.entries(donneesRecues).forEach(([key, value]) => {
-                donnees[key] = value;
+            Object.entries(donneesRecues).forEach(([pointVente, produits]) => {
+                if (produits && typeof produits === 'object') {
+                    Object.entries(produits).forEach(([produit, data]) => {
+                        const key = `${pointVente}-${produit}`;
+                        donnees[key] = data;
+                    });
+                }
             });
         }
 
@@ -5965,6 +5977,20 @@ async function onTypeStockChange() {
         POINTS_VENTE_PHYSIQUES.forEach(pointVente => {
             PRODUITS_INVENTAIRE.forEach(produit => {
                 const tr = document.createElement('tr');
+                
+                // Vérifier le mode du produit
+                const modeStock = PRODUITS_MODE_STOCK[produit] || 'manuel';
+                const isAutomatic = modeStock === 'automatique';
+                
+                // Style pour produits automatiques
+                if (isAutomatic) {
+                    tr.classList.add('stock-auto-row');
+                    tr.style.backgroundColor = 'rgba(99, 102, 241, 0.05)';
+                }
+                
+                tr.dataset.modeStock = modeStock;
+                tr.dataset.pointVente = pointVente;
+                tr.dataset.produit = produit;
                 
                 // Point de vente (modifiable)
                 const tdPointVente = document.createElement('td');
@@ -5982,10 +6008,25 @@ async function onTypeStockChange() {
                 tdPointVente.appendChild(selectPointVente);
                 tr.appendChild(tdPointVente);
 
-                // Produit (modifiable)
+                // Produit (modifiable) avec badge si automatique
                 const tdProduit = document.createElement('td');
+                
+                // Badge Auto si produit automatique
+                if (isAutomatic) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-primary me-1';
+                    badge.textContent = '⚡';
+                    badge.style.fontSize = '0.75rem';
+                    badge.title = 'Produit automatique';
+                    tdProduit.appendChild(badge);
+                }
+                
                 const selectProduit = document.createElement('select');
                 selectProduit.className = 'form-select form-select-sm produit-select';
+                if (isAutomatic) {
+                    selectProduit.style.display = 'inline-block';
+                    selectProduit.style.width = 'calc(100% - 60px)';
+                }
                 PRODUITS_INVENTAIRE.forEach(prod => {
                     const option = document.createElement('option');
                     option.value = prod;
@@ -5996,6 +6037,16 @@ async function onTypeStockChange() {
                     selectProduit.appendChild(option);
                 });
                 tdProduit.appendChild(selectProduit);
+                
+                // Badge unité pour produits automatiques
+                if (isAutomatic) {
+                    const unite = PRODUITS_UNITE_STOCK[produit] || 'unite';
+                    const uniteSpan = document.createElement('span');
+                    uniteSpan.className = 'badge bg-secondary ms-1';
+                    uniteSpan.textContent = unite === 'kilo' ? 'kg' : 'u';
+                    uniteSpan.style.fontSize = '0.6rem';
+                    tdProduit.appendChild(uniteSpan);
+                }
                 tr.appendChild(tdProduit);
 
                 // Quantité

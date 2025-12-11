@@ -1152,16 +1152,19 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                     uniteStock = 'kilo';
                 }
                 
+                // Déterminer le mode de stock (automatique par défaut, ou selon l'import)
+                const modeStock = entry.mode_stock_import || 'automatique';
+                
                 produitInventaire = await Produit.create({
                     nom: produitNom,
                     type_catalogue: 'inventaire',
                     prix_defaut: entry.prixUnit || 0,
                     prix_alternatifs: [],
-                    mode_stock: 'automatique',  // Mode automatique par défaut pour les imports OCR
+                    mode_stock: modeStock,  // Utiliser le mode spécifié ou automatique par défaut
                     unite_stock: uniteStock,
                     categorie_affichage: 'Import OCR'
                 });
-                console.log(`✅ Produit inventaire créé: ${produitNom} (mode: automatique, unité: ${uniteStock})`);
+                console.log(`✅ Produit inventaire créé: ${produitNom} (mode: ${modeStock}, unité: ${uniteStock})`);
             }
             
             // Mettre à jour l'entrée avec la catégorie correcte
@@ -1326,43 +1329,6 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                     fs.writeFileSync(stockSoirPath, JSON.stringify(stockSoir, null, 2));
                     
                     console.log(`📦 Stock Soir mis à jour: ${produitNom} @ ${pointVente}: ${stockMatinQte} - ${totalVentes} = ${stockSoirQte}`);
-                    
-                    // Mettre à jour aussi stock_auto (table PostgreSQL)
-                    try {
-                        const { StockAuto, PointVente } = require('./db/models');
-                        
-                        // Trouver le point de vente
-                        const pv = await PointVente.findOne({ where: { nom: pointVente, active: true } });
-                        
-                        if (pv) {
-                            // Créer ou mettre à jour le stock_auto
-                            const [stockAuto, created] = await StockAuto.findOrCreate({
-                                where: { 
-                                    produit_id: produit.id, 
-                                    point_vente_id: pv.id 
-                                },
-                                defaults: {
-                                    quantite: stockSoirQte,
-                                    prix_unitaire: produit.prix_defaut || vente.prixUnit || 0,
-                                    dernier_ajustement_type: 'vente',
-                                    dernier_ajustement_date: new Date(dateFormatted)
-                                }
-                            });
-                            
-                            if (!created) {
-                                // Mettre à jour le stock existant
-                                await stockAuto.update({
-                                    quantite: stockSoirQte,
-                                    dernier_ajustement_type: 'vente',
-                                    dernier_ajustement_date: new Date(dateFormatted)
-                                });
-                            }
-                            
-                            console.log(`📊 Stock Auto mis à jour: ${produitNom} @ ${pointVente}: ${stockSoirQte}`);
-                        }
-                    } catch (dbError) {
-                        console.error('⚠️ Erreur mise à jour stock_auto (non bloquant):', dbError.message);
-                    }
                 }
             }
         } catch (stockError) {
@@ -5371,6 +5337,113 @@ app.post('/api/ocr-extract', checkAuth, checkWriteAccess, async (req, res) => {
             apiKey: process.env.OPENAI_API_KEY
         });
 
+        // Helper function pour appeler l'API OCR
+        const callOCRAPI = async (imageData, mimeType, temperature, attemptNumber) => {
+            console.log(`🔍 OCR Attempt ${attemptNumber} (temp: ${temperature})...`);
+            
+            const response = await openai.chat.completions.create({
+                model: process.env.OPENAI_MODEL || 'gpt-4o',
+                messages: [
+                    {
+                        role: 'system',
+                        content: systemPrompt
+                    },
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'text',
+                                text: 'Analyse ce ticket "X de caisse" Sage 100cloud. Extrait TOUTES les lignes de produits avec leur montant (Chiffre d\'affaires TTC), quantité (Qtés) et prix unitaire (Prix de vente moyen). Retourne le JSON complet.'
+                            },
+                            {
+                                type: 'image_url',
+                                image_url: {
+                                    url: `data:${mimeType || 'image/jpeg'};base64,${imageData}`,
+                                    detail: 'high'
+                                }
+                            }
+                        ]
+                    }
+                ],
+                response_format: {
+                    type: 'json_schema',
+                    json_schema: {
+                        name: 'OCRData',
+                        strict: true,
+                        schema: ocrSchema
+                    }
+                },
+                max_tokens: 4096,
+                temperature: temperature
+            });
+            
+            return response;
+        };
+
+        // Helper function pour valider la qualité de l'extraction
+        const validateExtraction = (data) => {
+            const issues = [];
+            
+            if (!data.items || data.items.length === 0) {
+                issues.push('Aucun item extrait');
+            }
+            
+            if (!data.total_general || data.total_general === 0) {
+                issues.push('Total général manquant');
+            }
+            
+            const itemsWithMissingData = data.items.filter(item => 
+                !item.quantite || !item.prix_unitaire || !item.montant
+            ).length;
+            
+            if (itemsWithMissingData > 0) {
+                issues.push(`${itemsWithMissingData} items avec données manquantes`);
+            }
+            
+            const completeness = data.items.length > 0 ? 
+                ((data.items.length - itemsWithMissingData) / data.items.length) * 100 : 0;
+            
+            return {
+                isComplete: issues.length === 0 && completeness >= 80,
+                completeness: completeness,
+                issues: issues,
+                itemCount: data.items.length
+            };
+        };
+
+        // Helper function pour merger deux extractions
+        const mergeExtractions = (data1, data2) => {
+            console.log('🔄 Merging two extractions...');
+            
+            // Prendre les items les plus complets
+            const items1 = data1.items || [];
+            const items2 = data2.items || [];
+            
+            // Utiliser le résultat avec le plus d'items
+            let bestItems = items1.length >= items2.length ? items1 : items2;
+            
+            // Merger les items: compléter les données manquantes
+            const mergedItems = bestItems.map((item, idx) => {
+                const otherItem = items2[idx] || items1[idx];
+                
+                return {
+                    article_original: item.article_original || otherItem?.article_original || '',
+                    produit: item.produit || otherItem?.produit || '',
+                    quantite: item.quantite || otherItem?.quantite || 0,
+                    unite: item.unite || otherItem?.unite || 'unite',
+                    prix_unitaire: item.prix_unitaire || otherItem?.prix_unitaire || 0,
+                    montant: item.montant || otherItem?.montant || 0
+                };
+            });
+            
+            return {
+                items: mergedItems,
+                total_general: data1.total_general || data2.total_general || 0,
+                date_ticket: data1.date_ticket || data2.date_ticket || null,
+                source: data1.source || data2.source || 'Inconnu'
+            };
+        };
+
         // Prompt pour l'extraction structurée - optimisé pour Sage 100cloud
         const systemPrompt = `Tu es un expert en extraction de données de tickets de caisse Sage 100cloud "X de caisse".
 
@@ -5445,70 +5518,77 @@ IMPORTANT: Retourne UNIQUEMENT le JSON valide, sans markdown, sans backticks, sa
             additionalProperties: false
         };
 
-        const response = await openai.chat.completions.create({
-            model: process.env.OPENAI_MODEL || 'gpt-4o',
-            messages: [
-                {
-                    role: 'system',
-                    content: systemPrompt
-                },
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'text',
-                            text: 'Analyse ce ticket "X de caisse" Sage 100cloud. Extrait TOUTES les lignes de produits avec leur montant (Chiffre d\'affaires TTC), quantité (Qtés) et prix unitaire (Prix de vente moyen). Le total général est environ 775 000 FCFA. Retourne le JSON.'
-                        },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: `data:${mimeType || 'image/jpeg'};base64,${image}`,
-                                detail: 'high'
-                            }
-                        }
-                    ]
-                }
-            ],
-            response_format: {
-                type: 'json_schema',
-                json_schema: {
-                    name: 'OCRData',
-                    strict: true,
-                    schema: ocrSchema
-                }
-            },
-            max_tokens: 4096,
-            temperature: 0.1
-        });
-
-        // Check finish_reason before using result
-        const finishReason = response.choices[0].finish_reason;
-        if (finishReason === 'length') {
+        // STRATÉGIE: Smart Retry avec Merge
+        // 1. Premier appel avec température basse (précision)
+        // 2. Validation de la qualité
+        // 3. Si incomplet: deuxième appel et merge des résultats
+        
+        let response1 = await callOCRAPI(image, mimeType, 0.1, 1);
+        
+        // Check finish_reason
+        if (response1.choices[0].finish_reason === 'length') {
             console.error('⚠️ OCR response truncated due to length');
             return res.status(500).json({
                 success: false,
                 error: 'Réponse tronquée - image trop complexe. Essayez avec une image plus simple.',
-                finish_reason: finishReason
+                finish_reason: response1.choices[0].finish_reason
             });
         }
 
-        const content = response.choices[0].message.content;
-        console.log('🔍 OCR Raw response:', content.substring(0, 200) + '...');
+        const content1 = response1.choices[0].message.content;
+        console.log('🔍 OCR Response 1:', content1.substring(0, 150) + '...');
 
-        // Parser le JSON de la réponse (should be clean JSON with structured outputs)
-        let extractedData;
+        // Parser première réponse
+        let extractedData1;
         try {
-            extractedData = JSON.parse(content);
+            extractedData1 = JSON.parse(content1);
         } catch (parseError) {
-            console.error('❌ OCR JSON parse error:', parseError);
+            console.error('❌ OCR JSON parse error (attempt 1):', parseError);
             return res.status(500).json({
                 success: false,
                 error: 'Erreur lors du parsing des données extraites',
-                raw_response_preview: content.substring(0, 200) // Truncate for production
+                raw_response_preview: content1.substring(0, 200)
             });
         }
 
-        // Valider et normaliser les données
+        // Valider la qualité de l'extraction
+        const validation1 = validateExtraction(extractedData1);
+        console.log(`📊 Extraction 1 quality: ${validation1.completeness.toFixed(1)}% complete, ${validation1.itemCount} items`);
+        
+        if (validation1.issues.length > 0) {
+            console.log(`⚠️  Issues: ${validation1.issues.join(', ')}`);
+        }
+
+        let extractedData = extractedData1;
+        
+        // Si l'extraction n'est pas complète, faire un deuxième appel
+        if (!validation1.isComplete && validation1.itemCount > 0) {
+            console.log('🔄 Quality not optimal, making second extraction attempt...');
+            
+            try {
+                const response2 = await callOCRAPI(image, mimeType, 0.2, 2);
+                const content2 = response2.choices[0].message.content;
+                console.log('🔍 OCR Response 2:', content2.substring(0, 150) + '...');
+                
+                const extractedData2 = JSON.parse(content2);
+                const validation2 = validateExtraction(extractedData2);
+                console.log(`📊 Extraction 2 quality: ${validation2.completeness.toFixed(1)}% complete, ${validation2.itemCount} items`);
+                
+                // Merger les deux extractions
+                extractedData = mergeExtractions(extractedData1, extractedData2);
+                
+                const validationMerged = validateExtraction(extractedData);
+                console.log(`✨ Merged quality: ${validationMerged.completeness.toFixed(1)}% complete, ${validationMerged.itemCount} items`);
+                
+            } catch (retryError) {
+                console.error('⚠️  Second extraction failed, using first result:', retryError.message);
+                // Continue avec la première extraction
+            }
+        } else {
+            console.log('✅ First extraction quality is good, no retry needed');
+        }
+
+        // Valider et normaliser les données finales
         if (!extractedData.items || !Array.isArray(extractedData.items)) {
             return res.status(500).json({
                 success: false,

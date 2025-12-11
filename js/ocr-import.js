@@ -116,6 +116,9 @@ function initOCRImport() {
     });
 
     document.getElementById('ocr-import-btn')?.addEventListener('click', importOCRData);
+    
+    // Gestionnaire pour ajouter une ligne manuelle
+    document.getElementById('ocr-add-manual-row')?.addEventListener('click', addManualOCRRow);
 }
 
 /**
@@ -525,16 +528,47 @@ function displayOCRResults(data) {
     
     data.items.forEach((item, index) => {
         const row = document.createElement('tr');
-        row.className = item.matched ? 'table-success' : '';
+        // Différencier visuellement les lignes manuelles
+        if (item.isManual) {
+            row.className = 'table-info'; // Bleu clair pour les lignes manuelles
+        } else {
+            row.className = item.matched ? 'table-success' : '';
+        }
+        
         row.innerHTML = `
             <td>
                 <input type="checkbox" class="form-check-input ocr-item-check" 
                        data-index="${index}" ${item.selected !== false ? 'checked' : ''}>
+                ${item.isManual ? '<br><small class="badge bg-info">➕</small>' : ''}
             </td>
             <td>
-                <strong>${escapeHtml(item.article_original)}</strong>
+                ${item.isManual ? 
+                    `<input type="text" class="form-control form-control-sm" 
+                            data-index="${index}" 
+                            onchange="ocrExtractedData[${index}].article_original = this.value"
+                            placeholder="Ex: KG AIL" 
+                            value="${escapeHtml(item.article_original)}">` :
+                    `<strong>${escapeHtml(item.article_original)}</strong>`
+                }
                 <br>
-                <small class="text-muted">Unité: ${item.unite === 'kilo' ? 'Kg' : 'Unité'}</small>
+                <small class="text-muted">
+                    Unité: 
+                    ${item.isManual ? 
+                        `<select class="form-select form-select-sm d-inline-block" style="width: auto;" 
+                                onchange="ocrExtractedData[${index}].unite = this.value">
+                            <option value="unite" ${item.unite === 'unite' ? 'selected' : ''}>Unité</option>
+                            <option value="kilo" ${item.unite === 'kilo' ? 'selected' : ''}>Kg</option>
+                        </select>
+                        | Mode: 
+                        <select class="form-select form-select-sm d-inline-block" style="width: auto;" 
+                                onchange="ocrExtractedData[${index}].mode_stock = this.value"
+                                title="Mode de gestion du stock">
+                            <option value="automatique" ${item.mode_stock === 'automatique' ? 'selected' : ''}>⚡ Auto</option>
+                            <option value="manuel" ${item.mode_stock === 'manuel' ? 'selected' : ''}>🔧 Manuel</option>
+                        </select>` :
+                        (item.unite === 'kilo' ? 'Kg' : 'Unité')
+                    }
+                </small>
             </td>
             <td>
                 ${generateMatchingSelect(item, index)}
@@ -791,7 +825,8 @@ async function importOCRData() {
                     adresseClient: '',
                     // Info pour création auto du produit inventaire
                     article_original: item.article_original,
-                    unite_import: item.unite
+                    unite_import: item.unite,
+                    mode_stock_import: item.mode_stock || 'automatique' // Passer le mode de stock
                 };
 
                 const response = await fetch('/api/ventes', {
@@ -885,6 +920,37 @@ async function importOCRData() {
         importBtn.innerHTML = '<i class="bi bi-check-lg me-2"></i>Importer les ventes sélectionnées';
         updateOCRSelection();
     }
+}
+
+/**
+ * Ajoute une ligne manuelle vide pour saisie
+ */
+function addManualOCRRow() {
+    const newItem = {
+        id: ocrExtractedData.length + 1,
+        article_original: '',
+        produit: '',
+        quantite: 1,
+        unite: 'unite',
+        prix_unitaire: 0,
+        montant: 0,
+        selected: true,
+        matched: false,
+        isManual: true,  // Flag pour identifier les lignes manuelles
+        mode_stock: 'automatique'  // Mode stock par défaut: automatique
+    };
+    
+    ocrExtractedData.push(newItem);
+    displayOCRResults({ items: ocrExtractedData, total_general: calculateOCRTotal() });
+    
+    // Focus sur le premier champ de la nouvelle ligne
+    const newIndex = ocrExtractedData.length - 1;
+    setTimeout(() => {
+        const firstInput = document.querySelector(`.ocr-produit-custom[data-index="${newIndex}"]`);
+        if (firstInput) {
+            firstInput.focus();
+        }
+    }, 100);
 }
 
 /**

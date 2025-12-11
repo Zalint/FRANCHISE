@@ -1,0 +1,298 @@
+{
+  "Keur Bali": {
+    "Ail": {
+      "quantite": -5.25,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Aubergine": {
+      "quantite": -1.5,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Aubergine Amer": {
+      "quantite": -1.5,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Poisson Beurre": {
+      "quantite": -4.41,
+      "prixUnitaire": "1200.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Carotte": {
+      "quantite": -1.24,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Chou": {
+      "quantite": -1.5,
+      "prixUnitaire": "350.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Citron": {
+      "quantite": -1.5,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Concombre": {
+      "quantite": -1.5,
+      "prixUnitaire": "200.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Crevette - Crue": {
+      "quantite": -3,
+      "prixUnitaire": "8000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Poisson Dorade": {
+      "quantite": -12.85,
+      "prixUnitaire": "8000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Ma Epice 100f": {
+      "quantite": -1,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Filet De Boeuf": {
+      "quantite": -1.7,
+      "prixUnitaire": "8000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Foie De Boeuf": {
+      "quantite": -1.5,
+      "prixUnitaire": "12000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Foie Mouton": {
+      "quantite": -1.25,
+      "prixUnitaire": "500.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Gombo": {
+      "quantite": -1.5,
+      "prixUnitaire": "200.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Sachet Guejdj Beurre": {
+      "quantite": -1,
+      "prixUnitaire": "1000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Sachet Guejdj Kong": {
+      "quantite": -1,
+      "prixUnitaire": "1000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Huile Chef Aida Pm": {
+      "quantite": -1,
+      "prixUnitaire": "1000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Jarret": {
+      "quantite": -1,
+      "prixUnitaire": "400.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Lakhass": {
+      "quantite": -1.85,
+      "prixUnitaire": "150.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Manioc": {
+      "quantite": -0.85,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Navet": {
+      "quantite": -1,
+      "prixUnitaire": "300.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Noflay En Poudre 250g": {
+      "quantite": -1,
+      "prixUnitaire": "500.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Oignon Local": {
+      "quantite": -3.63,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Oignon Vert": {
+      "quantite": -1,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Patate": {
+      "quantite": -4.36,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Piment Projet": {
+      "quantite": -1,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Piment Goana": {
+      "quantite": -1,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Sachet Piment En Poudre": {
+      "quantite": -1,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Sachet Poivre En Poudre 100f": {
+      "quantite": -1,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Poivron Vert": {
+      "quantite": -0.73,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Pomme De Terre": {
+      "quantite": -5.56,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Poulet Entier": {
+      "quantite": -1,
+      "prixUnitaire": "3500.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Seude": {
+      "quantite": -1.5,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Tomate Fraiche": {
+      "quantite": -1,
+      "prixUnitaire": "300.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Tomate Djambe": {
+      "quantite": -1,
+      "prixUnitaire": "1200.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Tomate Cerise": {
+      "quantite": -1.5,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Toufa": {
+      "quantite": -1,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Viande Avec Os": {
+      "quantite": -3.75,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Viande Mouton": {
+      "quantite": -2,
+      "prixUnitaire": "552.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Viande Hachee 1er Choix": {
+      "quantite": -1,
+      "prixUnitaire": "1000.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    },
+    "Sachet Yett": {
+      "quantite": -1,
+      "prixUnitaire": "100.00",
+      "date": "2025-12-11",
+      "mode": "automatique",
+      "commentaire": ""
+    }
+  }
+}
