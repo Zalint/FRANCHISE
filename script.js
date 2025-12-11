@@ -4677,8 +4677,19 @@ async function chargerStock(date, type) {
             }
         }
         
-        // Retourner un objet structuré pour la réconciliation
-        return donnees || {};
+        // Retourner un objet aplati pour la réconciliation
+        // Structure: { "Keur Bali-Ail": { quantite: -5, ... } }
+        const flattenedObject = {};
+        for (const pointVente in donnees) {
+            if (donnees[pointVente] && typeof donnees[pointVente] === 'object') {
+                for (const produit in donnees[pointVente]) {
+                    const key = `${pointVente}-${produit}`;
+                    flattenedObject[key] = donnees[pointVente][produit];
+                }
+            }
+        }
+        console.log(`%c📦 Stock aplati pour réconciliation: ${Object.keys(flattenedObject).length} entrées`, 'color: #00aaff;');
+        return flattenedObject;
         
     } catch (error) {
         console.error('%cErreur lors du chargement des données:', 'color: #ff0000; font-weight: bold;', error);
@@ -6493,7 +6504,22 @@ async function chargerDonneesStock(type, date) {
             return {};
         }
         
-        return await response.json();
+        const data = await response.json();
+        
+        // Transform nested structure to flat structure
+        // JSON: { "Keur Bali": { "Ail": { quantite: -5 } } }
+        // Flat: { "Keur Bali-Ail": { quantite: -5 } }
+        const flatData = {};
+        for (const pointVente in data) {
+            if (data[pointVente] && typeof data[pointVente] === 'object') {
+                for (const produit in data[pointVente]) {
+                    const key = `${pointVente}-${produit}`;
+                    flatData[key] = data[pointVente][produit];
+                }
+            }
+        }
+        console.log(`Stock ${type} chargé pour réconciliation:`, flatData);
+        return flatData;
     } catch (error) {
         console.error(`Erreur lors du chargement du stock ${type}:`, error);
         // Retourner un objet vide en cas d'erreur
@@ -6651,14 +6677,17 @@ async function calculerReconciliationParPointVente(date, stockMatin, stockSoir, 
     
     // Calculer les totaux du stock matin
     Object.entries(stockMatin).forEach(([key, item]) => {
-        const [pointVente, produit] = key.split('-');
+        const [pointVente, ...produitParts] = key.split('-');
+        const produit = produitParts.join('-'); // Handle product names with dashes
         if (POINTS_VENTE_PHYSIQUES.includes(pointVente)) {
-            const montant = parseFloat(item.Montant || item.total || 0);
-            console.log(`  [DEBUG calcReconPV] StockMatin ${key}: montant parsed = ${montant}`); // Log parsed amount
-            reconciliation[pointVente].stockMatin += montant;
-            
             const quantite = parseFloat(item.Quantite || item.Nombre || item.quantite || 0);
             const prixUnitaire = parseFloat(item.PU || item.prixUnitaire || 0);
+            // Calculate montant from quantite * prixUnitaire if not already present
+            const montant = item.Montant !== undefined ? parseFloat(item.Montant) : 
+                            item.total !== undefined ? parseFloat(item.total) : 
+                            (quantite * prixUnitaire);
+            console.log(`  [DEBUG calcReconPV] StockMatin ${key}: qte=${quantite}, pu=${prixUnitaire}, montant=${montant}`);
+            reconciliation[pointVente].stockMatin += montant;
             
             if (debugInfo && debugInfo.detailsParPointVente && debugInfo.detailsParPointVente[pointVente]) {
                 debugInfo.detailsParPointVente[pointVente].stockMatin.push({
@@ -6674,14 +6703,17 @@ async function calculerReconciliationParPointVente(date, stockMatin, stockSoir, 
     
     // Calculer les totaux du stock soir
     Object.entries(stockSoir).forEach(([key, item]) => {
-        const [pointVente, produit] = key.split('-');
+        const [pointVente, ...produitParts] = key.split('-');
+        const produit = produitParts.join('-'); // Handle product names with dashes
         if (POINTS_VENTE_PHYSIQUES.includes(pointVente)) {
-            const montant = parseFloat(item.Montant || item.total || 0);
-            console.log(`  [DEBUG calcReconPV] StockSoir ${key}: montant parsed = ${montant}`); // Log parsed amount
-            reconciliation[pointVente].stockSoir += montant;
-            
             const quantite = parseFloat(item.Quantite || item.Nombre || item.quantite || 0);
             const prixUnitaire = parseFloat(item.PU || item.prixUnitaire || 0);
+            // Calculate montant from quantite * prixUnitaire if not already present
+            const montant = item.Montant !== undefined ? parseFloat(item.Montant) : 
+                            item.total !== undefined ? parseFloat(item.total) : 
+                            (quantite * prixUnitaire);
+            console.log(`  [DEBUG calcReconPV] StockSoir ${key}: qte=${quantite}, pu=${prixUnitaire}, montant=${montant}`);
+            reconciliation[pointVente].stockSoir += montant;
             
             if (debugInfo && debugInfo.detailsParPointVente && debugInfo.detailsParPointVente[pointVente]) {
                 debugInfo.detailsParPointVente[pointVente].stockSoir.push({
@@ -7703,9 +7735,22 @@ async function getStockForDate(date, type) {
         // Handle the actual response format: the response body IS the data object
         // Check if data is an object (basic validation)
         if (data && typeof data === 'object' && !Array.isArray(data)) {
-             console.log(`Stock ${type} data received for ${date}:`, data);
-             // No normalization needed here if the structure is already PointVente-Produit keys
-            return data; 
+            console.log(`Stock ${type} data received for ${date}:`, data);
+            
+            // Transform nested structure to flat structure
+            // JSON: { "Keur Bali": { "Ail": { quantite: -5 } } }
+            // Flat: { "Keur Bali-Ail": { quantite: -5 } }
+            const flatData = {};
+            for (const pointVente in data) {
+                if (data[pointVente] && typeof data[pointVente] === 'object') {
+                    for (const produit in data[pointVente]) {
+                        const key = `${pointVente}-${produit}`;
+                        flatData[key] = data[pointVente][produit];
+                    }
+                }
+            }
+            console.log(`Stock ${type} flattened for ${date}:`, flatData);
+            return flatData;
         } else {
             console.warn(`Unexpected data format for stock ${type} on ${date}:`, data);
             return {};
