@@ -1326,6 +1326,43 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                     fs.writeFileSync(stockSoirPath, JSON.stringify(stockSoir, null, 2));
                     
                     console.log(`📦 Stock Soir mis à jour: ${produitNom} @ ${pointVente}: ${stockMatinQte} - ${totalVentes} = ${stockSoirQte}`);
+                    
+                    // Mettre à jour aussi stock_auto (table PostgreSQL)
+                    try {
+                        const { StockAuto, PointVente } = require('./db/models');
+                        
+                        // Trouver le point de vente
+                        const pv = await PointVente.findOne({ where: { nom: pointVente, active: true } });
+                        
+                        if (pv) {
+                            // Créer ou mettre à jour le stock_auto
+                            const [stockAuto, created] = await StockAuto.findOrCreate({
+                                where: { 
+                                    produit_id: produit.id, 
+                                    point_vente_id: pv.id 
+                                },
+                                defaults: {
+                                    quantite: stockSoirQte,
+                                    prix_unitaire: produit.prix_defaut || vente.prixUnit || 0,
+                                    dernier_ajustement_type: 'vente',
+                                    dernier_ajustement_date: new Date(dateFormatted)
+                                }
+                            });
+                            
+                            if (!created) {
+                                // Mettre à jour le stock existant
+                                await stockAuto.update({
+                                    quantite: stockSoirQte,
+                                    dernier_ajustement_type: 'vente',
+                                    dernier_ajustement_date: new Date(dateFormatted)
+                                });
+                            }
+                            
+                            console.log(`📊 Stock Auto mis à jour: ${produitNom} @ ${pointVente}: ${stockSoirQte}`);
+                        }
+                    } catch (dbError) {
+                        console.error('⚠️ Erreur mise à jour stock_auto (non bloquant):', dbError.message);
+                    }
                 }
             }
         } catch (stockError) {
@@ -5404,7 +5441,7 @@ IMPORTANT: Retourne UNIQUEMENT le JSON valide, sans markdown, sans backticks, sa
                 date_ticket: { type: 'string' },
                 source: { type: 'string' }
             },
-            required: ['items', 'total_general'],
+            required: ['items', 'total_general', 'date_ticket', 'source'],
             additionalProperties: false
         };
 
@@ -5528,7 +5565,7 @@ IMPORTANT: Retourne UNIQUEMENT le JSON valide, sans markdown, sans backticks, sa
 app.post('/api/ocr-imports', checkAuth, checkWriteAccess, async (req, res) => {
     try {
         const { OcrImport } = require('./db/models');
-        const { date_ventes, point_vente, categorie, nombre_lignes, total_montant, donnees_json, image_thumbnail } = req.body;
+        const { date_ventes, point_vente, categorie, nombre_lignes, total_montant, donnees_json, image_source } = req.body;
         
         const ocrImport = await OcrImport.create({
             date_ventes,
@@ -5538,7 +5575,7 @@ app.post('/api/ocr-imports', checkAuth, checkWriteAccess, async (req, res) => {
             total_montant: total_montant || 0,
             statut: 'completed',
             utilisateur: req.session.user?.username || 'inconnu',
-            image_thumbnail,
+            image_source,
             donnees_json
         });
         
