@@ -344,12 +344,18 @@ const clientConfig = require('./config/client-config');
 const paymentsGeneratedRouter = require('./routes/payments-generated');
 const modulesRouter = require('./routes/modules');
 const configAdminRouter = require('./routes/config-admin');
+// SUPPRIMÉ - Stock unifié dans les fichiers JSON
+// const stockAutoRouter = require('./routes/stock-auto');
 
 // Routes des paiements générés
 app.use('/api/payments/generated', paymentsGeneratedRouter);
 
 // Routes d'administration de la configuration (produits, catégories, prix)
 app.use('/api/admin/config', configAdminRouter);
+
+// Routes pour la gestion du stock automatique
+// SUPPRIMÉ - Stock unifié dans les fichiers JSON
+// app.use('/api/stock-auto', stockAutoRouter);
 
 // Route pour obtenir la liste des points de vente avec ID (admin seulement) - depuis BDD
 app.get('/api/admin/points-vente', checkAuth, checkAdmin, async (req, res) => {
@@ -928,102 +934,8 @@ app.get('/api/admin/config/produits', checkAuth, checkAdmin, async (req, res) =>
     }
 });
 
-// Route pour lire la configuration des produits d'inventaire (depuis la BDD)
-app.get('/api/admin/config/produits-inventaire', checkAuth, checkAdmin, async (req, res) => {
-    try {
-        console.log('📋 GET /api/admin/config/produits-inventaire - Chargement depuis BDD...');
-        
-        const { Produit, PrixPointVente, PointVente } = require('./db/models');
-        
-        const dbProduits = await Produit.findAll({
-            where: { type_catalogue: 'inventaire' },
-            include: [{ 
-                model: PrixPointVente, 
-                as: 'prixParPointVente',
-                include: [{ model: PointVente, as: 'pointVente' }]
-            }]
-        });
-        
-        console.log('📋 Produits inventaire trouvés:', dbProduits.length);
-        
-        const inventaireResult = {};
-        
-        for (const produit of dbProduits) {
-            const config = {
-                prixDefault: parseFloat(produit.prix_defaut) || 0,
-                alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : []
-            };
-            
-            if (produit.prixParPointVente) {
-                for (const prix of produit.prixParPointVente) {
-                    if (prix.pointVente) {
-                        config[prix.pointVente.nom] = parseFloat(prix.prix);
-                    }
-                }
-            }
-            
-            inventaireResult[produit.nom] = config;
-        }
-        
-        res.json({ success: true, produitsInventaire: inventaireResult });
-    } catch (error) {
-        console.error('Erreur lors de la lecture des produits d\'inventaire:', error);
-        res.status(500).json({ success: false, message: error.message, produitsInventaire: {} });
-    }
-});
-
-// Route pour lire la configuration des produits d'abonnement (depuis la BDD)
-app.get('/api/admin/config/produits-abonnement', checkAuth, checkAdmin, async (req, res) => {
-    try {
-        console.log('📋 GET /api/admin/config/produits-abonnement - Chargement depuis BDD...');
-        
-        const { Produit, Category, PrixPointVente, PointVente } = require('./db/models');
-        
-        const dbProduits = await Produit.findAll({
-            where: { type_catalogue: 'abonnement' },
-            include: [
-                { model: Category, as: 'categorie' },
-                { 
-                    model: PrixPointVente, 
-                    as: 'prixParPointVente',
-                    include: [{ model: PointVente, as: 'pointVente' }]
-                }
-            ]
-        });
-        
-        console.log('📋 Produits abonnement trouvés:', dbProduits.length);
-        
-        const abonnementResult = {};
-        
-        for (const produit of dbProduits) {
-            const categorieName = produit.categorie ? produit.categorie.nom : 'Autres';
-            
-            if (!abonnementResult[categorieName]) {
-                abonnementResult[categorieName] = {};
-            }
-            
-            const config = {
-                default: parseFloat(produit.prix_defaut) || 0,
-                alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : []
-            };
-            
-            if (produit.prixParPointVente) {
-                for (const prix of produit.prixParPointVente) {
-                    if (prix.pointVente) {
-                        config[prix.pointVente.nom] = parseFloat(prix.prix);
-                    }
-                }
-            }
-            
-            abonnementResult[categorieName][produit.nom] = config;
-        }
-        
-        res.json({ success: true, produitsAbonnement: abonnementResult });
-    } catch (error) {
-        console.error('Erreur lors de la lecture des produits d\'abonnement:', error);
-        res.status(500).json({ success: false, message: error.message, produitsAbonnement: {} });
-    }
-});
+// NOTE: Les routes /api/admin/config/produits-inventaire et /api/admin/config/produits-abonnement
+// sont définies dans routes/config-admin.js avec gestion complète (mode_stock, unite_stock, categorie_affichage)
 
 // Routes pour la gestion des utilisateurs
 // Obtenir tous les utilisateurs
@@ -1140,13 +1052,26 @@ app.put('/api/admin/users/:username', checkAuth, checkAdmin, async (req, res) =>
 // Route pour ajouter des ventes
 app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
 
-    const entries = req.body;
+    // Gérer les deux cas: objet unique ou tableau
+    let entries = req.body;
+    if (!Array.isArray(entries)) {
+        entries = [entries];
+    }
     
     console.log('Tentative d\'ajout de ventes:', JSON.stringify(entries));
     
+    // Fonction pour normaliser le nom du produit (première lettre majuscule)
+    function normalizeProductName(name) {
+        if (!name) return name;
+        return name.trim()
+            .toLowerCase()
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+    
     // Vérifier les restrictions temporelles pour chaque vente
     for (const entry of entries) {
-
         const restriction = checkSaleTimeRestrictions(entry.date, req.session.user.username, req.session.user.role);
         if (!restriction.allowed) {
             return res.status(403).json({
@@ -1165,37 +1090,94 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                 message: `Le point de vente ${entry.pointVente} est désactivé` 
             });
         }
-        
-        // Vérifier si le produit existe dans la catégorie
-        if (entry.categorie && entry.produit) {
-            const categorieExists = produits[entry.categorie];
-            if (!categorieExists) {
-                return res.status(400).json({
-                    success: false,
-                    message: `La catégorie "${entry.categorie}" n'existe pas`
-                });
-            }
-            
-            const produitExists = produits[entry.categorie][entry.produit] !== undefined;
-            if (!produitExists) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Le produit "${entry.produit}" n'existe pas dans la catégorie "${entry.categorie}"`
-                });
-            }
-        }
     }
     
     try {
+        const { Produit, Category } = require('./db/models');
+        
+        // Créer automatiquement les produits qui n'existent pas
+        for (const entry of entries) {
+            // Normaliser le nom du produit
+            entry.produit = normalizeProductName(entry.produit);
+            
+            // Vérifier si le produit existe dans la BDD
+            const produitNom = entry.produit;
+            const categorieNom = entry.categorie || 'Import OCR';
+            
+            // Chercher ou créer la catégorie
+            let category = await Category.findOne({ where: { nom: categorieNom } });
+            if (!category) {
+                category = await Category.create({ nom: categorieNom });
+                console.log(`📁 Catégorie créée: ${categorieNom}`);
+            }
+            
+            // Chercher le produit (type vente)
+            let produitVente = await Produit.findOne({ 
+                where: { nom: produitNom, type_catalogue: 'vente' } 
+            });
+            
+            // Créer le produit de vente s'il n'existe pas
+            if (!produitVente) {
+                produitVente = await Produit.create({
+                    nom: produitNom,
+                    type_catalogue: 'vente',
+                    prix_defaut: entry.prixUnit || 0,
+                    prix_alternatifs: [],
+                    categorie_id: category.id
+                });
+                console.log(`✅ Produit vente créé: ${produitNom} (catégorie: ${categorieNom})`);
+                
+                // Mettre à jour le cache des produits
+                if (!produits[categorieNom]) {
+                    produits[categorieNom] = {};
+                }
+                produits[categorieNom][produitNom] = {
+                    default: entry.prixUnit || 0,
+                    alternatives: []
+                };
+            }
+            
+            // Chercher le produit (type inventaire)
+            let produitInventaire = await Produit.findOne({ 
+                where: { nom: produitNom, type_catalogue: 'inventaire' } 
+            });
+            
+            // Créer le produit d'inventaire s'il n'existe pas (mode automatique par défaut pour OCR)
+            if (!produitInventaire) {
+                // Déterminer l'unité selon les infos d'import
+                let uniteStock = 'unite';
+                if (entry.unite_import === 'kilo' || 
+                    entry.preparation === 'Frais' || 
+                    (entry.article_original && entry.article_original.toUpperCase().startsWith('KG'))) {
+                    uniteStock = 'kilo';
+                }
+                
+                produitInventaire = await Produit.create({
+                    nom: produitNom,
+                    type_catalogue: 'inventaire',
+                    prix_defaut: entry.prixUnit || 0,
+                    prix_alternatifs: [],
+                    mode_stock: 'automatique',  // Mode automatique par défaut pour les imports OCR
+                    unite_stock: uniteStock,
+                    categorie_affichage: 'Import OCR'
+                });
+                console.log(`✅ Produit inventaire créé: ${produitNom} (mode: automatique, unité: ${uniteStock})`);
+            }
+            
+            // Mettre à jour l'entrée avec la catégorie correcte
+            entry.categorie = categorieNom;
+        }
+    
         // Préparer les données pour l'insertion
         const ventesToInsert = entries.map(entry => {
             // Standardiser la date au format dd-mm-yyyy
             const dateStandardisee = standardiserDateFormat(entry.date);
             
             // Convertir les valeurs numériques en nombre avec une précision fixe
-            const nombre = parseFloat(parseFloat(entry.quantite).toFixed(2)) || 0;
-            const prixUnit = parseFloat(parseFloat(entry.prixUnit).toFixed(2)) || 0;
-            const montant = parseFloat(parseFloat(entry.total).toFixed(2)) || 0;
+            // Gérer les deux noms de champs (quantite/nombre, total/montant)
+            const nombre = parseFloat(parseFloat(entry.nombre || entry.quantite || 0).toFixed(2)) || 0;
+            const prixUnit = parseFloat(parseFloat(entry.prixUnit || 0).toFixed(2)) || 0;
+            const montant = parseFloat(parseFloat(entry.montant || entry.total || 0).toFixed(2)) || 0;
             
             // DEBUG: Log creance value
             console.log(`[VENTE DEBUG] entry.creance = "${entry.creance}" (type: ${typeof entry.creance})`);
@@ -1255,6 +1237,139 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
         
         // Insérer les ventes dans la base de données
         await Vente.bulkCreate(ventesToInsert);
+        
+        // =====================================================
+        // MISE À JOUR STOCK SOIR POUR PRODUITS AUTO
+        // Stock Soir = Stock Matin - Ventes
+        // =====================================================
+        try {
+            const { Produit } = require('./db/models');
+            
+            for (const vente of ventesToInsert) {
+                // Chercher si le produit existe et est en mode automatique
+                const produit = await Produit.findOne({
+                    where: { 
+                        nom: vente.produit,
+                        mode_stock: 'automatique'
+                    }
+                });
+                
+                if (produit) {
+                    const dateVente = vente.date;
+                    const dateFormatted = standardiserDateFormat(dateVente);
+                    const pointVente = vente.pointVente;
+                    const produitNom = vente.produit;
+                    const quantiteVendue = parseFloat(vente.nombre) || 0;
+                    
+                    // Charger Stock Matin
+                    const stockMatinPath = getPathByDate(STOCK_MATIN_PATH, dateFormatted);
+                    let stockMatin = {};
+                    if (fs.existsSync(stockMatinPath)) {
+                        stockMatin = JSON.parse(fs.readFileSync(stockMatinPath, 'utf8'));
+                    }
+                    
+                    // Initialiser Stock Matin si le produit n'existe pas (avec 0)
+                    if (!stockMatin[pointVente]) stockMatin[pointVente] = {};
+                    if (!stockMatin[pointVente][produitNom]) {
+                        stockMatin[pointVente][produitNom] = {
+                            quantite: 0,
+                            prixUnitaire: produit.prix_defaut || vente.prixUnit || 0,
+                            date: vente.date,
+                            mode: 'automatique',
+                            commentaire: 'Stock initial créé lors import'
+                        };
+                        // Sauvegarder Stock Matin
+                        const dirPath = path.dirname(stockMatinPath);
+                        if (!fs.existsSync(dirPath)) {
+                            fs.mkdirSync(dirPath, { recursive: true });
+                        }
+                        fs.writeFileSync(stockMatinPath, JSON.stringify(stockMatin, null, 2));
+                        console.log(`📦 Stock Matin initialisé: ${produitNom} @ ${pointVente}: 0`);
+                    }
+                    
+                    // Calculer Stock Soir = Stock Matin - Ventes totales du jour
+                    const stockMatinQte = parseFloat(stockMatin[pointVente][produitNom]?.quantite || 0);
+                    
+                    // Calculer total des ventes du jour pour ce produit
+                    const ventesJour = await Vente.findAll({
+                        where: {
+                            date: vente.date,
+                            pointVente: pointVente,
+                            produit: produitNom
+                        }
+                    });
+                    
+                    const totalVentes = ventesJour.reduce((sum, v) => sum + parseFloat(v.nombre || 0), 0);
+                    const stockSoirQte = stockMatinQte - totalVentes;
+                    
+                    // Mettre à jour Stock Soir
+                    const stockSoirPath = getPathByDate(STOCK_SOIR_PATH, dateFormatted);
+                    let stockSoir = {};
+                    if (fs.existsSync(stockSoirPath)) {
+                        stockSoir = JSON.parse(fs.readFileSync(stockSoirPath, 'utf8'));
+                    }
+                    
+                    if (!stockSoir[pointVente]) stockSoir[pointVente] = {};
+                    stockSoir[pointVente][produitNom] = {
+                        quantite: stockSoirQte,
+                        prixUnitaire: produit.prix_defaut || vente.prixUnit || 0,
+                        date: vente.date,
+                        mode: 'automatique',
+                        commentaire: ''
+                    };
+                    
+                    // Sauvegarder Stock Soir
+                    const dirPath = path.dirname(stockSoirPath);
+                    if (!fs.existsSync(dirPath)) {
+                        fs.mkdirSync(dirPath, { recursive: true });
+                    }
+                    fs.writeFileSync(stockSoirPath, JSON.stringify(stockSoir, null, 2));
+                    
+                    console.log(`📦 Stock Soir mis à jour: ${produitNom} @ ${pointVente}: ${stockMatinQte} - ${totalVentes} = ${stockSoirQte}`);
+                    
+                    // Mettre à jour aussi stock_auto (table PostgreSQL)
+                    try {
+                        const { StockAuto, PointVente } = require('./db/models');
+                        
+                        // Trouver le point de vente
+                        const pv = await PointVente.findOne({ where: { nom: pointVente, active: true } });
+                        
+                        if (pv) {
+                            // Créer ou mettre à jour le stock_auto
+                            const [stockAuto, created] = await StockAuto.findOrCreate({
+                                where: { 
+                                    produit_id: produit.id, 
+                                    point_vente_id: pv.id 
+                                },
+                                defaults: {
+                                    quantite: stockSoirQte,
+                                    prix_unitaire: produit.prix_defaut || vente.prixUnit || 0,
+                                    dernier_ajustement_type: 'vente',
+                                    dernier_ajustement_date: new Date(dateFormatted)
+                                }
+                            });
+                            
+                            if (!created) {
+                                // Mettre à jour le stock existant
+                                await stockAuto.update({
+                                    quantite: stockSoirQte,
+                                    dernier_ajustement_type: 'vente',
+                                    dernier_ajustement_date: new Date(dateFormatted)
+                                });
+                            }
+                            
+                            console.log(`📊 Stock Auto mis à jour: ${produitNom} @ ${pointVente}: ${stockSoirQte}`);
+                        }
+                    } catch (dbError) {
+                        console.error('⚠️ Erreur mise à jour stock_auto (non bloquant):', dbError.message);
+                    }
+                }
+            }
+        } catch (stockError) {
+            // Log l'erreur mais ne pas bloquer la vente
+            console.error('⚠️ Erreur mise à jour stock (non bloquant):', stockError.message);
+        }
+        // =====================================================
         
         // Récupérer les 10 dernières ventes pour l'affichage
         const dernieresVentes = await Vente.findAll({
@@ -2082,6 +2197,89 @@ function checkTimeRestrictions(req, res, next) {
     next();
 }
 
+// Route pour réinitialiser TOUTES les quantités de stock à 0 (admin uniquement)
+// TODO: SECURITY - Implement two-step confirmation with operation ID and audit logging
+// Current implementation is functional but could be improved with:
+// 1. Generate UUID operationId + confirmation token, store in pending-operations table
+// 2. Separate POST /api/admin/stock-reset/confirm/:operationId endpoint
+// 3. Require re-authentication or password confirmation
+// 4. Implement structured audit logging (winston/pino) with append-only storage
+// 5. Add rate limiting on create-request endpoint
+app.post('/api/admin/stock-reset/:type', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const type = req.params.type; // 'matin' ou 'soir'
+        const { date } = req.body;
+        const userRole = req.session.user.role;
+        
+        // Vérifier que l'utilisateur est admin
+        if (userRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: "Seuls les administrateurs peuvent réinitialiser le stock"
+            });
+        }
+        
+        // Valider le type
+        if (type !== 'matin' && type !== 'soir') {
+            return res.status(400).json({
+                success: false,
+                message: "Type de stock invalide. Utilisez 'matin' ou 'soir'"
+            });
+        }
+        
+        // Valider la date
+        if (!date) {
+            return res.status(400).json({
+                success: false,
+                message: "La date est requise"
+            });
+        }
+        
+        console.log(`🔄 RESET STOCK ${type.toUpperCase()} - Admin ${req.session.user.username} réinitialise le stock du ${date}`);
+        
+        let countModified = 0;
+        
+        // Déterminer le chemin du fichier
+        const baseFilePath = type === 'matin' ? STOCK_MATIN_PATH : STOCK_SOIR_PATH;
+        const filePath = getPathByDate(baseFilePath, date);
+        
+        // Réinitialiser TOUS les produits (manuels et automatiques) dans le fichier JSON
+        if (fs.existsSync(filePath)) {
+            const existingData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            
+            // Mettre toutes les quantités à 0 (manuels ET automatiques)
+            for (const pointVente in existingData) {
+                for (const produit in existingData[pointVente]) {
+                    const currentQuantite = parseFloat(existingData[pointVente][produit].quantite || 0);
+                    if (currentQuantite !== 0) {
+                        existingData[pointVente][produit].quantite = 0;
+                        countModified++;
+                    }
+                }
+            }
+            
+            // Sauvegarder les données modifiées
+            fs.writeFileSync(filePath, JSON.stringify(existingData, null, 2));
+            console.log(`✅ Stock ${type} du ${date} réinitialisé: ${countModified} entrées mises à 0`);
+        } else {
+            console.log(`ℹ️ Pas de fichier de stock ${type} pour le ${date}`);
+        }
+        
+        res.json({
+            success: true,
+            message: `Stock ${type} du ${date} réinitialisé avec succès`,
+            count: countModified
+        });
+        
+    } catch (error) {
+        console.error('Erreur lors de la réinitialisation du stock:', error);
+        res.status(500).json({
+            success: false,
+            message: "Erreur lors de la réinitialisation: " + error.message
+        });
+    }
+});
+
 // Route pour sauvegarder les données de stock
 app.post('/api/stock/:type', checkAuth, checkWriteAccess, checkStockTimeRestrictionsMiddleware, async (req, res) => {
     try {
@@ -2566,6 +2764,79 @@ app.delete('/api/ventes/:id', checkAuth, checkWriteAccess, async (req, res) => {
             });
         }
 
+        // =====================================================
+        // RECALCUL STOCK SOIR APRÈS SUPPRESSION
+        // Stock Soir = Stock Matin - Ventes restantes
+        // =====================================================
+        try {
+            const { Produit } = require('./db/models');
+            
+            // Chercher si le produit est en mode automatique
+            const produit = await Produit.findOne({
+                where: { 
+                    nom: vente.produit,
+                    mode_stock: 'automatique'
+                }
+            });
+            
+            if (produit) {
+                const dateVente = vente.date;
+                const dateFormatted = standardiserDateFormat(dateVente);
+                const pointVente = vente.pointVente;
+                const produitNom = vente.produit;
+                
+                // Charger Stock Matin
+                const stockMatinPath = getPathByDate(STOCK_MATIN_PATH, dateFormatted);
+                let stockMatin = {};
+                if (fs.existsSync(stockMatinPath)) {
+                    stockMatin = JSON.parse(fs.readFileSync(stockMatinPath, 'utf8'));
+                }
+                
+                const stockMatinQte = parseFloat(stockMatin[pointVente]?.[produitNom]?.quantite || 0);
+                
+                // Recalculer total des ventes après suppression
+                const ventesRestantes = await Vente.findAll({
+                    where: {
+                        date: vente.date,
+                        pointVente: pointVente,
+                        produit: produitNom,
+                        id: { [Op.ne]: venteId } // Exclure la vente en cours de suppression
+                    }
+                });
+                
+                const totalVentesRestantes = ventesRestantes.reduce((sum, v) => sum + parseFloat(v.nombre || 0), 0);
+                const stockSoirQte = stockMatinQte - totalVentesRestantes;
+                
+                // Mettre à jour Stock Soir
+                const stockSoirPath = getPathByDate(STOCK_SOIR_PATH, dateFormatted);
+                let stockSoir = {};
+                if (fs.existsSync(stockSoirPath)) {
+                    stockSoir = JSON.parse(fs.readFileSync(stockSoirPath, 'utf8'));
+                }
+                
+                if (!stockSoir[pointVente]) stockSoir[pointVente] = {};
+                
+                if (totalVentesRestantes === 0 && stockMatinQte === 0) {
+                    // Si plus de ventes et stock matin à 0, supprimer l'entrée
+                    delete stockSoir[pointVente][produitNom];
+                } else {
+                    stockSoir[pointVente][produitNom] = {
+                        quantite: stockSoirQte,
+                        prixUnitaire: produit.prix_defaut || vente.prixUnit || 0,
+                        date: vente.date,
+                        mode: 'automatique',
+                        commentaire: ''
+                    };
+                }
+                
+                fs.writeFileSync(stockSoirPath, JSON.stringify(stockSoir, null, 2));
+                console.log(`📦 Stock Soir recalculé: ${produitNom} @ ${pointVente}: ${stockMatinQte} - ${totalVentesRestantes} = ${stockSoirQte}`);
+            }
+        } catch (stockError) {
+            console.error('⚠️ Erreur recalcul stock (non bloquant):', stockError.message);
+        }
+        // =====================================================
+
         // Supprimer la vente
         await vente.destroy();
 
@@ -2580,6 +2851,149 @@ app.delete('/api/ventes/:id', checkAuth, checkWriteAccess, async (req, res) => {
         res.status(500).json({ 
             success: false, 
             message: "Erreur lors de la suppression de la vente: " + error.message 
+        });
+    }
+});
+
+// Route pour supprimer TOUTES les ventes d'une date (admin uniquement)
+app.delete('/api/ventes/jour/:date', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const dateParam = req.params.date;
+        const userRole = req.session.user.role;
+        
+        // Vérifier que l'utilisateur est admin
+        if (userRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: "Seuls les administrateurs peuvent supprimer toutes les ventes d'un jour"
+            });
+        }
+        
+        console.log(`🗑️ SUPPRESSION EN MASSE - Admin ${req.session.user.username} supprime les ventes du ${dateParam}`);
+        
+        // Standardiser le format de date
+        const dateStandardisee = standardiserDateFormat(dateParam);
+        
+        // Préparer les conditions pour les deux formats de date possibles
+        let dateDDMMYYYY = dateParam;
+        if (dateParam.includes('/')) {
+            dateDDMMYYYY = dateParam.replace(/\//g, '-');
+        }
+        
+        const whereConditions = {
+            [Op.or]: [
+                { date: dateStandardisee },
+                { date: dateDDMMYYYY }
+            ]
+        };
+        
+        // Compter les ventes à supprimer
+        const countVentes = await Vente.count({ where: whereConditions });
+        
+        if (countVentes === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `Aucune vente trouvée pour la date ${dateParam}`
+            });
+        }
+        
+        // Récupérer les ventes pour recalculer les stocks soir
+        const ventes = await Vente.findAll({ where: whereConditions });
+        
+        // Grouper les ventes par produit auto pour recalcul
+        const { Produit } = require('./db/models');
+        const produitsARecalculer = new Map(); // key = date-pointVente-produit
+        
+        for (const vente of ventes) {
+            const produit = await Produit.findOne({
+                where: { 
+                    nom: vente.produit,
+                    mode_stock: 'automatique'
+                }
+            });
+            
+            if (produit) {
+                const key = `${vente.date}-${vente.pointVente}-${vente.produit}`;
+                produitsARecalculer.set(key, {
+                    date: vente.date,
+                    pointVente: vente.pointVente,
+                    produit: vente.produit,
+                    produitObj: produit
+                });
+            }
+        }
+        
+        // Supprimer toutes les ventes
+        const deletedCount = await Vente.destroy({ where: whereConditions });
+        
+        // Recalculer Stock Soir pour chaque produit affecté
+        for (const [key, info] of produitsARecalculer) {
+            try {
+                const dateFormatted = standardiserDateFormat(info.date);
+                
+                // Charger Stock Matin
+                const stockMatinPath = getPathByDate(STOCK_MATIN_PATH, dateFormatted);
+                let stockMatin = {};
+                if (fs.existsSync(stockMatinPath)) {
+                    stockMatin = JSON.parse(fs.readFileSync(stockMatinPath, 'utf8'));
+                }
+                
+                const stockMatinQte = parseFloat(stockMatin[info.pointVente]?.[info.produit]?.quantite || 0);
+                
+                // Calculer ventes restantes (après suppression)
+                const ventesRestantes = await Vente.findAll({
+                    where: {
+                        date: info.date,
+                        pointVente: info.pointVente,
+                        produit: info.produit
+                    }
+                });
+                
+                const totalVentesRestantes = ventesRestantes.reduce((sum, v) => sum + parseFloat(v.nombre || 0), 0);
+                const stockSoirQte = stockMatinQte - totalVentesRestantes;
+                
+                // Mettre à jour Stock Soir
+                const stockSoirPath = getPathByDate(STOCK_SOIR_PATH, dateFormatted);
+                let stockSoir = {};
+                if (fs.existsSync(stockSoirPath)) {
+                    stockSoir = JSON.parse(fs.readFileSync(stockSoirPath, 'utf8'));
+                }
+                
+                if (!stockSoir[info.pointVente]) stockSoir[info.pointVente] = {};
+                
+                if (totalVentesRestantes === 0 && stockMatinQte === 0) {
+                    // Si plus de ventes et stock matin à 0, supprimer l'entrée
+                    delete stockSoir[info.pointVente][info.produit];
+                } else {
+                    stockSoir[info.pointVente][info.produit] = {
+                        quantite: stockSoirQte,
+                        prixUnitaire: info.produitObj.prix_defaut || 0,
+                        date: info.date,
+                        mode: 'automatique',
+                        commentaire: ''
+                    };
+                }
+                
+                fs.writeFileSync(stockSoirPath, JSON.stringify(stockSoir, null, 2));
+                console.log(`📦 Stock Soir recalculé: ${info.produit} @ ${info.pointVente}: ${stockSoirQte}`);
+            } catch (err) {
+                console.error(`Erreur recalcul stock pour ${info.produit}:`, err);
+            }
+        }
+        
+        console.log(`✅ ${deletedCount} ventes supprimées pour le ${dateParam}`);
+        
+        res.json({
+            success: true,
+            message: `${deletedCount} ventes supprimées pour le ${dateParam}`,
+            count: deletedCount
+        });
+        
+    } catch (error) {
+        console.error('Erreur lors de la suppression en masse:', error);
+        res.status(500).json({
+            success: false,
+            message: "Erreur lors de la suppression: " + error.message
         });
     }
 });
@@ -4918,6 +5332,379 @@ app.get('/api/performance-achat/stats', checkAuth, checkReadAccess, async (req, 
         res.status(500).json({ 
             success: false, 
             error: 'Failed to fetch performance statistics' 
+        });
+    }
+});
+
+// ============================================================================
+// OCR IMPORT - Extraction de données depuis images de tickets de caisse
+// ============================================================================
+
+/**
+ * POST /api/ocr-extract
+ * Extrait les données de vente depuis une image de ticket de caisse
+ * Utilise GPT-4o Vision pour l'OCR et l'extraction structurée
+ */
+app.post('/api/ocr-extract', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const { image, mimeType } = req.body;
+        
+        if (!image) {
+            return res.status(400).json({
+                success: false,
+                error: 'Image requise (format base64)'
+            });
+        }
+
+        // Vérifier que OpenAI est configuré
+        if (!process.env.OPENAI_API_KEY) {
+            return res.status(500).json({
+                success: false,
+                error: 'OpenAI API key non configurée'
+            });
+        }
+
+        console.log('🔍 OCR Extract: Processing image...');
+
+        const OpenAI = require('openai');
+        const openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY
+        });
+
+        // Prompt pour l'extraction structurée - optimisé pour Sage 100cloud
+        const systemPrompt = `Tu es un expert en extraction de données de tickets de caisse Sage 100cloud "X de caisse".
+
+COLONNES DU TICKET (dans l'ordre):
+- Article (colonne 1): Code + Nom du produit (ex: "AIL01 KG AIL", "AUBERGIN01 KG AUBERGINE")
+- Chiffre d'affaires TTC (colonne 2): MONTANT TOTAL de la ligne - C'EST LE MONTANT À EXTRAIRE
+- % CA (colonne 3): Pourcentage - IGNORER
+- Marge (colonne 4): Peut être négatif - IGNORER  
+- % mar. (colonne 5): Pourcentage - IGNORER
+- Qtés (colonne 6): QUANTITÉ VENDUE - nombre décimal possible
+- Prix de vente moyen (colonne 7): PRIX UNITAIRE
+
+RÈGLES D'EXTRACTION:
+1. Pour chaque ligne de produit, extraire:
+   - article_original: Le nom complet du produit (partie après le code, ex: "KG AIL" pas "AIL01")
+   - montant: La valeur de "Chiffre d'affaires TTC" (colonne 2) - C'EST UN NOMBRE ENTIER OU DÉCIMAL
+   - quantite: La valeur de "Qtés" (colonne 6)
+   - prix_unitaire: La valeur de "Prix de vente moyen" (colonne 7)
+2. Si l'article contient "KG" au début, l'unité est "kilo", sinon "unite"
+3. IGNORER les lignes: Total, Caisse, Nombre de passages, Panier moyen, Total général
+4. Les nombres peuvent avoir des espaces comme séparateurs de milliers (ex: "2 900" = 2900)
+5. Le total_general est sur la ligne "Total général" tout en bas
+
+EXEMPLE D'UNE LIGNE:
+"AIL01    KG AIL    2 900    0,37    -4 975    -171,    5,25    552,2"
+Doit donner: article_original="KG AIL", montant=2900, quantite=5.25, prix_unitaire=552.2
+
+STRUCTURE JSON:
+{
+  "items": [
+    {
+      "article_original": "KG AIL",
+      "produit": "Ail",
+      "quantite": 5.25,
+      "unite": "kilo",
+      "prix_unitaire": 552.2,
+      "montant": 2900
+    }
+  ],
+  "total_general": 775139,
+  "date_ticket": "05/12/25",
+  "source": "Sage 100cloud"
+}
+
+IMPORTANT: Retourne UNIQUEMENT le JSON valide, sans markdown, sans backticks, sans texte.`;
+
+        // Define JSON Schema for structured outputs
+        const ocrSchema = {
+            type: 'object',
+            properties: {
+                items: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            article_original: { type: 'string' },
+                            produit: { type: 'string' },
+                            quantite: { type: 'number' },
+                            unite: { type: 'string', enum: ['unite', 'kilo'] },
+                            prix_unitaire: { type: 'number' },
+                            montant: { type: 'number' }
+                        },
+                        required: ['article_original', 'produit', 'quantite', 'unite', 'prix_unitaire', 'montant'],
+                        additionalProperties: false
+                    }
+                },
+                total_general: { type: 'number' },
+                date_ticket: { type: 'string' },
+                source: { type: 'string' }
+            },
+            required: ['items', 'total_general', 'date_ticket', 'source'],
+            additionalProperties: false
+        };
+
+        const response = await openai.chat.completions.create({
+            model: process.env.OPENAI_MODEL || 'gpt-4o',
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Analyse ce ticket "X de caisse" Sage 100cloud. Extrait TOUTES les lignes de produits avec leur montant (Chiffre d\'affaires TTC), quantité (Qtés) et prix unitaire (Prix de vente moyen). Le total général est environ 775 000 FCFA. Retourne le JSON.'
+                        },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: `data:${mimeType || 'image/jpeg'};base64,${image}`,
+                                detail: 'high'
+                            }
+                        }
+                    ]
+                }
+            ],
+            response_format: {
+                type: 'json_schema',
+                json_schema: {
+                    name: 'OCRData',
+                    strict: true,
+                    schema: ocrSchema
+                }
+            },
+            max_tokens: 4096,
+            temperature: 0.1
+        });
+
+        // Check finish_reason before using result
+        const finishReason = response.choices[0].finish_reason;
+        if (finishReason === 'length') {
+            console.error('⚠️ OCR response truncated due to length');
+            return res.status(500).json({
+                success: false,
+                error: 'Réponse tronquée - image trop complexe. Essayez avec une image plus simple.',
+                finish_reason: finishReason
+            });
+        }
+
+        const content = response.choices[0].message.content;
+        console.log('🔍 OCR Raw response:', content.substring(0, 200) + '...');
+
+        // Parser le JSON de la réponse (should be clean JSON with structured outputs)
+        let extractedData;
+        try {
+            extractedData = JSON.parse(content);
+        } catch (parseError) {
+            console.error('❌ OCR JSON parse error:', parseError);
+            return res.status(500).json({
+                success: false,
+                error: 'Erreur lors du parsing des données extraites',
+                raw_response_preview: content.substring(0, 200) // Truncate for production
+            });
+        }
+
+        // Valider et normaliser les données
+        if (!extractedData.items || !Array.isArray(extractedData.items)) {
+            return res.status(500).json({
+                success: false,
+                error: 'Format de données invalide - items manquants',
+                extracted: extractedData
+            });
+        }
+
+        // Normaliser les items
+        const normalizedItems = extractedData.items.map((item, index) => {
+            // Derive values robustly
+            const rawArticle = item.article_original || item.article || '';
+            const produit = item.produit || rawArticle.replace(/^KG\s+/i, '').trim();
+            const unite = item.unite || (rawArticle.toUpperCase().startsWith('KG') ? 'kilo' : 'unite');
+            
+            return {
+                id: index + 1,
+                article_original: rawArticle,
+                produit: produit,
+                quantite: parseFloat(item.quantite) || 0,
+                unite: unite,
+                prix_unitaire: parseFloat(item.prix_unitaire) || 0,
+                montant: parseFloat(item.montant) || 0,
+                selected: true
+            };
+        });
+
+        console.log(`✅ OCR Extract: ${normalizedItems.length} items extraits`);
+
+        res.json({
+            success: true,
+            data: {
+                items: normalizedItems,
+                total_general: extractedData.total_general || normalizedItems.reduce((sum, item) => sum + item.montant, 0),
+                date_ticket: extractedData.date_ticket || null,
+                source: extractedData.source || 'Inconnu',
+                count: normalizedItems.length
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ OCR Extract error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Erreur lors de l\'extraction OCR'
+        });
+    }
+});
+
+/**
+ * POST /api/ocr-imports
+ * Enregistre un import OCR dans l'historique
+ */
+app.post('/api/ocr-imports', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const { OcrImport } = require('./db/models');
+        const { date_ventes, point_vente, categorie, nombre_lignes, total_montant, donnees_json, image_source } = req.body;
+        
+        const ocrImport = await OcrImport.create({
+            date_ventes,
+            point_vente,
+            categorie: categorie || 'Import OCR',
+            nombre_lignes: nombre_lignes || 0,
+            total_montant: total_montant || 0,
+            statut: 'completed',
+            utilisateur: req.session.user?.username || 'inconnu',
+            image_source,
+            donnees_json
+        });
+        
+        console.log(`📋 Import OCR enregistré: ${ocrImport.id} - ${nombre_lignes} lignes`);
+        
+        res.json({
+            success: true,
+            import_id: ocrImport.id,
+            message: 'Import enregistré dans l\'historique'
+        });
+    } catch (error) {
+        console.error('❌ Erreur enregistrement import OCR:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/ocr-imports
+ * Récupère l'historique des imports OCR
+ */
+app.get('/api/ocr-imports', checkAuth, checkReadAccess, async (req, res) => {
+    try {
+        const { OcrImport } = require('./db/models');
+        const { limit = 50, offset = 0, point_vente, date_from, date_to } = req.query;
+        
+        const where = {};
+        if (point_vente) where.point_vente = point_vente;
+        if (date_from) where.date_ventes = { ...where.date_ventes, [require('sequelize').Op.gte]: date_from };
+        if (date_to) where.date_ventes = { ...where.date_ventes, [require('sequelize').Op.lte]: date_to };
+        
+        const imports = await OcrImport.findAndCountAll({
+            where,
+            order: [['date_import', 'DESC']],
+            limit: parseInt(limit),
+            offset: parseInt(offset)
+        });
+        
+        res.json({
+            success: true,
+            data: imports.rows,
+            total: imports.count,
+            limit: parseInt(limit),
+            offset: parseInt(offset)
+        });
+    } catch (error) {
+        console.error('❌ Erreur récupération imports OCR:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/ocr-imports/:id
+ * Récupère les détails d'un import OCR
+ */
+app.get('/api/ocr-imports/:id', checkAuth, checkReadAccess, async (req, res) => {
+    try {
+        const { OcrImport } = require('./db/models');
+        const ocrImport = await OcrImport.findByPk(req.params.id);
+        
+        if (!ocrImport) {
+            return res.status(404).json({
+                success: false,
+                error: 'Import non trouvé'
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: ocrImport
+        });
+    } catch (error) {
+        console.error('❌ Erreur récupération import OCR:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * DELETE /api/ocr-imports/:id
+ * Supprime un import OCR de l'historique (et optionnellement les ventes associées)
+ */
+app.delete('/api/ocr-imports/:id', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const { OcrImport, Vente } = require('./db/models');
+        const { delete_ventes } = req.query;
+        
+        const ocrImport = await OcrImport.findByPk(req.params.id);
+        
+        if (!ocrImport) {
+            return res.status(404).json({
+                success: false,
+                error: 'Import non trouvé'
+            });
+        }
+        
+        let ventesDeleted = 0;
+        
+        // Supprimer les ventes associées si demandé
+        if (delete_ventes === 'true' && ocrImport.donnees_json) {
+            const donnees = ocrImport.donnees_json;
+            if (donnees.vente_ids && Array.isArray(donnees.vente_ids)) {
+                ventesDeleted = await Vente.destroy({
+                    where: { id: donnees.vente_ids }
+                });
+            }
+        }
+        
+        await ocrImport.destroy();
+        
+        console.log(`🗑️ Import OCR supprimé: ${req.params.id} (${ventesDeleted} ventes supprimées)`);
+        
+        res.json({
+            success: true,
+            message: 'Import supprimé',
+            ventes_deleted: ventesDeleted
+        });
+    } catch (error) {
+        console.error('❌ Erreur suppression import OCR:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
