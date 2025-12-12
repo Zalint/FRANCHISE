@@ -740,18 +740,31 @@ app.post('/api/login', async (req, res) => {
         }
 
         console.log('Authentification réussie pour:', username);
-        req.session.user = user;
+        
+        // Créer l'objet utilisateur formaté avec les permissions
+        // Rôles existants: lecteur, user, superutilisateur, superviseur, admin
+        const formattedUser = {
+            username: user.username,
+            role: user.role,
+            pointVente: user.pointVente,
+            isAdmin: user.role === 'admin',
+            isLecteur: user.role === 'lecteur',
+            isSupervisor: ['superutilisateur', 'superviseur'].includes(user.role),
+            canRead: ['lecteur', 'user', 'admin', 'superutilisateur', 'superviseur'].includes(user.role),
+            canWrite: ['user', 'admin', 'superutilisateur', 'superviseur'].includes(user.role),
+            canManageReconciliation: ['admin', 'superutilisateur', 'superviseur'].includes(user.role),
+            canAccessAllPointsVente: ['admin', 'superutilisateur', 'superviseur'].includes(user.role),
+            canCopyStock: ['admin', 'superutilisateur', 'superviseur'].includes(user.role),
+            canManageAdvanced: ['admin', 'superutilisateur', 'superviseur'].includes(user.role),
+            canManageEstimation: ['admin', 'superutilisateur', 'superviseur'].includes(user.role)
+        };
+        
+        // Stocker l'utilisateur formaté dans la session
+        req.session.user = formattedUser;
+        
         res.json({ 
             success: true, 
-            user: {
-                username: user.username,
-                role: user.role,
-                pointVente: user.pointVente,
-                isAdmin: user.role === 'admin',
-                isLecteur: user.role === 'lecteur',
-                canRead: ['lecteur', 'user', 'admin'].includes(user.role),
-                canWrite: ['user', 'admin'].includes(user.role)
-            }
+            user: formattedUser
         });
     } catch (error) {
         console.error('Erreur de connexion:', error);
@@ -776,9 +789,26 @@ app.get('/api/check-session', (req, res) => {
     console.log('Session actuelle:', req.session);
     
     if (req.session.user) {
+        const user = req.session.user;
+        
+        // S'assurer que les permissions sont définies (compatibilité avec anciennes sessions)
+        // Rôles existants: lecteur, user, superutilisateur, superviseur, admin
+        if (user.canRead === undefined || user.canAccessAllPointsVente === undefined) {
+            user.canRead = ['lecteur', 'user', 'admin', 'superutilisateur', 'superviseur'].includes(user.role);
+            user.canWrite = ['user', 'admin', 'superutilisateur', 'superviseur'].includes(user.role);
+            user.isAdmin = user.role === 'admin';
+            user.isSupervisor = ['superutilisateur', 'superviseur'].includes(user.role);
+            user.canManageReconciliation = ['admin', 'superutilisateur', 'superviseur'].includes(user.role);
+            user.canAccessAllPointsVente = ['admin', 'superutilisateur', 'superviseur'].includes(user.role);
+            user.canCopyStock = ['admin', 'superutilisateur', 'superviseur'].includes(user.role);
+            user.canManageAdvanced = ['admin', 'superutilisateur', 'superviseur'].includes(user.role);
+            user.canManageEstimation = ['admin', 'superutilisateur', 'superviseur'].includes(user.role);
+            req.session.user = user; // Mettre à jour la session
+        }
+        
         res.json({
             success: true,
-            user: req.session.user
+            user: user
         });
     } else {
         res.json({ success: false });

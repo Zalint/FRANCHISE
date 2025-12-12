@@ -29,6 +29,20 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+// Middleware pour vérifier que l'utilisateur est admin OU superviseur (lecture produits)
+const requireAdminOrSupervisor = (req, res, next) => {
+  if (!req.session || !req.session.user) {
+    return res.status(401).json({ success: false, error: 'Non authentifié' });
+  }
+  
+  const allowedRoles = ['admin', 'superutilisateur', 'superviseur'];
+  if (!allowedRoles.includes(req.session.user.role)) {
+    return res.status(403).json({ success: false, error: 'Accès réservé aux administrateurs et superviseurs' });
+  }
+  
+  next();
+};
+
 // =====================================================
 // POINTS DE VENTE
 // =====================================================
@@ -432,8 +446,9 @@ router.get('/produits', requireAdmin, async (req, res) => {
 /**
  * GET /api/admin/config/produits-inventaire
  * Liste les produits d'inventaire formatés pour l'interface admin
+ * Accessible aux admin, superutilisateur et superviseur
  */
-router.get('/produits-inventaire', requireAdmin, async (req, res) => {
+router.get('/produits-inventaire', requireAdminOrSupervisor, async (req, res) => {
   try {
     const produits = await Produit.findAll({
       where: { type_catalogue: 'inventaire' },
