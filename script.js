@@ -4637,15 +4637,11 @@ async function chargerStock(date, type) {
         
         console.log('%cDonnées récupérées:', 'color: #00ff00;', donnees);
 
-        // Convertir la structure imbriquée en Map avec clés plates
-        // Structure JSON: { "Keur Bali": { "Ail": { quantite: -5 } } }
-        // Structure Map: clé = "Keur Bali-Ail", valeur = { quantite: -5 }
+        // Format plat: { "Keur Bali-Ail": { Nombre: "5", PU: "552", ... } }
+        // Convertir l'objet en Map pour stockData
         const flattenedData = new Map();
-        for (const pointVente in donnees) {
-            for (const produit in donnees[pointVente]) {
-                const key = `${pointVente}-${produit}`;
-                flattenedData.set(key, donnees[pointVente][produit]);
-            }
+        for (const key in donnees) {
+            flattenedData.set(key, donnees[key]);
         }
 
         // Mise à jour de stockData
@@ -4665,10 +4661,10 @@ async function chargerStock(date, type) {
             console.log('%cTableau vidé avant initialisation des nouvelles lignes', 'color: #ff0000;');
 
             // Déterminer si aucune donnée n'est disponible
-            const matinEmpty = !donnees || Object.keys(donnees).length === 0;
-            console.log('%cStock vide?', 'color: #ff9900;', matinEmpty);
+            const stockEmpty = !donnees || Object.keys(donnees).length === 0;
+            console.log('%cStock vide?', 'color: #ff9900;', stockEmpty);
 
-            if (matinEmpty) {
+            if (stockEmpty) {
                 console.log('%cAucune donnée de stock disponible pour cette date, initialisation des valeurs par défaut', 'color: #ff9900;');
                 initTableauStock();
             } else {
@@ -4677,19 +4673,9 @@ async function chargerStock(date, type) {
             }
         }
         
-        // Retourner un objet aplati pour la réconciliation
-        // Structure: { "Keur Bali-Ail": { quantite: -5, ... } }
-        const flattenedObject = {};
-        for (const pointVente in donnees) {
-            if (donnees[pointVente] && typeof donnees[pointVente] === 'object') {
-                for (const produit in donnees[pointVente]) {
-                    const key = `${pointVente}-${produit}`;
-                    flattenedObject[key] = donnees[pointVente][produit];
-                }
-            }
-        }
-        console.log(`%c📦 Stock aplati pour réconciliation: ${Object.keys(flattenedObject).length} entrées`, 'color: #00aaff;');
-        return flattenedObject;
+        // Retourner directement l'objet plat pour la réconciliation
+        console.log(`%c📦 Stock pour réconciliation: ${Object.keys(donnees).length} entrées`, 'color: #00aaff;');
+        return donnees;
         
     } catch (error) {
         console.error('%cErreur lors du chargement des données:', 'color: #ff0000; font-weight: bold;', error);
@@ -5952,33 +5938,11 @@ async function onTypeStockChange() {
         let donneesRecues = await response.json();
         console.log('%cDonnées brutes reçues du serveur:', 'color: #00ff00;', donneesRecues);
 
-        // Transformer les données imbriquées en format plat
-        // Structure JSON: { "Keur Bali": { "Ail": { quantite: -5 } } }
-        // Structure attendue: { "Keur Bali-Ail": { quantite: -5 } }
-        const donnees = {};
+        // Format plat attendu: { "Keur Bali-Ail": { Nombre: "5", PU: "552", ... } }
+        // Les données sont déjà au format plat depuis le serveur
+        const donnees = donneesRecues || {};
         
-        if (Array.isArray(donneesRecues)) {
-            // Si c'est un tableau (ancien format)
-            donneesRecues.forEach(item => {
-                const pointVente = item["Point de Vente"] || item.pointVente;
-                const produit = item.Produit || item.produit;
-                const key = `${pointVente}-${produit}`;
-                donnees[key] = item;
-            });
-        } else {
-            // Si c'est un objet imbriqué (nouveau format JSON)
-            donneesRecues = donneesRecues || {};
-            Object.entries(donneesRecues).forEach(([pointVente, produits]) => {
-                if (produits && typeof produits === 'object') {
-                    Object.entries(produits).forEach(([produit, data]) => {
-                        const key = `${pointVente}-${produit}`;
-                        donnees[key] = data;
-                    });
-                }
-            });
-        }
-
-        console.log('%cDonnées transformées:', 'color: #00ff00;', donnees);
+        console.log('%cDonnées chargées (format plat):', 'color: #00ff00;', Object.keys(donnees).length, 'entrées');
 
         // Vider le tableau
         const tbody = document.querySelector('#stock-table tbody');
@@ -6506,20 +6470,9 @@ async function chargerDonneesStock(type, date) {
         
         const data = await response.json();
         
-        // Transform nested structure to flat structure
-        // JSON: { "Keur Bali": { "Ail": { quantite: -5 } } }
-        // Flat: { "Keur Bali-Ail": { quantite: -5 } }
-        const flatData = {};
-        for (const pointVente in data) {
-            if (data[pointVente] && typeof data[pointVente] === 'object') {
-                for (const produit in data[pointVente]) {
-                    const key = `${pointVente}-${produit}`;
-                    flatData[key] = data[pointVente][produit];
-                }
-            }
-        }
-        console.log(`Stock ${type} chargé pour réconciliation:`, flatData);
-        return flatData;
+        // Format plat: { "Keur Bali-Ail": { Nombre: "5", PU: "552", ... } }
+        console.log(`Stock ${type} chargé pour réconciliation:`, Object.keys(data).length, 'entrées');
+        return data;
     } catch (error) {
         console.error(`Erreur lors du chargement du stock ${type}:`, error);
         // Retourner un objet vide en cas d'erreur
@@ -7732,25 +7685,10 @@ async function getStockForDate(date, type) {
         
         const data = await response.json();
         
-        // Handle the actual response format: the response body IS the data object
-        // Check if data is an object (basic validation)
+        // Format plat: { "Keur Bali-Ail": { Nombre: "5", PU: "552", ... } }
         if (data && typeof data === 'object' && !Array.isArray(data)) {
-            console.log(`Stock ${type} data received for ${date}:`, data);
-            
-            // Transform nested structure to flat structure
-            // JSON: { "Keur Bali": { "Ail": { quantite: -5 } } }
-            // Flat: { "Keur Bali-Ail": { quantite: -5 } }
-            const flatData = {};
-            for (const pointVente in data) {
-                if (data[pointVente] && typeof data[pointVente] === 'object') {
-                    for (const produit in data[pointVente]) {
-                        const key = `${pointVente}-${produit}`;
-                        flatData[key] = data[pointVente][produit];
-                    }
-                }
-            }
-            console.log(`Stock ${type} flattened for ${date}:`, flatData);
-            return flatData;
+            console.log(`Stock ${type} data received for ${date}:`, Object.keys(data).length, 'entrées');
+            return data;
         } else {
             console.warn(`Unexpected data format for stock ${type} on ${date}:`, data);
             return {};

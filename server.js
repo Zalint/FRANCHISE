@@ -1294,6 +1294,9 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                     const produitNom = vente.produit;
                     const quantiteVendue = parseFloat(vente.nombre) || 0;
                     
+                    // Format PLAT: { "PointVente-Produit": { Nombre, PU, ... } }
+                    const stockKey = `${pointVente}-${produitNom}`;
+                    
                     // Charger Stock Matin
                     const stockMatinPath = getPathByDate(STOCK_MATIN_PATH, dateFormatted);
                     let stockMatin = {};
@@ -1302,14 +1305,14 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                     }
                     
                     // Initialiser Stock Matin si le produit n'existe pas (avec 0)
-                    if (!stockMatin[pointVente]) stockMatin[pointVente] = {};
-                    if (!stockMatin[pointVente][produitNom]) {
-                        stockMatin[pointVente][produitNom] = {
-                            quantite: 0,
-                            prixUnitaire: produit.prix_defaut || vente.prixUnit || 0,
-                            date: vente.date,
-                            mode: 'automatique',
-                            commentaire: 'Stock initial créé lors import'
+                    if (!stockMatin[stockKey]) {
+                        stockMatin[stockKey] = {
+                            Nombre: 0,
+                            PU: produit.prix_defaut || vente.prixUnit || 0,
+                            Montant: 0,
+                            Produit: produitNom,
+                            "Point de Vente": pointVente,
+                            mode: 'automatique'
                         };
                         // Sauvegarder Stock Matin
                         const dirPath = path.dirname(stockMatinPath);
@@ -1317,11 +1320,12 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                             fs.mkdirSync(dirPath, { recursive: true });
                         }
                         fs.writeFileSync(stockMatinPath, JSON.stringify(stockMatin, null, 2));
-                        console.log(`📦 Stock Matin initialisé: ${produitNom} @ ${pointVente}: 0`);
+                        console.log(`📦 Stock Matin initialisé: ${stockKey}: 0`);
                     }
                     
                     // Calculer Stock Soir = Stock Matin - Ventes totales du jour
-                    const stockMatinQte = parseFloat(stockMatin[pointVente][produitNom]?.quantite || 0);
+                    const stockMatinData = stockMatin[stockKey] || {};
+                    const stockMatinQte = parseFloat(stockMatinData.Nombre || stockMatinData.quantite || 0);
                     
                     // Calculer total des ventes du jour pour ce produit
                     const ventesJour = await Vente.findAll({
@@ -1334,21 +1338,22 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                     
                     const totalVentes = ventesJour.reduce((sum, v) => sum + parseFloat(v.nombre || 0), 0);
                     const stockSoirQte = stockMatinQte - totalVentes;
+                    const prixUnit = parseFloat(produit.prix_defaut || vente.prixUnit || 0);
                     
-                    // Mettre à jour Stock Soir
+                    // Mettre à jour Stock Soir (format PLAT)
                     const stockSoirPath = getPathByDate(STOCK_SOIR_PATH, dateFormatted);
                     let stockSoir = {};
                     if (fs.existsSync(stockSoirPath)) {
                         stockSoir = JSON.parse(fs.readFileSync(stockSoirPath, 'utf8'));
                     }
                     
-                    if (!stockSoir[pointVente]) stockSoir[pointVente] = {};
-                    stockSoir[pointVente][produitNom] = {
-                        quantite: stockSoirQte,
-                        prixUnitaire: produit.prix_defaut || vente.prixUnit || 0,
-                        date: vente.date,
-                        mode: 'automatique',
-                        commentaire: ''
+                    stockSoir[stockKey] = {
+                        Nombre: stockSoirQte,
+                        PU: prixUnit,
+                        Montant: stockSoirQte * prixUnit,
+                        Produit: produitNom,
+                        "Point de Vente": pointVente,
+                        mode: 'automatique'
                     };
                     
                     // Sauvegarder Stock Soir
@@ -1358,7 +1363,7 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
                     }
                     fs.writeFileSync(stockSoirPath, JSON.stringify(stockSoir, null, 2));
                     
-                    console.log(`📦 Stock Soir mis à jour: ${produitNom} @ ${pointVente}: ${stockMatinQte} - ${totalVentes} = ${stockSoirQte}`);
+                    console.log(`📦 Stock Soir mis à jour: ${stockKey}: ${stockMatinQte} - ${totalVentes} = ${stockSoirQte}`);
                 }
             }
         } catch (stockError) {
@@ -2780,15 +2785,17 @@ app.delete('/api/ventes/:id', checkAuth, checkWriteAccess, async (req, res) => {
                 const dateFormatted = standardiserDateFormat(dateVente);
                 const pointVente = vente.pointVente;
                 const produitNom = vente.produit;
+                const stockKey = `${pointVente}-${produitNom}`;
                 
-                // Charger Stock Matin
+                // Charger Stock Matin (format PLAT)
                 const stockMatinPath = getPathByDate(STOCK_MATIN_PATH, dateFormatted);
                 let stockMatin = {};
                 if (fs.existsSync(stockMatinPath)) {
                     stockMatin = JSON.parse(fs.readFileSync(stockMatinPath, 'utf8'));
                 }
                 
-                const stockMatinQte = parseFloat(stockMatin[pointVente]?.[produitNom]?.quantite || 0);
+                const stockMatinData = stockMatin[stockKey] || {};
+                const stockMatinQte = parseFloat(stockMatinData.Nombre || stockMatinData.quantite || 0);
                 
                 // Recalculer total des ventes après suppression
                 const ventesRestantes = await Vente.findAll({
@@ -2802,31 +2809,31 @@ app.delete('/api/ventes/:id', checkAuth, checkWriteAccess, async (req, res) => {
                 
                 const totalVentesRestantes = ventesRestantes.reduce((sum, v) => sum + parseFloat(v.nombre || 0), 0);
                 const stockSoirQte = stockMatinQte - totalVentesRestantes;
+                const prixUnit = parseFloat(produit.prix_defaut || vente.prixUnit || 0);
                 
-                // Mettre à jour Stock Soir
+                // Mettre à jour Stock Soir (format PLAT)
                 const stockSoirPath = getPathByDate(STOCK_SOIR_PATH, dateFormatted);
                 let stockSoir = {};
                 if (fs.existsSync(stockSoirPath)) {
                     stockSoir = JSON.parse(fs.readFileSync(stockSoirPath, 'utf8'));
                 }
                 
-                if (!stockSoir[pointVente]) stockSoir[pointVente] = {};
-                
                 if (totalVentesRestantes === 0 && stockMatinQte === 0) {
                     // Si plus de ventes et stock matin à 0, supprimer l'entrée
-                    delete stockSoir[pointVente][produitNom];
+                    delete stockSoir[stockKey];
                 } else {
-                    stockSoir[pointVente][produitNom] = {
-                        quantite: stockSoirQte,
-                        prixUnitaire: produit.prix_defaut || vente.prixUnit || 0,
-                        date: vente.date,
-                        mode: 'automatique',
-                        commentaire: ''
+                    stockSoir[stockKey] = {
+                        Nombre: stockSoirQte,
+                        PU: prixUnit,
+                        Montant: stockSoirQte * prixUnit,
+                        Produit: produitNom,
+                        "Point de Vente": pointVente,
+                        mode: 'automatique'
                     };
                 }
                 
                 fs.writeFileSync(stockSoirPath, JSON.stringify(stockSoir, null, 2));
-                console.log(`📦 Stock Soir recalculé: ${produitNom} @ ${pointVente}: ${stockMatinQte} - ${totalVentesRestantes} = ${stockSoirQte}`);
+                console.log(`📦 Stock Soir recalculé: ${stockKey}: ${stockMatinQte} - ${totalVentesRestantes} = ${stockSoirQte}`);
             }
         } catch (stockError) {
             console.error('⚠️ Erreur recalcul stock (non bloquant):', stockError.message);
@@ -2922,19 +2929,21 @@ app.delete('/api/ventes/jour/:date', checkAuth, checkWriteAccess, async (req, re
         // Supprimer toutes les ventes
         const deletedCount = await Vente.destroy({ where: whereConditions });
         
-        // Recalculer Stock Soir pour chaque produit affecté
+        // Recalculer Stock Soir pour chaque produit affecté (format PLAT)
         for (const [key, info] of produitsARecalculer) {
             try {
                 const dateFormatted = standardiserDateFormat(info.date);
+                const stockKey = `${info.pointVente}-${info.produit}`;
                 
-                // Charger Stock Matin
+                // Charger Stock Matin (format PLAT)
                 const stockMatinPath = getPathByDate(STOCK_MATIN_PATH, dateFormatted);
                 let stockMatin = {};
                 if (fs.existsSync(stockMatinPath)) {
                     stockMatin = JSON.parse(fs.readFileSync(stockMatinPath, 'utf8'));
                 }
                 
-                const stockMatinQte = parseFloat(stockMatin[info.pointVente]?.[info.produit]?.quantite || 0);
+                const stockMatinData = stockMatin[stockKey] || {};
+                const stockMatinQte = parseFloat(stockMatinData.Nombre || stockMatinData.quantite || 0);
                 
                 // Calculer ventes restantes (après suppression)
                 const ventesRestantes = await Vente.findAll({
@@ -2947,31 +2956,31 @@ app.delete('/api/ventes/jour/:date', checkAuth, checkWriteAccess, async (req, re
                 
                 const totalVentesRestantes = ventesRestantes.reduce((sum, v) => sum + parseFloat(v.nombre || 0), 0);
                 const stockSoirQte = stockMatinQte - totalVentesRestantes;
+                const prixUnit = parseFloat(info.produitObj.prix_defaut || 0);
                 
-                // Mettre à jour Stock Soir
+                // Mettre à jour Stock Soir (format PLAT)
                 const stockSoirPath = getPathByDate(STOCK_SOIR_PATH, dateFormatted);
                 let stockSoir = {};
                 if (fs.existsSync(stockSoirPath)) {
                     stockSoir = JSON.parse(fs.readFileSync(stockSoirPath, 'utf8'));
                 }
                 
-                if (!stockSoir[info.pointVente]) stockSoir[info.pointVente] = {};
-                
                 if (totalVentesRestantes === 0 && stockMatinQte === 0) {
                     // Si plus de ventes et stock matin à 0, supprimer l'entrée
-                    delete stockSoir[info.pointVente][info.produit];
+                    delete stockSoir[stockKey];
                 } else {
-                    stockSoir[info.pointVente][info.produit] = {
-                        quantite: stockSoirQte,
-                        prixUnitaire: info.produitObj.prix_defaut || 0,
-                        date: info.date,
-                        mode: 'automatique',
-                        commentaire: ''
+                    stockSoir[stockKey] = {
+                        Nombre: stockSoirQte,
+                        PU: prixUnit,
+                        Montant: stockSoirQte * prixUnit,
+                        Produit: info.produit,
+                        "Point de Vente": info.pointVente,
+                        mode: 'automatique'
                     };
                 }
                 
                 fs.writeFileSync(stockSoirPath, JSON.stringify(stockSoir, null, 2));
-                console.log(`📦 Stock Soir recalculé: ${info.produit} @ ${info.pointVente}: ${stockSoirQte}`);
+                console.log(`📦 Stock Soir recalculé: ${stockKey}: ${stockSoirQte}`);
             } catch (err) {
                 console.error(`Erreur recalcul stock pour ${info.produit}:`, err);
             }

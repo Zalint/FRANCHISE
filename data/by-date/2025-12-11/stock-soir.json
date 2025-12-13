@@ -1,298 +1,338 @@
 {
-  "Keur Bali": {
-    "Ail": {
-      "quantite": -5.25,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Aubergine": {
-      "quantite": -1.5,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Aubergine Amer": {
-      "quantite": -1.5,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Poisson Beurre": {
-      "quantite": -4.41,
-      "prixUnitaire": "1200.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Carotte": {
-      "quantite": -1.24,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Chou": {
-      "quantite": -1.5,
-      "prixUnitaire": "350.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Citron": {
-      "quantite": -1.5,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Concombre": {
-      "quantite": -1.5,
-      "prixUnitaire": "200.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Crevette - Crue": {
-      "quantite": -3,
-      "prixUnitaire": "8000.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Poisson Dorade": {
-      "quantite": -12.85,
-      "prixUnitaire": "8000.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Ma Epice 100f": {
-      "quantite": -1,
-      "prixUnitaire": "100.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Filet De Boeuf": {
-      "quantite": -1.7,
-      "prixUnitaire": "8000.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Foie De Boeuf": {
-      "quantite": -1.5,
-      "prixUnitaire": "12000.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Foie Mouton": {
-      "quantite": -1.25,
-      "prixUnitaire": "500.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Gombo": {
-      "quantite": -1.5,
-      "prixUnitaire": "200.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Sachet Guejdj Beurre": {
-      "quantite": -1,
-      "prixUnitaire": "1000.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Sachet Guejdj Kong": {
-      "quantite": -1,
-      "prixUnitaire": "1000.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Huile Chef Aida Pm": {
-      "quantite": -1,
-      "prixUnitaire": "1000.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Jarret": {
-      "quantite": -1,
-      "prixUnitaire": "400.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Lakhass": {
-      "quantite": -1.85,
-      "prixUnitaire": "150.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Manioc": {
-      "quantite": -0.85,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Navet": {
-      "quantite": -1,
-      "prixUnitaire": "300.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Noflay En Poudre 250g": {
-      "quantite": -1,
-      "prixUnitaire": "500.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Oignon Local": {
-      "quantite": -3.63,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Oignon Vert": {
-      "quantite": -1,
-      "prixUnitaire": "100.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Patate": {
-      "quantite": -4.36,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Piment Projet": {
-      "quantite": -1,
-      "prixUnitaire": "100.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Piment Goana": {
-      "quantite": -1,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Sachet Piment En Poudre": {
-      "quantite": -1,
-      "prixUnitaire": "100.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Sachet Poivre En Poudre 100f": {
-      "quantite": -1,
-      "prixUnitaire": "100.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Poivron Vert": {
-      "quantite": -0.73,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Pomme De Terre": {
-      "quantite": -5.56,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Poulet Entier": {
-      "quantite": -1,
-      "prixUnitaire": "3500.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Seude": {
-      "quantite": -1.5,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Tomate Fraiche": {
-      "quantite": -1,
-      "prixUnitaire": "300.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Tomate Djambe": {
-      "quantite": -1,
-      "prixUnitaire": "1200.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Tomate Cerise": {
-      "quantite": -1.5,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Toufa": {
-      "quantite": -1,
-      "prixUnitaire": "100.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Viande Avec Os": {
-      "quantite": -3.75,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Viande Mouton": {
-      "quantite": -2,
-      "prixUnitaire": "552.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Viande Hachee 1er Choix": {
-      "quantite": -1,
-      "prixUnitaire": "1000.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    },
-    "Sachet Yett": {
-      "quantite": -1,
-      "prixUnitaire": "100.00",
-      "date": "2025-12-11",
-      "mode": "automatique",
-      "commentaire": ""
-    }
+  "Keur Bali-Ail": {
+    "Nombre": -5.25,
+    "PU": 552,
+    "Montant": -2898,
+    "Produit": "Ail",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Aubergine": {
+    "Nombre": -1.5,
+    "PU": 552,
+    "Montant": -828,
+    "Produit": "Aubergine",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Aubergine Amer": {
+    "Nombre": -1.5,
+    "PU": 552,
+    "Montant": -828,
+    "Produit": "Aubergine Amer",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Poisson Beurre": {
+    "Nombre": -4.41,
+    "PU": 1200,
+    "Montant": -5292,
+    "Produit": "Poisson Beurre",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Carotte": {
+    "Nombre": -1.24,
+    "PU": 552,
+    "Montant": -684.48,
+    "Produit": "Carotte",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Chou": {
+    "Nombre": -1.5,
+    "PU": 350,
+    "Montant": -525,
+    "Produit": "Chou",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Citron": {
+    "Nombre": -1.5,
+    "PU": 552,
+    "Montant": -828,
+    "Produit": "Citron",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Concombre": {
+    "Nombre": -1.5,
+    "PU": 200,
+    "Montant": -300,
+    "Produit": "Concombre",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Crevette - Crue": {
+    "Nombre": -3,
+    "PU": 8000,
+    "Montant": -24000,
+    "Produit": "Crevette - Crue",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Poisson Dorade": {
+    "Nombre": -12.85,
+    "PU": 8000,
+    "Montant": -102800,
+    "Produit": "Poisson Dorade",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Ma Epice 100f": {
+    "Nombre": -1,
+    "PU": 100,
+    "Montant": -100,
+    "Produit": "Ma Epice 100f",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Filet De Boeuf": {
+    "Nombre": -1.7,
+    "PU": 8000,
+    "Montant": -13600,
+    "Produit": "Filet De Boeuf",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Foie De Boeuf": {
+    "Nombre": -1.5,
+    "PU": 12000,
+    "Montant": -18000,
+    "Produit": "Foie De Boeuf",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Foie Mouton": {
+    "Nombre": -1.25,
+    "PU": 500,
+    "Montant": -625,
+    "Produit": "Foie Mouton",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Gombo": {
+    "Nombre": -1.5,
+    "PU": 200,
+    "Montant": -300,
+    "Produit": "Gombo",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Sachet Guejdj Beurre": {
+    "Nombre": -1,
+    "PU": 1000,
+    "Montant": -1000,
+    "Produit": "Sachet Guejdj Beurre",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Sachet Guejdj Kong": {
+    "Nombre": -1,
+    "PU": 1000,
+    "Montant": -1000,
+    "Produit": "Sachet Guejdj Kong",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Huile Chef Aida Pm": {
+    "Nombre": -1,
+    "PU": 1000,
+    "Montant": -1000,
+    "Produit": "Huile Chef Aida Pm",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Jarret": {
+    "Nombre": -1,
+    "PU": 400,
+    "Montant": -400,
+    "Produit": "Jarret",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Lakhass": {
+    "Nombre": -1.85,
+    "PU": 150,
+    "Montant": -277.5,
+    "Produit": "Lakhass",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Manioc": {
+    "Nombre": -0.85,
+    "PU": 552,
+    "Montant": -469.2,
+    "Produit": "Manioc",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Navet": {
+    "Nombre": -1,
+    "PU": 300,
+    "Montant": -300,
+    "Produit": "Navet",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Noflay En Poudre 250g": {
+    "Nombre": -1,
+    "PU": 500,
+    "Montant": -500,
+    "Produit": "Noflay En Poudre 250g",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Oignon Local": {
+    "Nombre": -3.63,
+    "PU": 552,
+    "Montant": -2003.76,
+    "Produit": "Oignon Local",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Oignon Vert": {
+    "Nombre": -1,
+    "PU": 100,
+    "Montant": -100,
+    "Produit": "Oignon Vert",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Patate": {
+    "Nombre": -4.36,
+    "PU": 552,
+    "Montant": -2406.72,
+    "Produit": "Patate",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Piment Projet": {
+    "Nombre": -1,
+    "PU": 100,
+    "Montant": -100,
+    "Produit": "Piment Projet",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Piment Goana": {
+    "Nombre": -1,
+    "PU": 552,
+    "Montant": -552,
+    "Produit": "Piment Goana",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Sachet Piment En Poudre": {
+    "Nombre": -1,
+    "PU": 100,
+    "Montant": -100,
+    "Produit": "Sachet Piment En Poudre",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Sachet Poivre En Poudre 100f": {
+    "Nombre": -1,
+    "PU": 100,
+    "Montant": -100,
+    "Produit": "Sachet Poivre En Poudre 100f",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Poivron Vert": {
+    "Nombre": -0.73,
+    "PU": 552,
+    "Montant": -402.96,
+    "Produit": "Poivron Vert",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Pomme De Terre": {
+    "Nombre": -5.56,
+    "PU": 552,
+    "Montant": -3069.12,
+    "Produit": "Pomme De Terre",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Poulet Entier": {
+    "Nombre": -1,
+    "PU": 3500,
+    "Montant": -3500,
+    "Produit": "Poulet Entier",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Seude": {
+    "Nombre": -1.5,
+    "PU": 552,
+    "Montant": -828,
+    "Produit": "Seude",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Tomate Fraiche": {
+    "Nombre": -1,
+    "PU": 300,
+    "Montant": -300,
+    "Produit": "Tomate Fraiche",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Tomate Djambe": {
+    "Nombre": -1,
+    "PU": 1200,
+    "Montant": -1200,
+    "Produit": "Tomate Djambe",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Tomate Cerise": {
+    "Nombre": -1.5,
+    "PU": 552,
+    "Montant": -828,
+    "Produit": "Tomate Cerise",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Toufa": {
+    "Nombre": -1,
+    "PU": 100,
+    "Montant": -100,
+    "Produit": "Toufa",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Viande Avec Os": {
+    "Nombre": -3.75,
+    "PU": 552,
+    "Montant": -2070,
+    "Produit": "Viande Avec Os",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Viande Mouton": {
+    "Nombre": -2,
+    "PU": 552,
+    "Montant": -1104,
+    "Produit": "Viande Mouton",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Viande Hachee 1er Choix": {
+    "Nombre": -1,
+    "PU": 1000,
+    "Montant": -1000,
+    "Produit": "Viande Hachee 1er Choix",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Sachet Yett": {
+    "Nombre": -1,
+    "PU": 100,
+    "Montant": -100,
+    "Produit": "Sachet Yett",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
   }
 }
