@@ -159,13 +159,24 @@ async function createUser(username, password, role, pointVente, active = true) {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+    const acces_tous_points = pointVente === 'tous' || (Array.isArray(pointVente) && pointVente.includes('tous'));
+
     const newUser = await User.create({
         username,
         password: hashedPassword,
         role,
-        acces_tous_points: pointVente === 'tous' || (Array.isArray(pointVente) && pointVente.includes('tous')),
+        acces_tous_points,
         active
     });
+
+    // Associer les points de vente spécifiques si ce n'est pas "tous"
+    if (!acces_tous_points) {
+        const pvNames = Array.isArray(pointVente) ? pointVente : (pointVente ? [pointVente] : []);
+        if (pvNames.length > 0) {
+            const pvRecords = await PointVente.findAll({ where: { nom: pvNames } });
+            await newUser.setPointsVente(pvRecords);
+        }
+    }
 
     // Recharger le cache
     await loadUsers();
@@ -173,7 +184,7 @@ async function createUser(username, password, role, pointVente, active = true) {
     return {
         username: newUser.username,
         role: newUser.role,
-        pointVente: newUser.acces_tous_points ? 'tous' : [],
+        pointVente: acces_tous_points ? 'tous' : pointVente,
         active: newUser.active
     };
 }
@@ -190,13 +201,27 @@ async function updateUser(username, updates) {
         updates.password = await bcrypt.hash(updates.password, saltRounds);
     }
 
+    let pointVenteValue;
     if (updates.pointVente !== undefined) {
-        updates.acces_tous_points = updates.pointVente === 'tous' || 
-            (Array.isArray(updates.pointVente) && updates.pointVente.includes('tous'));
+        pointVenteValue = updates.pointVente;
+        updates.acces_tous_points = pointVenteValue === 'tous' || 
+            (Array.isArray(pointVenteValue) && pointVenteValue.includes('tous'));
         delete updates.pointVente;
     }
 
     await user.update(updates);
+
+    // Mettre à jour les associations points de vente
+    if (pointVenteValue !== undefined) {
+        if (updates.acces_tous_points) {
+            // Supprimer toutes les associations spécifiques (l'accès total est géré par le flag)
+            await user.setPointsVente([]);
+        } else {
+            const pvNames = Array.isArray(pointVenteValue) ? pointVenteValue : (pointVenteValue ? [pointVenteValue] : []);
+            const pvRecords = pvNames.length > 0 ? await PointVente.findAll({ where: { nom: pvNames } }) : [];
+            await user.setPointsVente(pvRecords);
+        }
+    }
     
     // Recharger le cache
     await loadUsers();

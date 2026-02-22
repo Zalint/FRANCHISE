@@ -2198,9 +2198,6 @@ function displayCommandeGroup(commande, container) {
                 <button class="btn-view-commande" onclick="event.stopPropagation(); afficherDetailsCommande('${commande.commandeId}')" title="Voir les détails">
                     <i class="fas fa-eye"></i>
                 </button>
-                ${clientPhone ? `<button class="btn-history-commande" data-phone="${escapeHtml(clientPhone)}" data-name="${escapeHtml(clientName)}" title="Historique du client">
-                    <i class="fas fa-history"></i>
-                </button>` : ''}
                 <button class="${editButtonClass}" ${editButtonOnClick} title="${canEdit ? 'Modifier la commande' : 'Modification non autorisée'}" style="${editButtonStyle}">
                     <i class="fas fa-edit"></i>
                 </button>
@@ -2280,26 +2277,12 @@ function displayCommandeGroup(commande, container) {
     // Click on entire summary row
     summary.addEventListener('click', (e) => {
         // Don't toggle if clicking on action buttons
-        if (e.target.closest('.btn-edit-commande, .btn-whatsapp-commande, .btn-history-commande')) {
+        if (e.target.closest('.btn-edit-commande, .btn-whatsapp-commande')) {
             return;
         }
         toggle();
     });
     
-    // Add event listener for history button
-    const historyBtn = item.querySelector('.btn-history-commande');
-    if (historyBtn) {
-        console.log('✅ Bouton historique trouvé, ajout event listener');
-        historyBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const phone = historyBtn.getAttribute('data-phone');
-            const name = historyBtn.getAttribute('data-name');
-            console.log('🔍 Click historique - Phone:', phone, 'Name:', name);
-            ouvrirHistoriqueClient(phone, name);
-        });
-    } else {
-        console.log('⚠️ Pas de bouton historique pour cette commande');
-    }
     
     // Open by default so details are visible immediately
     // We set initial state manually first to ensure sync
@@ -4213,7 +4196,7 @@ function toggleSummaryCards() {
     if (!container || !icon) return;
 
     const isHidden = container.classList.toggle('hidden');
-    icon.className = isHidden ? 'fas fa-eye' : 'fas fa-eye-slash';
+    icon.className = isHidden ? 'fas fa-eye-slash' : 'fas fa-eye';
 
     // Persister la préférence
     try { localStorage.setItem('summaryCardsHidden', isHidden ? '1' : '0'); } catch(e) {}
@@ -4223,12 +4206,12 @@ function toggleSummaryCards() {
 (function restoreSummaryCardsState() {
     document.addEventListener('DOMContentLoaded', () => {
         try {
-            const hidden = localStorage.getItem('summaryCardsHidden') === '1';
+            const hidden = localStorage.getItem('summaryCardsHidden') !== '0';
             if (hidden) {
                 const container = document.getElementById('summaryCardsContainer');
                 const icon = document.getElementById('iconToggleSummaryCards');
                 if (container) container.classList.add('hidden');
-                if (icon) icon.className = 'fas fa-eye';
+                if (icon) icon.className = 'fas fa-eye-slash';
             }
         } catch(e) {}
     });
@@ -7558,6 +7541,47 @@ async function listerPeripheriquesBluetooth() {
 // ===== MODAL TOTAUX DU JOUR =====
 
 /**
+ * Toggle POS header visibility
+ */
+function togglePosHeader() {
+    const container = document.querySelector('.pos-container');
+    const icon = document.getElementById('headerToggleIcon');
+    const revealTab = document.getElementById('headerRevealTab');
+    if (!container) return;
+
+    const isHidden = container.classList.toggle('header-hidden');
+    document.body.classList.toggle('header-hidden-state', isHidden);
+
+    if (icon) {
+        icon.classList.toggle('fa-chevron-up', !isHidden);
+        icon.classList.toggle('fa-chevron-down', isHidden);
+    }
+    if (revealTab) {
+        revealTab.style.display = isHidden ? 'block' : 'none';
+    }
+
+    localStorage.setItem('pos_header_hidden', isHidden ? '1' : '0');
+}
+
+// Restore header state on load
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('pos_header_hidden') === '1') {
+        const container = document.querySelector('.pos-container');
+        const icon = document.getElementById('headerToggleIcon');
+        const revealTab = document.getElementById('headerRevealTab');
+        if (container) {
+            container.classList.add('header-hidden');
+            document.body.classList.add('header-hidden-state');
+        }
+        if (icon) {
+            icon.classList.remove('fa-chevron-up');
+            icon.classList.add('fa-chevron-down');
+        }
+        if (revealTab) revealTab.style.display = 'block';
+    }
+});
+
+/**
  * Toggle Admin Menu Dropdown
  */
 function toggleAdminMenu() {
@@ -7634,7 +7658,7 @@ async function chargerTotauxDate() {
         const response = await fetch(`/api/external/ventes-date/aggregated?start_date=${dateFormatted}&end_date=${dateFormatted}${pointVente ? '&pointVente=' + encodeURIComponent(pointVente) : ''}`, {
             credentials: 'include',
             headers: {
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
             }
         });
         
@@ -7655,7 +7679,7 @@ async function chargerTotauxDate() {
             const packResponse = await fetch(`/api/external/ventes-date/pack/aggregated?start_date=${dateFormattedYYYYMMDD}&end_date=${dateFormattedYYYYMMDD}${pointVente ? '&pointVente=' + encodeURIComponent(pointVente) : ''}`, {
                 credentials: 'include',
                 headers: {
-                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                    'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
                 }
             });
             
