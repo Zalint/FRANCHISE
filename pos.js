@@ -6137,6 +6137,9 @@ function toggleOrderTrackingView() {
  * @returns {Promise<number|null>} - Note moyenne ou null si indisponible
  */
 async function getClientAverageRating(phoneNumber) {
+    // API audit client désactivée
+    return null;
+
     // Vérifier si la note est déjà en cache
     if (clientRatingsCache[phoneNumber] !== undefined) {
         // Ne pas logger si c'est null (pour éviter le spam dans la console)
