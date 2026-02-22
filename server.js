@@ -708,8 +708,6 @@ const getPaymentRefMapping = async () => {
 // Middleware d'authentification par API key pour services externes comme Relevance AI
 const validateApiKey = (req, res, next) => {
     const apiKey = req.headers['x-api-key'];
-    // Vérifier l'API key (en production, utilisez une variable d'environnement)
-    // À remplacer par votre propre API key
     const validApiKey = process.env.EXTERNAL_API_KEY || 'your-secure-api-key-for-relevance';
     
     if (!apiKey || apiKey !== validApiKey) {
@@ -719,7 +717,6 @@ const validateApiKey = (req, res, next) => {
         });
     }
     
-    // Simuler un utilisateur avec des droits complets pour les requêtes API externes
     req.user = {
         username: 'api-client',
         role: 'api',
@@ -727,6 +724,23 @@ const validateApiKey = (req, res, next) => {
     };
     
     next();
+};
+
+// Accepte soit une session active (POS interne), soit une API key valide (clients externes)
+const validateApiKeyOrSession = (req, res, next) => {
+    // Session active → autorisé directement
+    if (req.session && req.session.user) {
+        req.user = req.session.user;
+        return next();
+    }
+    // Sinon, vérifier l'API key
+    const apiKey = req.headers['x-api-key'];
+    const validApiKey = process.env.EXTERNAL_API_KEY || 'your-secure-api-key-for-relevance';
+    if (apiKey && apiKey === validApiKey) {
+        req.user = { username: 'api-client', role: 'api', pointVente: 'tous' };
+        return next();
+    }
+    return res.status(401).json({ success: false, message: 'Authentification requise' });
 };
 
 
@@ -6525,7 +6539,7 @@ function parseEstimationDate(dateStr) {
 // Helper function to fetch theoretical sales from external API
 async function fetchVentesTheoriquesFromAPI(estimation) {
     try {
-        const externalApiKey = process.env.EXTERNAL_API_KEY || 'b326e72b67a9b508c88270b9954c5ca1';
+        const externalApiKey = process.env.EXTERNAL_API_KEY || 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4';
         // Use the correct base URL for the environment
         const baseUrl = process.env.NODE_ENV === 'production' 
             ? (process.env.BASE_URL || 'https://keur-bali.onrender.com')
@@ -8382,7 +8396,7 @@ app.get('/api/audit-client', checkAuth, async (req, res) => {
         
         // Appel à l'API externe
         const externalApiUrl = `https://matix-livreur-backend.onrender.com/api/external/mata/audit/client?phone_number=${encodeURIComponent(phone_number)}`;
-        const apiKey = process.env.EXTERNAL_API_KEY || 'b326e72b67a9b508c88270b9954c5ca1';
+        const apiKey = process.env.EXTERNAL_API_KEY || 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4';
         
         const response = await axios.get(externalApiUrl, {
             headers: {
@@ -8507,7 +8521,7 @@ app.get('/api/show-estimation', checkAuth, checkReadAccess, async (req, res) => 
 // =================== EXTERNAL API ENDPOINTS FOR RELEVANCE AI ===================
 
 // External API version for ventes saisie by date
-app.get('/api/external/ventes-date', validateApiKey, async (req, res) => {
+app.get('/api/external/ventes-date', validateApiKeyOrSession, async (req, res) => {
     try {
         const { date, pointVente } = req.query;
         
@@ -8611,7 +8625,7 @@ app.get('/api/external/ventes-date', validateApiKey, async (req, res) => {
 });
 
 // External API version for aggregated ventes by date range and category
-app.get('/api/external/ventes-date/aggregated', validateApiKey, async (req, res) => {
+app.get('/api/external/ventes-date/aggregated', validateApiKeyOrSession, async (req, res) => {
     try {
         const { start_date, end_date, pointVente } = req.query;
         
@@ -8800,7 +8814,7 @@ app.get('/api/external/ventes-date/aggregated', validateApiKey, async (req, res)
 });
 
 // External API for pack sales aggregation with composition breakdown
-app.get('/api/external/ventes-date/pack/aggregated', validateApiKey, async (req, res) => {
+app.get('/api/external/ventes-date/pack/aggregated', validateApiKeyOrSession, async (req, res) => {
     try {
         const { 
             start_date, 
@@ -12655,7 +12669,7 @@ async function fetchWeightedPurchasePrices(startDate, endDate) {
         const achatsResponse = await fetch(achatsUrl, {
             method: 'GET',
             headers: {
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4',
                 'Content-Type': 'application/json'
             }
         });
@@ -12833,7 +12847,7 @@ async function fetchSellingPricesFromVentes(startDate, endDate, pointVente) {
         const response = await fetch(`${baseUrl}/api/external/ventes?dateDebut=${dateDebutAPI}&dateFin=${dateFinAPI}&pointVente=${encodeURIComponent(pointVenteAPI)}`, {
             method: 'GET',
             headers: {
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
             }
         });
         
@@ -13914,7 +13928,7 @@ async function fetchAchatsBoeufWithRetry(initialStartDate, endDate, maxRetries =
             const achatsResponse = await fetch(achatsUrl, {
                 method: 'GET',
                 headers: {
-                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                    'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4',
                     'Content-Type': 'application/json'
                 }
             });
@@ -14006,7 +14020,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
             const reconciliationResponse = await fetch(reconciliationUrl, {
                 method: 'GET',
                 headers: {
-                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                    'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4',
                     'Content-Type': 'application/json'
                 }
             });
@@ -14096,7 +14110,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                     const achatsResponse = await fetch(achatsUrl, {
                         method: 'GET',
                         headers: {
-                            'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                            'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4',
                             'Content-Type': 'application/json'
                         }
                     });
@@ -14123,7 +14137,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 const stockSoirResponse = await fetch(stockSoirUrl, {
                     method: 'GET',
                     headers: {
-                        'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                        'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4',
                         'Content-Type': 'application/json'
                     }
                 });
@@ -14266,7 +14280,7 @@ async function getProxyMargesViaAPI(startDate, endDate, pointVente, prixAchatAgn
                 const packResponse = await fetch(packApiUrl, {
                     method: 'GET',
                     headers: {
-                        'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                        'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4',
                         'Content-Type': 'application/json'
                     }
                 });
