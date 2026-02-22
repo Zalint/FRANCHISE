@@ -1,0 +1,53 @@
+{
+  "KEUR_BALLI": {
+    "nom_complet": "Keur BALLI",
+    "slogan": "",
+    "site_web": "",
+    "telephones": [],
+    "adresse_siege": "Dakar, Sénégal",
+    "footer_facture": "Merci de votre confiance !",
+    "footer_whatsapp": "Merci de votre confiance !",
+    "points_vente_codes": []
+  },
+
+  "MATA": {
+    "nom_complet": "MATA VIANDE",
+    "slogan": "Mata, le gout du raffinement",
+    "site_web": "www.mataviande.com",
+    "telephones": [
+      {
+        "numero": "+221 78 480 95 95",
+        "point_vente": "O.Foire"
+      },
+      {
+        "numero": "+221 77 858 96 96",
+        "point_vente": "Grand Mbao"
+      },
+      {
+        "numero": "+221 78 777 26 26",
+        "point_vente": "Keur Massar"
+      }
+    ],
+    "adresse_siege": "Dakar, Sénégal",
+    "footer_facture": "Merci de votre confiance !",
+    "footer_whatsapp": "Merci de votre confiance ! MATA VIANDE - www.mataviande.com",
+    "points_vente_codes": ["MBA", "OSF", "KM"]
+  },
+  
+  "SACRE_COEUR": {
+    "nom_complet": "Le Sacré Cœur",
+    "slogan": "Excellence et qualité",
+    "site_web": "",
+    "telephones": [
+      {
+        "numero": "+221 76 927 86 95",
+        "point_vente": "Sacré Cœur"
+      }
+    ],
+    "adresse_siege": "Sacré Cœur, Dakar",
+    "footer_facture": "Merci pour votre visite !",
+    "footer_whatsapp": "Merci pour votre visite !",
+    "points_vente_codes": ["SAC"]
+  }
+}
+

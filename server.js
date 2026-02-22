@@ -1,4 +1,4 @@
-﻿// Load environment variables
+// Load environment variables
 require('dotenv').config({
   path: process.env.NODE_ENV === 'production' ? '.env' : '.env.local'
 });
@@ -235,10 +235,159 @@ app.use(session({
 }));
 
 
+// Route dynamique pour la config inventaire - fusionne les catégories de base avec les produits OCR/superette en BDD
+app.get('/inventaire-config.json', async (req, res) => {
+    try {
+        // Catégories de base (produits viande connus)
+        const baseCategories = {
+            BOVIN: {
+                label: "Bovin", icon: "🐮", color: "#8B4513", ordre: 1,
+                sousCategories: {
+                    BOEUF:        { label: "Boeuf",          icon: "🥩", ordre: 1, unite: "kg",  produits: ["Boeuf en gros","Boeuf en détail","Boeuf en morceaux","Bœuf","Boeuf"] },
+                    VEAU:         { label: "Veau",           icon: "🥩", ordre: 2, unite: "kg",  produits: ["Veau en gros","Veau en détail","Veau en morceaux","Veau"] },
+                    FOIE:         { label: "Foie",           icon: "🥩", ordre: 3, unite: "kg",  produits: ["Foie","foie"] },
+                    YELL:         { label: "Yell",           icon: "🥩", ordre: 4, unite: "kg",  produits: ["Yell","yell"] },
+                    FILET:        { label: "Filet",          icon: "🥩", ordre: 5, unite: "kg",  produits: ["Filet","filet"] },
+                    FAUX_FILET:   { label: "Faux filet",     icon: "🥩", ordre: 6, unite: "kg",  produits: ["Faux filet","faux filet","Sans Os","sans os"] },
+                    VIANDE_HACHEE:{ label: "Viande hachée",  icon: "🍖", ordre: 7, unite: "kg",  produits: ["Viande hachée","Viande hachee","Hachée","Hachee"] },
+                    MERGEZ:       { label: "Merguez",        icon: "🌭", ordre: 8, unite: "kg",  produits: ["Mergez","Merguez","Merguez poulet"] }
+                }
+            },
+            OVIN: {
+                label: "Ovin", icon: "🐑", color: "#D2691E", ordre: 2,
+                sousCategories: {
+                    AGNEAU:       { label: "Agneau",          icon: "🥩", ordre: 1, unite: "kg", produits: ["Agneau en gros","Agneau en détail","Agneau en morceaux","Agneau","Mouton en gros","Mouton en détail","Mouton"] },
+                    PATTE_MOUTON: { label: "Patte de mouton", icon: "🥩", ordre: 2, unite: "kg", produits: ["Patte de mouton","patte de mouton"] },
+                    LAXASS:       { label: "Laxass",          icon: "🥩", ordre: 3, unite: "kg", produits: ["Laxass","laxass"] }
+                }
+            },
+            VOLAILLE: {
+                label: "Volaille", icon: "🐔", color: "#FFD700", ordre: 3,
+                sousCategories: {
+                    POULET:           { label: "Poulet",            icon: "🐔", ordre: 1, unite: "pcs", produits: ["Poulet en gros","Poulet en détail","Poulet"] },
+                    POULETS_DECOUPES: { label: "Poulets découpés",  icon: "🐔", ordre: 2, unite: "kg",  produits: ["Poulets découpés","Poulet découpé"] },
+                    CUISSE_POULET:    { label: "Cuisse de poulet",  icon: "🍗", ordre: 3, unite: "kg",  produits: ["Cuisse de poulet","Cuisses de poulet"] },
+                    AILES_POULET:     { label: "Ailes de poulet",   icon: "🍗", ordre: 4, unite: "kg",  produits: ["Ailes de poulet","Aile de poulet"] },
+                    BLANC_POULET:     { label: "Blanc de poulet",   icon: "🍗", ordre: 5, unite: "kg",  produits: ["Blanc de poulet","Blancs de poulet"] },
+                    HAUT_POULET:      { label: "Haut de poulet",    icon: "🍗", ordre: 6, unite: "kg",  produits: ["Haut de poulet","Hauts de poulet"] }
+                }
+            },
+            POISSON: {
+                label: "Poisson", icon: "🐟", color: "#4682B4", ordre: 4,
+                sousCategories: {
+                    DORADE:    { label: "Dorade",    icon: "🐟", ordre: 1, unite: "kg", produits: ["Dorade"] },
+                    SEUD:      { label: "Seud",      icon: "🐟", ordre: 2, unite: "kg", produits: ["Seud (barracuda)","Seud"] },
+                    CREVETTES: { label: "Crevettes", icon: "🐟", ordre: 3, unite: "kg", produits: ["Crevettes"] },
+                    BEURRE:    { label: "Beurre",    icon: "🐟", ordre: 4, unite: "kg", produits: ["Beurre"] }
+                }
+            }
+        };
+
+        // Construire l'ensemble des produits déjà couverts (normalisés)
+        const normalize = s => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const knownProducts = new Set();
+        for (const superCat of Object.values(baseCategories)) {
+            for (const sousCat of Object.values(superCat.sousCategories)) {
+                for (const p of sousCat.produits) {
+                    if (p !== '*') knownProducts.add(normalize(p));
+                }
+            }
+        }
+
+        // Charger les produits dynamiques depuis la BDD (type inventaire = produits OCR/superette)
+        const { Produit } = require('./db/models');
+        let dynamicOrderBase = 10;
+        const dynamicCategories = {};
+
+        try {
+            const dbProduits = await Produit.findAll({
+                where: { type_catalogue: 'inventaire' },
+                order: [['nom', 'ASC']]
+            });
+
+            for (const produit of dbProduits) {
+                if (knownProducts.has(normalize(produit.nom))) continue; // déjà couvert
+
+                const catName = produit.categorie_affichage || 'Superette';
+                const catKey = 'DYN_' + catName.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+                const unite = produit.unite_stock === 'kilo' ? 'kg' : 'pcs';
+
+                if (!dynamicCategories[catKey]) {
+                    dynamicCategories[catKey] = {
+                        label: catName,
+                        icon: "🛒",
+                        color: "#5C6BC0",
+                        ordre: dynamicOrderBase++,
+                        sousCategories: {}
+                    };
+                }
+
+                // Regrouper par unite dans la même super-catégorie
+                const sousCatKey = catKey + (unite === 'kg' ? '_KG' : '_PCS');
+                if (!dynamicCategories[catKey].sousCategories[sousCatKey]) {
+                    dynamicCategories[catKey].sousCategories[sousCatKey] = {
+                        label: catName,
+                        icon: "📦",
+                        ordre: 1,
+                        unite: unite,
+                        produits: []
+                    };
+                }
+                dynamicCategories[catKey].sousCategories[sousCatKey].produits.push(produit.nom);
+                knownProducts.add(normalize(produit.nom));
+            }
+        } catch (dbErr) {
+            console.warn('⚠️ Impossible de charger les produits dynamiques depuis la BDD:', dbErr.message);
+        }
+
+        const config = {
+            version: "1.1",
+            lastUpdate: new Date().toISOString().split('T')[0],
+            description: "Configuration inventaire - catégories fixes + produits OCR/superette BDD",
+            categories: {
+                ...baseCategories,
+                ...dynamicCategories,
+                AUTRE: {
+                    label: "Autres Produits", icon: "📦", color: "#808080", ordre: 99,
+                    sousCategories: {
+                        DIVERS: {
+                            label: "Divers", icon: "📦", ordre: 1, unite: "divers",
+                            produits: ["*"],
+                            note: "Attrape tous les produits non mappés - unité à vérifier manuellement"
+                        }
+                    }
+                }
+            },
+            unites: {
+                kg:     { label: "Kilogrammes", symbole: "kg" },
+                pcs:    { label: "Unités",      symbole: "pcs" },
+                divers: { label: "Divers",      symbole: "divers" }
+            },
+            seuils: {
+                stock_faible: 0.2,
+                stock_moyen:  0.5,
+                stock_bon:    1.0,
+                description:  "Seuils en pourcentage du stock initial pour les alertes"
+            }
+        };
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.json(config);
+    } catch (error) {
+        console.error('❌ Erreur génération inventaire-config.json:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/points-vente', async (req, res) => {
     try {
-        // Récupérer les points de vente depuis la base de données
         const pointsVenteData = await configService.getPointsVenteAsLegacy();
+        // ?format=full retourne l'objet complet { nom: { active, payment_ref } } (utilisé par pos.js)
+        // Sans paramètre : retourne le tableau des noms actifs (utilisé par script.js / redirect)
+        if (req.query.format === 'full') {
+            return res.json(pointsVenteData);
+        }
         const activePointsVente = Object.entries(pointsVenteData)
             .filter(([_, properties]) => properties.active)
             .map(([name, _]) => name);
@@ -316,7 +465,8 @@ const {
     checkAdvancedAccess,
     checkCopyStockAccess,
     checkEstimationAccess,
-    checkReconciliationAccess
+    checkReconciliationAccess,
+    checkStatutLivraisonAccess
 } = require('./middlewares/auth');
 
 // Importer les middlewares de modules
@@ -1261,6 +1411,25 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
             if (entry.extension) {
                 venteData.extension = entry.extension;
                 console.log(`📦 Composition du pack enregistrée pour ${entry.produit}:`, entry.extension);
+            }
+
+            // Ajouter commande_id (regroupe les articles d'une même commande)
+            if (entry.commandeId || entry.commande_id) {
+                venteData.commandeId = entry.commandeId || entry.commande_id;
+            }
+
+            // Ajouter les infos client supplémentaires
+            if (entry.instructionsClient) {
+                venteData.instructionsClient = entry.instructionsClient;
+            }
+            if (entry.statutPreparation || entry.statut_preparation) {
+                venteData.statutPreparation = entry.statutPreparation || entry.statut_preparation;
+            }
+            if (entry.livreurAssigne || entry.livreur_assigne) {
+                venteData.livreurAssigne = entry.livreurAssigne || entry.livreur_assigne;
+            }
+            if (entry.montantRestantDu !== undefined || entry.montant_restant_du !== undefined) {
+                venteData.montantRestantDu = parseFloat(entry.montantRestantDu ?? entry.montant_restant_du ?? 0);
             }
             
             return venteData;
@@ -3080,7 +3249,12 @@ app.get('/api/ventes-date', checkAuth, async (req, res) => {
                 nomClient: vente.nomClient,
                 numeroClient: vente.numeroClient,
                 adresseClient: vente.adresseClient,
-                creance: vente.creance
+                instructionsClient: vente.instructionsClient || null,
+                creance: vente.creance,
+                montantRestantDu: parseFloat(vente.montantRestantDu) || 0,
+                commande_id: vente.commandeId || null,
+                statut_preparation: vente.statutPreparation || 'en_preparation',
+                livreur_assigne: vente.livreurAssigne || null
             };
         });
         
@@ -14866,4 +15040,918 @@ function formatProductData(margeResult, productName) {
     };
 }
 
-// ... existing code ...
+// ============================================================
+// MODULE POS - Routes et fonctions auxiliaires
+// ============================================================
+
+const ClotureCaisse = require('./db/models/ClotureCaisse');
+const { CommandeInfo } = require('./db/models');
+const tracabiliteConfig = require('./config/tracabilite-produits.json');
+
+// ===== PANIER (CART) =====
+app.post('/api/save-cart', checkAuth, (req, res) => {
+    try {
+        req.session.savedCart = req.body;
+        res.json({ success: true, message: 'Panier sauvegardé' });
+    } catch (error) {
+        console.error('Erreur sauvegarde panier:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de la sauvegarde du panier' });
+    }
+});
+
+app.get('/api/load-cart', checkAuth, (req, res) => {
+    try {
+        res.json({ success: true, cart: req.session.savedCart || null });
+    } catch (error) {
+        console.error('Erreur chargement panier:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors du chargement du panier' });
+    }
+});
+
+app.post('/api/clear-cart', checkAuth, (req, res) => {
+    try {
+        req.session.savedCart = null;
+        res.json({ success: true, message: 'Panier vidé' });
+    } catch (error) {
+        console.error('Erreur suppression panier:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de la suppression du panier' });
+    }
+});
+
+// ===== STATUT DE LIVRAISON =====
+app.put('/api/commandes/statut', checkAuth, checkStatutLivraisonAccess, async (req, res) => {
+    try {
+        const { commandeId, statut } = req.body;
+        if (!commandeId || !statut) {
+            return res.status(400).json({ success: false, message: 'commandeId et statut sont requis' });
+        }
+        const validStatuts = ['en_preparation', 'pret', 'en_livraison', 'sur_place'];
+        if (!validStatuts.includes(statut)) {
+            return res.status(400).json({ success: false, message: 'Statut invalide' });
+        }
+        const ventes = await Vente.findAll({ where: { commande_id: commandeId } });
+        if (ventes.length === 0) {
+            return res.status(404).json({ success: false, message: 'Commande non trouvée' });
+        }
+        const userPointVente = req.session.user.pointVente;
+        const userRole = req.session.user.role;
+        if (!['superviseur', 'admin', 'chef_livreur'].includes(userRole)) {
+            const ventePointVente = ventes[0].pointVente;
+            const hasAccess = Array.isArray(userPointVente)
+                ? userPointVente.includes(ventePointVente) || userPointVente.includes('tous')
+                : userPointVente === ventePointVente || userPointVente === 'tous';
+            if (!hasAccess) {
+                return res.status(403).json({ success: false, message: "Vous n'avez pas accès à cette commande" });
+            }
+        }
+        const updateData = { statut_preparation: statut };
+        if (statut === 'pret') updateData.livreur_assigne = null;
+        await Vente.update(updateData, { where: { commande_id: commandeId } });
+        res.json({ success: true, message: 'Statut mis à jour', commandeId, statut });
+    } catch (error) {
+        console.error('Erreur mise à jour statut:', error);
+        res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+    }
+});
+
+// ===== SUPPRESSION DE COMMANDE =====
+app.delete('/api/commandes/:commandeId', checkAuth, checkWriteAccess, async (req, res) => {
+    const transaction = await sequelize.transaction();
+    try {
+        const commandeId = decodeURIComponent(req.params.commandeId);
+        const ventes = await Vente.findAll({ where: { commande_id: commandeId }, transaction });
+        if (ventes.length === 0) {
+            await transaction.rollback();
+            return res.status(404).json({ success: false, message: 'Commande non trouvée' });
+        }
+        const userPointVente = req.session.user.pointVente;
+        for (const vente of ventes) {
+            const hasAccess = userPointVente === 'tous' ||
+                (Array.isArray(userPointVente) && (userPointVente.includes('tous') || userPointVente.includes(vente.pointVente))) ||
+                userPointVente === vente.pointVente;
+            if (!hasAccess) {
+                await transaction.rollback();
+                return res.status(403).json({ success: false, message: 'Accès non autorisé à ce point de vente' });
+            }
+        }
+        const commandeInfoRow = await CommandeInfo.findOne({ where: { commande_id: commandeId }, transaction });
+        if (commandeInfoRow) {
+            await CommandeInfo.destroy({ where: { commande_id: commandeId }, transaction });
+        }
+        await Vente.destroy({ where: { commande_id: commandeId }, transaction });
+        await transaction.commit();
+        res.json({ success: true, message: `Commande supprimée (${ventes.length} ventes)`, deletedCount: ventes.length });
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Erreur suppression commande:', error);
+        res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+    }
+});
+
+// ===== CREDITS COMMANDES =====
+app.post('/api/commandes/:commandeId/remove-credit', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const commandeId = decodeURIComponent(req.params.commandeId);
+        const ventes = await Vente.findAll({ where: { commande_id: commandeId } });
+        if (ventes.length === 0) {
+            return res.status(404).json({ success: false, message: 'Commande non trouvée' });
+        }
+        let venteAvecCredit = null;
+        for (const vente of ventes) {
+            if (vente.extension && vente.extension.credit_used) { venteAvecCredit = vente; break; }
+        }
+        if (!venteAvecCredit) {
+            return res.status(400).json({ success: false, message: 'Aucun crédit trouvé sur cette commande' });
+        }
+        const updatedExtension = { ...venteAvecCredit.extension };
+        delete updatedExtension.credit_used;
+        delete updatedExtension.amount_paid_after_credit;
+        delete updatedExtension.credit_status;
+        delete updatedExtension.credit_phone;
+        delete updatedExtension.credit_transaction_id;
+        delete updatedExtension.credit_error_message;
+        delete updatedExtension.credit_updated_at;
+        const hasOtherProps = Object.keys(updatedExtension).length > 0;
+        await venteAvecCredit.update({ extension: hasOtherProps ? updatedExtension : null });
+        let totalAmount = 0;
+        for (const vente of ventes) { totalAmount += parseFloat(vente.total || 0); }
+        res.json({ success: true, message: 'Crédit retiré avec succès', new_total: totalAmount });
+    } catch (error) {
+        console.error('Erreur retrait crédit:', error);
+        res.status(500).json({ success: false, message: 'Erreur: ' + error.message });
+    }
+});
+
+app.get('/api/commandes/:commandeId/credit', checkAuth, async (req, res) => {
+    try {
+        const commandeId = decodeURIComponent(req.params.commandeId);
+        const credit = await CommandeInfo.findOne({ where: { commande_id: commandeId } });
+        if (!credit) return res.json({ success: true, hasCredit: false, credit: null });
+        res.json({
+            success: true, hasCredit: true,
+            credit: {
+                credit_used: parseFloat(credit.credit_used),
+                credit_phone: credit.credit_phone,
+                credit_status: credit.credit_status,
+                credit_version: credit.credit_version,
+                amount_paid_after_credit: credit.amount_paid_after_credit ? parseFloat(credit.amount_paid_after_credit) : null,
+                transaction_id: credit.transaction_id,
+                error_message: credit.error_message,
+                credit_updated_at: credit.credit_updated_at,
+                createdAt: credit.createdAt
+            }
+        });
+    } catch (error) {
+        console.error('Erreur récupération crédit:', error);
+        res.status(500).json({ success: false, message: 'Erreur: ' + error.message });
+    }
+});
+
+app.post('/api/commandes/:commandeId/credit', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const commandeId = decodeURIComponent(req.params.commandeId);
+        const { credit_used, credit_phone, amount_paid_after_credit, credit_version } = req.body;
+        if (!credit_used || !credit_phone) {
+            return res.status(400).json({ success: false, message: 'credit_used et credit_phone sont requis' });
+        }
+        const [credit, created] = await CommandeInfo.upsert({
+            commande_id: commandeId, credit_used, credit_phone,
+            credit_status: 'pending', credit_version: credit_version || null,
+            amount_paid_after_credit: amount_paid_after_credit || null,
+            credit_updated_at: new Date(), payment_status: 'A',
+            payment_method: 'credit', payment_updated_at: new Date()
+        });
+        res.json({ success: true, message: created ? 'Crédit créé' : 'Crédit mis à jour', credit });
+    } catch (error) {
+        console.error('Erreur création crédit:', error);
+        res.status(500).json({ success: false, message: 'Erreur: ' + error.message });
+    }
+});
+
+app.post('/api/commandes/:commandeId/update-credit-status', checkAuth, checkWriteAccess, async (req, res) => {
+    try {
+        const commandeId = decodeURIComponent(req.params.commandeId);
+        const { credit_status, transaction_id, error_message } = req.body;
+        const validStatuses = ['pending', 'confirmed', 'failed'];
+        if (!validStatuses.includes(credit_status)) {
+            return res.status(400).json({ success: false, message: `Statut invalide. Valeurs acceptées: ${validStatuses.join(', ')}` });
+        }
+        const info = await CommandeInfo.findOne({ where: { commande_id: commandeId } });
+        if (!info) return res.status(404).json({ success: false, message: 'Aucune info trouvée pour cette commande' });
+        const updateData = { credit_status, credit_updated_at: new Date(), payment_updated_at: new Date() };
+        if (credit_status === 'confirmed') updateData.payment_status = 'C';
+        else if (credit_status === 'failed') updateData.payment_status = 'A';
+        if (transaction_id) updateData.transaction_id = transaction_id;
+        if (error_message) updateData.error_message = error_message;
+        await info.update(updateData);
+        res.json({ success: true, message: `Statut crédit mis à jour: ${credit_status}`, credit_status });
+    } catch (error) {
+        console.error('Erreur mise à jour statut crédit:', error);
+        res.status(500).json({ success: false, message: 'Erreur: ' + error.message });
+    }
+});
+
+// ===== PAYMENT STATUS COMMANDES =====
+app.get('/api/orders/:commandeId/payment-status', checkAuth, async (req, res) => {
+    try {
+        const { commandeId } = req.params;
+
+        // 1. Lire depuis commande_infos (source de vérité pour le statut)
+        const commandeInfo = await CommandeInfo.findOne({ where: { commande_id: commandeId } });
+
+        // 2. Lire la créance depuis ventes
+        const ventesWithCreance = await sequelize.query(
+            `SELECT montant_restant_du, creance FROM ventes WHERE commande_id = :commandeId LIMIT 1`,
+            { replacements: { commandeId }, type: sequelize.QueryTypes.SELECT }
+        );
+        const montantRestantDu = parseFloat(ventesWithCreance[0]?.montant_restant_du || 0);
+        const creance = ventesWithCreance[0]?.creance || false;
+
+        // 3. Priorité : créance > statut sauvegardé > défaut A
+        let posStatus = 'A';
+        if (creance && montantRestantDu > 0) {
+            posStatus = 'C';
+        } else if (commandeInfo?.payment_status) {
+            posStatus = commandeInfo.payment_status;
+        }
+
+        res.json({ success: true, data: { commandeId, posStatus, hasPaymentLink: false, montantRestantDu } });
+    } catch (error) {
+        console.error('Erreur payment-status:', error);
+        res.status(500).json({ success: false, message: 'Erreur serveur' });
+    }
+});
+
+app.put('/api/orders/:commandeId/payment-status', checkAuth, async (req, res) => {
+    try {
+        const { commandeId } = req.params;
+        const { status } = req.body;
+        if (!['A', 'P', 'C'].includes(status)) {
+            return res.status(400).json({ success: false, message: 'Statut invalide' });
+        }
+        await CommandeInfo.upsert({
+            commande_id: commandeId,
+            payment_status: status,
+            payment_updated_at: new Date()
+        });
+        res.json({ success: true, data: { commandeId, posStatus: status } });
+    } catch (error) {
+        console.error('Erreur mise à jour payment-status:', error);
+        res.status(500).json({ success: false, message: 'Erreur serveur' });
+    }
+});
+
+app.post('/api/orders/:commandeId/mark-manual-payment', checkAuth, async (req, res) => {
+    res.status(410).json({ success: false, message: 'Fonctionnalité Bictorys désactivée' });
+});
+
+app.post('/api/orders/:commandeId/reset-manual-payment', checkAuth, async (req, res) => {
+    res.status(410).json({ success: false, message: 'Fonctionnalité Bictorys désactivée' });
+});
+
+app.post('/api/orders/:newCommandeId/reassign-bictorys-link', checkAuth, async (req, res) => {
+    res.status(410).json({ success: false, message: 'Fonctionnalité Bictorys désactivée' });
+});
+
+app.post('/api/orders/:commandeId/bictorys-link', checkAuth, async (req, res) => {
+    res.status(410).json({ success: false, message: 'Fonctionnalité Bictorys désactivée' });
+});
+
+app.delete('/api/orders/:commandeId/bictorys-link', checkAuth, async (req, res) => {
+    res.status(410).json({ success: false, message: 'Fonctionnalité Bictorys désactivée' });
+});
+
+// ===== DETAILS COMMANDE =====
+app.get('/api/orders/:commandeId/details', checkAuth, async (req, res) => {
+    try {
+        const { commandeId } = req.params;
+        const ventes = await Vente.findAll({
+            where: { commande_id: commandeId },
+            order: [['id', 'ASC']]
+        });
+        if (!ventes || ventes.length === 0) return res.status(404).json({ success: false, message: 'Commande non trouvée' });
+        const firstVente = ventes[0];
+        const totalAmount = ventes.reduce((sum, v) => sum + parseFloat(v.montant || 0), 0);
+        res.json({
+            success: true,
+            data: {
+                commandeId,
+                clientName: firstVente.nomClient,
+                clientPhone: firstVente.numeroClient,
+                clientAddress: firstVente.adresseClient,
+                specialInstructions: firstVente.instructionsClient,
+                totalAmount,
+                creance: firstVente.creance,
+                montantRestantDu: parseFloat(firstVente.montantRestantDu || 0),
+                pointVente: firstVente.pointVente,
+                date: firstVente.date,
+                statutPreparation: firstVente.statutPreparation,
+                livreurAssigne: firstVente.livreurAssigne,
+                items: ventes.map(v => ({
+                    produit: v.produit,
+                    nombre: parseFloat(v.nombre),
+                    prixUnit: parseFloat(v.prixUnit),
+                    montant: parseFloat(v.montant)
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('Erreur order details:', error);
+        res.status(500).json({ success: false, message: 'Erreur: ' + error.message });
+    }
+});
+
+// ===== TRAÇABILITÉ VIANDE =====
+function formatDateTracabilite(date) {
+    return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
+}
+
+async function getTracabiliteViande(commandeProduits) {
+    try {
+        const produitsEligibles = tracabiliteConfig.produits_tracabilite_viande;
+        const produitsEligiblesNormalized = produitsEligibles.filter(p => p && p.displayName).map(p => p.displayName.toLowerCase());
+        const contientViande = commandeProduits.some(p => p && p.nom && produitsEligiblesNormalized.includes(p.nom.toLowerCase()));
+        if (!contientViande) return null;
+        const achatRecent = await AchatBoeuf.findOne({ order: [['date', 'DESC']], limit: 1 });
+        if (!achatRecent) return null;
+        const [year, month, day] = achatRecent.date.split('-').map(Number);
+        const d = new Date(`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T00:00:00`);
+        const lettresMois = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+        const lot = `${lettresMois[d.getMonth()]}${d.getFullYear().toString().slice(-2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+        return { origine: tracabiliteConfig.info_tracabilite.origine, dateAbattage: formatDateTracabilite(d), lot };
+    } catch (error) {
+        console.error('Erreur tracabilité viande:', error);
+        return null;
+    }
+}
+
+app.get('/api/tracabilite-viande', checkAuth, async (req, res) => {
+    try {
+        const { commandeId } = req.query;
+        if (!commandeId) return res.status(400).json({ success: false, error: 'commandeId is required' });
+        const ventes = await Vente.findAll({ where: { commande_id: commandeId } });
+        if (ventes.length === 0) return res.status(404).json({ success: false, error: 'Commande non trouvée' });
+        const produits = ventes.map(v => ({ nom: v.produit, quantite: parseFloat(v.nombre) || 0, prix: parseFloat(v.prixUnit) || 0 }));
+        const tracabilite = await getTracabiliteViande(produits);
+        res.json({ success: true, data: tracabilite });
+    } catch (error) {
+        console.error('Erreur tracabilité:', error);
+        res.status(500).json({ success: false, error: 'Erreur interne' });
+    }
+});
+
+// ===== LIVREURS =====
+let livreursConfig = { api_url: null, livreurs_actifs: [] };
+
+function chargerConfigLivreurs() {
+    try {
+        const configPath = path.join(__dirname, 'livreurs_actifs.json');
+        const configData = fs.readFileSync(configPath, 'utf8');
+        livreursConfig = JSON.parse(configData);
+        if (Array.isArray(livreursConfig.livreurs_actifs)) {
+            livreursConfig.livreurs_actifs = livreursConfig.livreurs_actifs.map(n => (n && typeof n === 'string' ? n.trim() : n));
+        }
+        console.log('✅ Config livreurs chargée:', { api_url: livreursConfig.api_url, nombre_livreurs: livreursConfig.livreurs_actifs.length });
+    } catch (error) {
+        console.error('⚠️ Erreur chargement config livreurs:', error.message);
+    }
+}
+
+chargerConfigLivreurs();
+
+app.get('/api/livreur/actifs', checkAuth, (req, res) => {
+    try {
+        res.json({ success: true, api_url: livreursConfig.api_url, livreurs_actifs: livreursConfig.livreurs_actifs || [], count: (livreursConfig.livreurs_actifs || []).length });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erreur récupération livreurs', error: error.message });
+    }
+});
+
+app.post('/api/livreur/reload-config', checkAuth, checkAdmin, (req, res) => {
+    try {
+        chargerConfigLivreurs();
+        res.json({ success: true, message: 'Configuration livreurs rechargée', config: livreursConfig });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erreur rechargement', error: error.message });
+    }
+});
+
+app.post('/api/livreur/assigner', checkAuth, async (req, res) => {
+    try {
+        const { commande_id, livreur_id, livreur_nom, client, articles, total, point_vente, date_commande, statut } = req.body;
+        if (!commande_id || !livreur_nom || !client) {
+            return res.status(400).json({ success: false, message: 'commande_id, livreur_nom et client sont requis' });
+        }
+        const payload = { commande_id, livreur_id: livreur_id || livreur_nom, livreur_nom, client, articles: articles || [], total: total || 0, point_vente: point_vente || '', date_commande: date_commande || new Date().toISOString(), statut: statut || 'en_livraison' };
+        const apiUrl = `${livreursConfig.api_url}/api/external/commande-en-cours`;
+        const response = await axios.post(apiUrl, payload, { headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.EXTERNAL_API_KEY }, timeout: 120000 });
+        try { await Vente.update({ livreur_assigne: livreur_nom }, { where: { commande_id } }); } catch (dbError) {}
+        res.json({ success: true, message: `Commande ${commande_id} assignée à ${livreur_nom}`, data: response.data });
+    } catch (error) {
+        console.error('Erreur assignation livreur:', error.message);
+        if (error.response) return res.status(error.response.status).json({ success: false, message: error.response.data.message || 'Erreur API', error: error.response.data });
+        if (error.request) return res.status(503).json({ success: false, message: 'API externe ne répond pas' });
+        return res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+    }
+});
+
+app.delete('/api/livreur/annuler', checkAuth, async (req, res) => {
+    try {
+        const { commande_id } = req.body;
+        if (!commande_id) return res.status(400).json({ success: false, message: 'commande_id est requis' });
+        const apiUrl = `${livreursConfig.api_url}/api/external/commande-en-cours/annuler`;
+        const response = await axios.delete(apiUrl, { headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.EXTERNAL_API_KEY }, data: { commande_id }, timeout: 10000 });
+        res.json({ success: true, message: `Assignation annulée pour ${commande_id}`, data: response.data });
+    } catch (error) {
+        console.error('Erreur annulation livreur:', error.message);
+        res.status(500).json({ success: false, message: 'Erreur lors de l\'annulation', error: error.message });
+    }
+});
+
+app.get('/api/livreur/check/:commandeId', checkAuth, async (req, res) => {
+    try {
+        const { commandeId } = req.params;
+        const vente = await Vente.findOne({ where: { commande_id: commandeId, livreur_assigne: { [Op.ne]: null } }, attributes: ['livreur_assigne'] });
+        if (vente && vente.livreur_assigne) res.json({ success: true, hasLivreur: true, livreur: vente.livreur_assigne });
+        else res.json({ success: true, hasLivreur: false, livreur: null });
+    } catch (error) {
+        console.error('Erreur vérification livreur:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de la vérification', error: error.message });
+    }
+});
+
+// ===== CLOTURES DE CAISSE =====
+function generateCashReference(pointVente) {
+    const posMapping = { 'Dahra': 'CASH_DHR', 'Linguere': 'CASH_LGR', 'Mbao': 'CASH_MBA', 'Keur Massar': 'CASH_KM', 'O.Foire': 'CASH_OSF', 'Sacre Coeur': 'CASH_SAC', 'Abattage': 'CASH_ABATS', 'Touba': 'CASH_TB' };
+    return posMapping[pointVente] || null;
+}
+
+app.get('/api/clotures-caisse/estimatif', checkAuth, async (req, res) => {
+    try {
+        const { date, pointVente } = req.query;
+        if (!date || !pointVente) return res.status(400).json({ success: false, message: 'date et pointVente sont requis' });
+        let isoDate = date, ddmmyyyy = date;
+        if (date.match(/^\d{4}-\d{2}-\d{2}$/)) { const p = date.split('-'); ddmmyyyy = `${p[2]}-${p[1]}-${p[0]}`; }
+        else if (date.match(/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/)) { const p = date.split(/[\/\-]/); ddmmyyyy = `${p[0]}-${p[1]}-${p[2]}`; isoDate = `${p[2]}-${p[1]}-${p[0]}`; }
+        const ventesArr = await Vente.findAll({ where: { [Op.or]: [{ date: isoDate }, { date: ddmmyyyy }], pointVente } });
+        const totalVentes = ventesArr.reduce((sum, v) => sum + (parseFloat(v.montant) || 0), 0);
+        const commandeIds = ventesArr.map(v => v.commande_id).filter(Boolean);
+        let montantBictorys = 0, paidLinks = [];
+        if (commandeIds.length > 0) {
+            paidLinks = await PaymentLink.findAll({ where: { commande_id: { [Op.in]: commandeIds }, status: 'paid', is_commande_deleted: false } });
+            montantBictorys = paidLinks.reduce((sum, pl) => sum + (parseFloat(pl.amount) || 0), 0);
+        }
+        const estimatif = Math.max(0, totalVentes - montantBictorys);
+        res.json({ success: true, data: { totalVentes, montantBictorys, estimatif, date: isoDate, pointVente, nbBictorysLinks: paidLinks.length } });
+    } catch (error) {
+        console.error('Erreur cloture estimatif:', error.message);
+        res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+    }
+});
+
+app.get('/api/clotures-caisse', checkAuth, async (req, res) => {
+    try {
+        const { date, pointVente } = req.query;
+        if (!date || !pointVente) return res.status(400).json({ success: false, message: 'date et pointVente sont requis' });
+        let isoDate = date;
+        if (date.match(/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/)) { const parts = date.split(/[\/\-]/); isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`; }
+        const clotures = await ClotureCaisse.findAll({ where: { date: isoDate, point_de_vente: pointVente }, order: [['created_at', 'ASC']] });
+        res.json({ success: true, count: clotures.length, data: clotures });
+    } catch (error) {
+        console.error('Erreur clotures GET:', error.message);
+        res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+    }
+});
+
+app.post('/api/clotures-caisse', checkAuth, async (req, res) => {
+    try {
+        const { date, pointVente, montantEspeces, fondDeCaisse, montantEstimatif, commercial, commentaire } = req.body;
+        const username = req.session?.user?.username || req.user?.username || 'inconnu';
+        if (!date || !pointVente || montantEspeces === undefined || !commercial) {
+            return res.status(400).json({ success: false, message: 'date, pointVente, montantEspeces et commercial sont requis' });
+        }
+        let isoDate = date;
+        if (date.match(/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/)) { const parts = date.split(/[\/\-]/); isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`; }
+        const transaction = await sequelize.transaction();
+        let cloture;
+        try {
+            await ClotureCaisse.update({ is_latest: false }, { where: { date: isoDate, point_de_vente: pointVente }, transaction });
+            cloture = await ClotureCaisse.create({ date: isoDate, point_de_vente: pointVente, montant_especes: parseFloat(montantEspeces), fond_de_caisse: parseFloat(fondDeCaisse) || 0, montant_estimatif: montantEstimatif !== undefined ? parseFloat(montantEstimatif) : null, commercial, commentaire: commentaire || null, created_by: username, is_latest: true }, { transaction });
+            const cashRef = generateCashReference(pointVente);
+            if (cashRef) {
+                const existing = await CashPayment.findOne({ where: { date: isoDate, point_de_vente: pointVente, payment_type: 'CASH', is_manual: true }, transaction });
+                const commentCash = `Clôture caisse par ${commercial} (cloture_id:${cloture.id})`;
+                if (existing) { await existing.update({ amount: parseFloat(montantEspeces), comment: commentCash, created_by: username, payment_reference: cashRef }, { transaction }); }
+                else { await CashPayment.create({ date: isoDate, created_at: new Date(), point_de_vente: pointVente, amount: parseFloat(montantEspeces), payment_reference: cashRef, payment_type: 'CASH', reference: cashRef, comment: commentCash, is_manual: true, created_by: username }, { transaction }); }
+            }
+            await transaction.commit();
+        } catch (txError) { await transaction.rollback(); throw txError; }
+        res.status(201).json({ success: true, message: `Clôture enregistrée pour ${pointVente} le ${isoDate}`, data: cloture });
+    } catch (error) {
+        console.error('Erreur cloture POST:', error.message);
+        res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+    }
+});
+
+// ===== CREDIT CLIENT (PROXY) =====
+app.post('/api/credit/use', checkAuth, async (req, res) => {
+    try {
+        const { phone_number, amount_used, order_id, version } = req.body;
+        if (!phone_number || !amount_used || !order_id) return res.status(400).json({ success: false, error: 'phone_number, amount_used et order_id sont requis' });
+        if (version === undefined || version === null) return res.status(400).json({ success: false, error: 'version est requise pour éviter les conflits' });
+        const isLocal = process.env.NODE_ENV !== 'production';
+        const externalApiUrl = isLocal ? 'http://localhost:4000/api/external/clients/credits/use' : 'https://matix-livreur-backend.onrender.com/api/external/clients/credits/use';
+        const apiKey = process.env.EXTERNAL_API_KEY;
+        if (!apiKey) throw new Error('EXTERNAL_API_KEY manquant');
+        const response = await axios.post(externalApiUrl, { phone_number, amount_used, order_id, version }, { headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' }, timeout: 10000 });
+        res.json(response.data);
+    } catch (error) {
+        console.error('Erreur credit/use:', error.message);
+        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data?.error || 'Erreur utilisation crédit', details: error.message });
+    }
+});
+
+app.post('/api/credit/refund', checkAuth, async (req, res) => {
+    try {
+        const { phone_number, amount, order_id, version } = req.body;
+        if (!phone_number || !amount || !order_id) return res.status(400).json({ success: false, error: 'phone_number, amount et order_id sont requis' });
+        if (version === undefined || version === null) return res.status(400).json({ success: false, error: 'version est requise pour éviter les conflits' });
+        const isLocal = process.env.NODE_ENV !== 'production';
+        const externalApiUrl = isLocal ? 'http://localhost:4000/api/external/clients/credits/refund' : 'https://matix-livreur-backend.onrender.com/api/external/clients/credits/refund';
+        const apiKey = process.env.EXTERNAL_API_KEY;
+        if (!apiKey) throw new Error('EXTERNAL_API_KEY manquant');
+        const response = await axios.post(externalApiUrl, { phone_number, amount, order_id, version }, { headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' }, timeout: 10000 });
+        res.json(response.data);
+    } catch (error) {
+        console.error('Erreur credit/refund:', error.message);
+        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data?.error || 'Erreur remboursement crédit', details: error.message });
+    }
+});
+
+console.log('✅ Routes POS intégrées avec succès');
+
+// ===== REALTIME DASHBOARD =====
+
+// Dernières mises à jour des ventes et transferts par PDV
+app.get('/api/realtime/last-updates', checkAuth, async (req, res) => {
+    console.log('🌐 [LAST-UPDATES] ========== DÉBUT ==========');
+    try {
+        const user = req.user;
+        if (user.role !== 'superviseur' && user.role !== 'SuperUtilisateur' && user.role !== 'superutilisateur') {
+            return res.status(403).json({ success: false, message: 'Accès refusé. Réservé aux Superviseurs et SuperUtilisateurs.' });
+        }
+
+        let targetDate;
+        if (req.query.date) {
+            targetDate = req.query.date;
+        } else {
+            const today = new Date();
+            targetDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        }
+
+        const [year, month, day] = targetDate.split('-');
+        const targetDateDDMMYYYY = `${day}-${month}-${year}`;
+
+        console.log('🌐 [LAST-UPDATES] Date cible:', targetDate, '/', targetDateDDMMYYYY);
+
+        const lastVentes = await Vente.findAll({
+            attributes: ['pointVente', [sequelize.fn('MAX', sequelize.col('createdAt')), 'lastUpdate']],
+            where: { [Op.or]: [{ date: targetDate }, { date: targetDateDDMMYYYY }] },
+            group: ['pointVente'],
+            raw: true
+        });
+
+        const lastTransferts = await Transfert.findAll({
+            attributes: ['pointVente', [sequelize.fn('MAX', sequelize.col('createdAt')), 'lastUpdate']],
+            where: { [Op.or]: [{ date: targetDate }, { date: targetDateDDMMYYYY }, { date: `${day}/${month}/${year}` }] },
+            group: ['pointVente'],
+            raw: true
+        });
+
+        const formattedVentes = {};
+        lastVentes.forEach(item => { formattedVentes[item.pointVente] = item.lastUpdate; });
+
+        const formattedTransferts = {};
+        lastTransferts.forEach(item => { formattedTransferts[item.pointVente] = item.lastUpdate; });
+
+        console.log('✅ [LAST-UPDATES] Ventes:', lastVentes.length, '/ Transferts:', lastTransferts.length);
+        console.log('🌐 [LAST-UPDATES] ========== FIN ==========');
+
+        res.json({ success: true, date: targetDate, data: { ventes: formattedVentes, transferts: formattedTransferts } });
+
+    } catch (error) {
+        console.error('❌ [LAST-UPDATES] Erreur:', error.message);
+        res.status(500).json({ success: false, message: 'Erreur serveur lors de la récupération des dernières mises à jour' });
+    }
+});
+
+// Réconciliation temps réel (proxy vers external API)
+app.get('/api/realtime/reconciliation', checkAuth, async (req, res) => {
+    try {
+        let dateStr;
+        if (req.query.date) {
+            const [year, month, day] = req.query.date.split('-');
+            dateStr = `${day}-${month}-${year}`;
+        } else {
+            const today = new Date();
+            dateStr = `${String(today.getDate()).padStart(2,'0')}-${String(today.getMonth()+1).padStart(2,'0')}-${today.getFullYear()}`;
+        }
+
+        const apiKey = process.env.EXTERNAL_API_KEY || 'your-secure-api-key-for-relevance';
+        const response = await axios.get(`http://localhost:${PORT}/api/external/reconciliation`, {
+            params: { date: dateStr },
+            headers: { 'X-API-Key': apiKey }
+        });
+
+        res.json(response.data);
+
+    } catch (error) {
+        console.error('❌ [REALTIME] Erreur proxy réconciliation:', error.message);
+        res.status(500).json({ success: false, message: 'Erreur serveur lors de la récupération des données' });
+    }
+});
+
+// Statut paiement commandes par PDV (A=En Attente, P=Payé) depuis CommandeInfo
+app.get('/api/realtime/commandes-statut', checkAuth, async (req, res) => {
+    try {
+        const user = req.user;
+        if (user.role !== 'superviseur' && user.role !== 'SuperUtilisateur' && user.role !== 'superutilisateur') {
+            return res.status(403).json({ success: false, message: 'Accès réservé aux Superviseurs.' });
+        }
+
+        let targetDate = req.query.date;
+        if (!targetDate) {
+            const today = new Date();
+            targetDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        }
+
+        const [year, month, day] = targetDate.split('-');
+        const targetDateDDMMYYYY = `${day}-${month}-${year}`;
+
+        const { CommandeInfo } = require('./db/models');
+
+        // Récupérer toutes les ventes du jour ayant une commande_id
+        const ventes = await Vente.findAll({
+            attributes: ['pointVente', 'commandeId', 'montant'],
+            where: {
+                [Op.or]: [{ date: targetDate }, { date: targetDateDDMMYYYY }],
+                commandeId: { [Op.not]: null }
+            },
+            raw: true
+        });
+
+        if (ventes.length === 0) {
+            return res.json({ success: true, date: targetDate, data: {} });
+        }
+
+        // Récupérer les statuts de paiement pour ces commandes
+        const commandeIds = [...new Set(ventes.map(v => v.commandeId).filter(Boolean))];
+        const commandeInfos = await CommandeInfo.findAll({
+            attributes: ['commande_id', 'payment_status'],
+            where: { commande_id: { [Op.in]: commandeIds } },
+            raw: true
+        });
+
+        // Mapper commande_id → payment_status
+        const statusMap = {};
+        commandeInfos.forEach(ci => { statusMap[ci.commande_id] = ci.payment_status || 'A'; });
+
+        // Agréger montant par PDV et statut
+        const result = {};
+        ventes.forEach(v => {
+            const pdv = v.pointVente;
+            const status = statusMap[v.commandeId] || 'A';
+            const montant = parseFloat(v.montant) || 0;
+
+            if (!result[pdv]) result[pdv] = { A: 0, P: 0, M: 0, PP: 0, C: 0 };
+            if (result[pdv][status] !== undefined) {
+                result[pdv][status] += montant;
+            } else {
+                result[pdv]['A'] += montant;
+            }
+        });
+
+        res.json({ success: true, date: targetDate, data: result });
+
+    } catch (error) {
+        console.error('❌ [COMMANDES-STATUT] Erreur:', error.message);
+        res.status(500).json({ success: false, message: 'Erreur serveur' });
+    }
+});
+
+// Ventes de packs agrégées (proxy vers external API)
+app.get('/api/realtime/packs', checkAuth, async (req, res) => {
+    try {
+        const user = req.user;
+        if (user.role !== 'superviseur' && user.role !== 'SuperUtilisateur' && user.role !== 'superutilisateur') {
+            return res.status(403).json({ success: false, message: 'Accès réservé aux Superviseurs et SuperUtilisateurs.' });
+        }
+
+        let targetDate = req.query.date;
+        if (!targetDate) {
+            const today = new Date();
+            targetDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        }
+
+        const apiKey = process.env.EXTERNAL_API_KEY || 'your-secure-api-key-for-relevance';
+        const response = await axios.get(`http://localhost:${PORT}/api/external/ventes-date/pack/aggregated`, {
+            params: { start_date: targetDate, end_date: targetDate },
+            headers: { 'X-API-Key': apiKey }
+        });
+
+        res.json(response.data);
+
+    } catch (error) {
+        console.error('❌ [REALTIME] Erreur récupération packs:', error.message);
+        res.status(500).json({ success: false, message: 'Erreur serveur lors de la récupération des ventes de packs' });
+    }
+});
+
+// ===== WEBORDERS =====
+const { WebOrder } = require('./db/models');
+
+app.get('/api/realtime/weborders/recent', checkAuth, async (req, res) => {
+    try {
+        const now = new Date();
+        const sevenDaysAgo = new Date(now);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+        const orders = await WebOrder.findAll({
+            where: { createdAt: { [Op.gte]: sevenDaysAgo, [Op.lte]: now } },
+            order: [['createdAt', 'DESC']]
+        });
+        res.json({ success: true, count: orders.length, orders });
+    } catch (error) {
+        console.error('Erreur weborders/recent:', error);
+        res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+    }
+});
+
+app.get('/api/realtime/weborders', checkAuth, async (req, res) => {
+    try {
+        const user = req.user;
+        if (user.role !== 'superviseur' && user.role !== 'SuperUtilisateur' && user.role !== 'superutilisateur') {
+            return res.status(403).json({ success: false, message: 'Accès réservé aux Superviseurs.' });
+        }
+        let targetDate = req.query.date;
+        if (!targetDate) {
+            const today = new Date();
+            targetDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        }
+        const orders = await WebOrder.findAll({
+            where: sequelize.where(sequelize.fn('DATE', sequelize.col('order_date')), targetDate),
+            order: [[sequelize.col('order_date'), 'DESC'], [sequelize.col('created_at'), 'DESC']]
+        });
+        res.json({ success: true, count: orders.length, data: orders });
+    } catch (error) {
+        console.error('Erreur realtime/weborders:', error);
+        res.status(500).json({ success: false, message: 'Erreur serveur' });
+    }
+});
+
+app.get('/api/weborders', checkAuth, async (req, res) => {
+    try {
+        const orders = await WebOrder.findAll({ order: [['createdAt', 'DESC']] });
+        res.json({ success: true, count: orders.length, data: orders });
+    } catch (error) {
+        console.error('Erreur GET weborders:', error);
+        res.status(500).json({ success: false, message: 'Erreur serveur' });
+    }
+});
+
+app.post('/api/weborders/:id/assign', checkAuth, async (req, res) => {
+    let transaction;
+    try {
+        const user = req.user;
+        const orderId = req.params.id;
+        const { username } = req.body;
+        if (username !== user.username) return res.status(403).json({ success: false, message: 'Vous ne pouvez vous assigner que vous-même' });
+        transaction = await sequelize.transaction();
+        const order = await WebOrder.findByPk(orderId, { transaction, lock: transaction.LOCK.UPDATE });
+        if (!order) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Commande non trouvée' }); }
+        if (order.assignedTo && order.assignedTo !== user.username) { await transaction.rollback(); return res.status(400).json({ success: false, message: `Commande déjà assignée à ${order.assignedTo}` }); }
+        if (order.convertedToPOS) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Commande déjà convertie' }); }
+        order.assignedTo = user.username;
+        order.assignedAt = new Date();
+        await order.save({ transaction });
+        await transaction.commit();
+        res.json({ success: true, message: 'Commande assignée', order });
+    } catch (error) {
+        if (transaction) await transaction.rollback();
+        console.error('Erreur weborder assign:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de l\'assignation' });
+    }
+});
+
+app.post('/api/weborders/:id/unassign', checkAuth, async (req, res) => {
+    let transaction;
+    try {
+        const user = req.user;
+        const orderId = req.params.id;
+        transaction = await sequelize.transaction();
+        const order = await WebOrder.findByPk(orderId, { transaction, lock: transaction.LOCK.UPDATE });
+        if (!order) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Commande non trouvée' }); }
+        if (order.assignedTo !== user.username) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Vous ne pouvez désassigner que vos propres commandes' }); }
+        if (order.convertedToPOS) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Commande déjà convertie' }); }
+        order.assignedTo = null;
+        order.assignedAt = null;
+        await order.save({ transaction });
+        await transaction.commit();
+        res.json({ success: true, message: 'Désassignation réussie', order });
+    } catch (error) {
+        if (transaction) await transaction.rollback();
+        console.error('Erreur weborder unassign:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de la désassignation' });
+    }
+});
+
+app.post('/api/weborders/:id/convert', checkAuth, async (req, res) => {
+    let transaction;
+    try {
+        const user = req.user;
+        const orderId = req.params.id;
+        const { posVenteId } = req.body;
+        transaction = await sequelize.transaction();
+        const order = await WebOrder.findByPk(orderId, { transaction, lock: transaction.LOCK.UPDATE });
+        if (!order) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Commande non trouvée' }); }
+        if (order.convertedToPOS) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Commande déjà convertie' }); }
+        if (order.assignedTo && order.assignedTo !== user.username) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Commande assignée à un autre utilisateur' }); }
+        order.convertedToPOS = true;
+        order.convertedAt = new Date();
+        order.convertedBy = user.username;
+        order.posVenteId = posVenteId;
+        await order.save({ transaction });
+        await transaction.commit();
+        res.json({ success: true, message: 'Commande convertie avec succès', order });
+    } catch (error) {
+        if (transaction) await transaction.rollback();
+        console.error('Erreur weborder convert:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de la conversion' });
+    }
+});
+
+app.post('/api/weborders/:id/archive', checkAuth, async (req, res) => {
+    try {
+        const user = req.user;
+        const orderId = req.params.id;
+        const result = await sequelize.transaction(async (t) => {
+            const order = await WebOrder.findByPk(orderId, { transaction: t, lock: t.LOCK.UPDATE });
+            if (!order) throw { statusCode: 404, success: false, message: 'Commande non trouvée' };
+            if (order.convertedToPOS) throw { statusCode: 400, success: false, message: 'Commande déjà marquée effectuée' };
+            if (order.assignedTo && order.assignedTo !== user.username) throw { statusCode: 403, success: false, message: 'Commande assignée à un autre utilisateur' };
+            order.convertedToPOS = true;
+            order.convertedAt = new Date();
+            order.convertedBy = user.username;
+            order.posVenteId = null;
+            await order.save({ transaction: t });
+            return { success: true, message: 'Commande marquée comme effectuée', order };
+        });
+        res.json(result);
+    } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({ success: error.success, message: error.message });
+        console.error('Erreur weborder archive:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de l\'archivage' });
+    }
+});
+
+// ===== DAY SCREENING =====
+const dayScreeningCache = new Map();
+const dayScreeningStatus = new Map();
+
+app.post('/api/day-screening/start', checkAuth, async (req, res) => {
+    try {
+        const { date, pointVente: reqPointVente, forceRefresh } = req.body;
+        const pointVente = (reqPointVente === 'tous' || !reqPointVente) ? 'tous' : reqPointVente;
+        const cacheKey = `${date}_${pointVente}`;
+        if (forceRefresh) { dayScreeningCache.delete(cacheKey); dayScreeningStatus.delete(cacheKey); }
+        if (!forceRefresh && dayScreeningCache.has(cacheKey)) {
+            const cached = dayScreeningCache.get(cacheKey);
+            if (Date.now() - cached.timestamp < 30 * 60 * 1000) {
+                return res.json({ success: true, fromCache: true, timestamp: cached.timestamp, results: cached.results });
+            }
+        }
+        dayScreeningStatus.set(cacheKey, { status: 'in_progress', startTime: Date.now() });
+        res.json({ success: true, message: 'Analyse lancée en background', cacheKey });
+    } catch (error) {
+        console.error('Erreur day-screening start:', error);
+        res.status(500).json({ success: false, message: 'Erreur lors du lancement', error: error.message });
+    }
+});
+
+app.get('/api/day-screening/status', checkAuth, async (req, res) => {
+    try {
+        const today = new Date();
+        const defaultDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        const date = req.query.date || defaultDate;
+        const reqPointVente = req.query.pointVente || req.session.user.pointVente;
+        const pointVente = (reqPointVente === 'tous' || !reqPointVente) ? 'tous' : reqPointVente;
+        const cacheKey = `${date}_${pointVente}`;
+        const status = dayScreeningStatus.get(cacheKey) || { status: 'not_started' };
+        res.json({ success: true, ...status });
+    } catch (error) {
+        console.error('Erreur day-screening status:', error);
+        res.status(500).json({ success: false, message: 'Erreur', error: error.message });
+    }
+});
+
+console.log('✅ Routes weborders et day-screening POS chargées');

@@ -1,0 +1,87 @@
+{
+  "name": "Keur BALLI - Point de Vente",
+  "short_name": "Keur BALLI",
+  "description": "Système de point de vente pour Keur BALLI",
+  "start_url": "/pos.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#dc3545",
+  "theme_color": "#dc3545",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/image/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/image/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/image/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/image/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/image/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/image/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/image/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/image/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nouvelle vente",
+      "short_name": "Vendre",
+      "description": "Commencer une nouvelle vente",
+      "url": "/pos.html",
+      "icons": [{ "src": "/image/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mode Standard",
+      "short_name": "Standard",
+      "description": "Interface de gestion classique",
+      "url": "/index.html",
+      "icons": [{ "src": "/image/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Consultation",
+      "short_name": "Consulter",
+      "description": "Consulter les transactions",
+      "url": "/pos.html?mode=consultation",
+      "icons": [{ "src": "/image/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["business", "productivity", "finance"],
+  "screenshots": []
+}
+

@@ -1,0 +1,57 @@
+{
+  "produits_tracabilite_viande": [
+    {
+      "productCode": "BOEUF_DETAIL",
+      "displayName": "Boeuf en détail",
+      "animalType": "boeuf",
+      "saleFormat": "detail",
+      "category": "viande"
+    },
+    {
+      "productCode": "BOEUF_GROS",
+      "displayName": "Boeuf en gros",
+      "animalType": "boeuf",
+      "saleFormat": "gros",
+      "category": "viande"
+    },
+    {
+      "productCode": "VEAU_DETAIL",
+      "displayName": "Veau en détail",
+      "animalType": "veau",
+      "saleFormat": "detail",
+      "category": "viande"
+    },
+    {
+      "productCode": "VEAU_GROS",
+      "displayName": "Veau en gros",
+      "animalType": "veau",
+      "saleFormat": "gros",
+      "category": "viande"
+    },
+    {
+      "productCode": "FAUX_FILET",
+      "displayName": "Faux filet",
+      "animalType": "boeuf",
+      "cut": "faux_filet",
+      "category": "viande"
+    },
+    {
+      "productCode": "FILET",
+      "displayName": "Filet",
+      "animalType": "boeuf",
+      "cut": "filet",
+      "category": "viande"
+    },
+    {
+      "productCode": "SANS_OS",
+      "displayName": "Sans Os",
+      "animalType": "boeuf",
+      "preparation": "sans_os",
+      "category": "viande"
+    }
+  ],
+  "info_tracabilite": {
+    "origine": "Abattoir agréé (Sénégal)",
+    "description": "Produits nécessitant l'affichage des informations de traçabilité sur les tickets"
+  }
+}

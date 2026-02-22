@@ -95,6 +95,39 @@ const Vente = sequelize.define('Vente', {
     allowNull: true,
     field: 'extension',
     comment: 'Extension JSON pour stocker des données supplémentaires (ex: composition des packs)'
+  },
+  commandeId: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    field: 'commande_id',
+    comment: 'Numéro de commande (ex: MBA1234567890) pour regrouper les ventes'
+  },
+  instructionsClient: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'instructions_client',
+    comment: 'Instructions spéciales du client pour la commande'
+  },
+  statutPreparation: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    defaultValue: 'en_preparation',
+    field: 'statut_preparation',
+    comment: 'Statut: en_preparation, pret, en_livraison, sur_place'
+  },
+  livreurAssigne: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    defaultValue: null,
+    field: 'livreur_assigne',
+    comment: 'Nom du livreur assigné à cette commande'
+  },
+  montantRestantDu: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    defaultValue: 0,
+    field: 'montant_restant_du',
+    comment: 'Montant restant dû par le client (créance)'
   }
 }, {
   tableName: 'ventes',

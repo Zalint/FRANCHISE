@@ -1,0 +1,610 @@
+/* ========================================
+   STYLES POUR LES STATUTS DE PAIEMENT POS
+   ======================================== */
+
+/* ===== Boutons filtre statuts (psf-btn) ===== */
+.psf-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    background: #f0f0f0;
+    color: #444;
+    white-space: nowrap;
+}
+.psf-btn:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
+.psf-btn.active { border-color: currentColor; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+
+.psf-btn-warning          { background: #f9c74f; color: #7a5c00; }
+.psf-btn-warning.active   { background: #f9c74f; border-color: #c89500; }
+
+.psf-btn-success          { background: #2e7d32; color: #fff; }
+.psf-btn-success.active   { background: #1b5e20; border-color: #fff; }
+
+.psf-btn-danger           { background: #c0392b; color: #fff; }
+.psf-btn-danger.active    { background: #922b21; border-color: #fff; }
+
+.psf-btn .filter-count    { font-size: 0.8rem; opacity: 0.85; }
+
+/* Styles pour les compteurs de filtres */
+.filter-count {
+    display: inline-block;
+    margin-left: 4px;
+    font-weight: 600;
+    color: #666;
+}
+
+.filter-btn.active .filter-count {
+    color: #2c3e50; /* Couleur foncée pour la lisibilité */
+    font-weight: 700; /* Un peu plus gras pour se démarquer */
+}
+
+/* ==================== STAMPING "PAYÉ" ==================== */
+
+/* Container pour le tampon sur la commande */
+.transaction-item {
+    position: relative;
+    overflow: hidden; /* Pour que le tampon ne déborde pas */
+}
+
+/* Tampon "PAYÉ" (visible uniquement pour P et M) */
+.paid-stamp {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-15deg);
+    z-index: 5;
+    pointer-events: none; /* Ne bloque pas les clics */
+    
+    /* Style du tampon - TAILLE RÉDUITE */
+    border: 3px solid #e74c3c;
+    color: #e74c3c;
+    font-size: 1.2rem;
+    font-weight: 900;
+    letter-spacing: 4px;
+    padding: 6px 20px;
+    text-transform: uppercase;
+    
+    /* Effet de transparence */
+    opacity: 0.7;
+    
+    /* Effet grunge/texture */
+    text-shadow: 
+        1px 1px 0px rgba(231, 76, 60, 0.3),
+        -1px -1px 0px rgba(231, 76, 60, 0.3);
+    
+    /* Bordure avec effet d'usure */
+    border-radius: 4px;
+    box-shadow: 
+        0 0 0 2px rgba(231, 76, 60, 0.2),
+        inset 0 0 15px rgba(231, 76, 60, 0.1);
+}
+
+/* Animation d'apparition du tampon */
+@keyframes stampAppear {
+    0% {
+        transform: translate(-50%, -50%) rotate(-15deg) scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: translate(-50%, -50%) rotate(-15deg) scale(1.1);
+        opacity: 0.8;
+    }
+    100% {
+        transform: translate(-50%, -50%) rotate(-15deg) scale(1);
+        opacity: 0.7;
+    }
+}
+
+.paid-stamp.animate {
+    animation: stampAppear 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Version pour Manuel (légèrement différente) */
+.paid-stamp.manual {
+    color: #9b59b6;
+    border-color: #9b59b6;
+    text-shadow: 
+        1px 1px 0px rgba(155, 89, 182, 0.3),
+        -1px -1px 0px rgba(155, 89, 182, 0.3);
+    box-shadow: 
+        0 0 0 2px rgba(155, 89, 182, 0.2),
+        inset 0 0 20px rgba(155, 89, 182, 0.1);
+}
+
+/* Style for BON RÉDUCTION (Crédit appliqué) */
+.paid-stamp.credit {
+    border-color: #28a745; /* Vert */
+    color: #28a745;
+    text-shadow: 
+        1px 1px 0px rgba(40, 167, 69, 0.3),
+        -1px -1px 0px rgba(40, 167, 69, 0.3);
+    box-shadow: 
+        0 0 0 2px rgba(40, 167, 69, 0.2),
+        inset 0 0 20px rgba(40, 167, 69, 0.1);
+    
+    /* Réduire pour le texte long "BON RÉDUCTION (1000 FCFA)" */
+    font-size: 0.85rem;
+    padding: 4px 12px;
+    letter-spacing: 2px;
+    border-width: 2px;
+}
+
+/* Style for CRÉANCE (Montant impayé sans crédit) */
+.paid-stamp.creance {
+    border-color: #dc3545; /* Rouge */
+    color: #dc3545;
+    text-shadow: 
+        1px 1px 0px rgba(220, 53, 69, 0.3),
+        -1px -1px 0px rgba(220, 53, 69, 0.3);
+    box-shadow: 
+        0 0 0 2px rgba(220, 53, 69, 0.2),
+        inset 0 0 20px rgba(220, 53, 69, 0.1);
+    
+    /* Réduire davantage pour le texte long "CRÉANCE (800 FCFA)" */
+    font-size: 0.85rem; /* Plus petit que 1.2rem */
+    padding: 4px 12px; /* Plus compact que 6px 20px */
+    letter-spacing: 2px; /* Plus serré que 4px */
+    border-width: 2px; /* Plus fin que 3px */
+}
+
+/* Responsive : réduire la taille sur mobile */
+@media (max-width: 768px) {
+    .paid-stamp {
+        font-size: 1rem;
+        letter-spacing: 3px;
+        padding: 4px 15px;
+        border-width: 2px;
+    }
+}
+
+/* ==================== BADGES DE STATUT ==================== */
+
+/* Badge de statut de paiement */
+.payment-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 5px 12px;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    user-select: none;
+    white-space: nowrap;
+}
+
+/* Badges cliquables */
+.payment-status-badge.cursor-pointer {
+    cursor: pointer;
+}
+
+.payment-status-badge.cursor-pointer:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Badges non cliquables (P et M) */
+.payment-status-badge[data-clickable="false"] {
+    cursor: default;
+    opacity: 0.95;
+}
+
+/* Couleur violette pour le statut Manuel */
+.bg-purple {
+    background-color: #9b59b6 !important;
+    color: white !important;
+}
+
+/* Couleur orange pour le statut Partiel (PP) */
+.bg-orange-partial,
+.bg-orange-pp,
+.paid-stamp.partial,
+.paid-stamp-recap.partial {
+    background-color: rgba(255, 152, 0, 0.1) !important;
+    border-color: #ff9800 !important;
+    color: #ff9800 !important;
+}
+
+/* Tampon récap partiel avec texte long */
+.paid-stamp-recap.partial {
+    font-size: 0.8em; /* Plus petit */
+    padding: 4px 12px;
+    letter-spacing: 2px;
+}
+
+/* Tampon récap BON RÉDUCTION (Crédit) */
+.paid-stamp-recap.credit {
+    border-color: #28a745 !important;
+    color: #28a745 !important;
+    background-color: rgba(40, 167, 69, 0.1) !important;
+    font-size: 0.8em;
+    padding: 4px 12px;
+    letter-spacing: 2px;
+}
+
+/* Tampon récap CRÉANCE */
+.paid-stamp-recap.creance {
+    border-color: #dc3545 !important;
+    color: #dc3545 !important;
+    background-color: rgba(220, 53, 69, 0.1) !important;
+    font-size: 0.8em;
+    padding: 4px 12px;
+    letter-spacing: 2px;
+}
+
+.bg-info {
+    background-color: #17a2b8 !important;
+    color: white !important;
+}
+
+/* Menu contextuel */
+.payment-status-menu {
+    animation: slideInDown 0.2s ease-out;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Items du menu */
+.payment-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 15px;
+    border: none;
+    background: white;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 6px;
+    margin: 2px 0;
+    transition: background 0.15s ease;
+    font-size: 14px;
+    color: #333;
+}
+
+.payment-menu-item:hover {
+    background: #f0f0f0;
+}
+
+.payment-menu-item:active {
+    background: #e0e0e0;
+}
+
+.payment-menu-item .menu-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.payment-menu-item .menu-text {
+    flex: 1;
+    line-height: 1.3;
+}
+
+/* Séparateur du menu */
+.payment-menu-divider {
+    height: 1px;
+    background: #e0e0e0;
+    margin: 8px 0;
+}
+
+/* Info du menu */
+.payment-menu-info {
+    padding: 10px 15px;
+    font-size: 13px;
+    color: #666;
+    line-height: 1.4;
+    background: #f9f9f9;
+    border-radius: 6px;
+    margin-top: 5px;
+}
+
+.payment-menu-info strong {
+    color: #333;
+}
+
+/* Responsive: ajuster le positionnement du menu sur petits écrans */
+@media (max-width: 768px) {
+    .payment-status-menu {
+        position: fixed !important;
+        left: 50% !important;
+        transform: translateX(-50%);
+        width: calc(100% - 40px);
+        max-width: 300px;
+    }
+}
+
+/* Animation au hover des badges */
+.payment-status-badge {
+    position: relative;
+    overflow: hidden;
+}
+
+.payment-status-badge.cursor-pointer::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+}
+
+.payment-status-badge.cursor-pointer:hover::before {
+    width: 100%;
+    height: 100%;
+}
+
+/* États des badges selon le statut */
+.payment-status-badge[data-status="A"] {
+    /* Jaune - Autres */
+}
+
+.payment-status-badge[data-status="O"] {
+    /* Bleu - Ouvert */
+}
+
+.payment-status-badge[data-status="E"] {
+    /* Gris - Expiré */
+}
+
+.payment-status-badge[data-status="P"] {
+    /* Vert - Payé */
+}
+
+.payment-status-badge[data-status="M"] {
+    /* Violet - Manuel */
+}
+
+/* Indicateur de chargement pour le refresh */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.payment-status-badge.refreshing {
+    opacity: 0.7;
+}
+
+.payment-status-badge.refreshing .badge-icon {
+    animation: spin 1s linear infinite;
+}
+
+/* Style pour les toasts (notifications) */
+.toast-payment-success {
+    background: #28a745 !important;
+    color: white !important;
+}
+
+.toast-payment-warning {
+    background: #ffc107 !important;
+    color: #333 !important;
+}
+
+.toast-payment-info {
+    background: #17a2b8 !important;
+    color: white !important;
+}
+
+/* Amélioration de l'accessibilité */
+.payment-status-badge:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+}
+
+.payment-menu-item:focus {
+    outline: 2px solid #007bff;
+    outline-offset: -2px;
+}
+
+/* Animation de succès lors du changement de statut */
+@keyframes successPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+.payment-status-badge.status-changed {
+    animation: successPulse 0.5s ease;
+}
+
+/* ==================== FILTRES DE STATUT ==================== */
+
+.payment-status-filters {
+    display: none; /* Caché par défaut */
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    flex-wrap: wrap;
+}
+
+/* Afficher les filtres seulement en mode étendu */
+.transactions-expanded .payment-status-filters {
+    display: flex;
+}
+
+.payment-status-filters .filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.payment-status-filters .filter-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.payment-status-filters .filter-btn.active {
+    border-color: #e74c3c;
+    background: #fff5f5;
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.payment-status-filters .filter-btn i {
+    font-size: 1rem;
+}
+
+.payment-status-filters .filter-btn .payment-status-badge {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+}
+
+/* ==================== FILTRES DE SATISFACTION CLIENT ==================== */
+
+.client-rating-filters {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    flex-wrap: nowrap;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    overflow-x: auto;
+}
+
+.client-rating-filters .filter-btn {
+    padding: 4px 10px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    background: white;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.client-rating-filters .filter-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.client-rating-filters .filter-btn.active {
+    border-color: #007bff;
+    background: #e7f3ff;
+    color: #007bff;
+    font-weight: 600;
+}
+
+/* Style pour les emojis de taille réduite dans les filtres */
+.rating-emoji-small {
+    display: inline-block;
+    font-size: 0.85rem;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.client-rating-filters .filter-btn i {
+    font-size: 0.85rem;
+}
+
+.client-rating-filters .filter-count {
+    display: inline-block;
+    margin-left: 4px;
+    font-weight: 600;
+    color: #666;
+    font-size: 0.75rem;
+}
+
+.client-rating-filters .filter-btn.active .filter-count {
+    color: #007bff;
+    font-weight: 700;
+}
+
+/* ==================== BOUTON EXPORT CSV ==================== */
+
+/* Conteneur des filtres avec flexbox pour aligner CSV à droite */
+.payment-status-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Style pour le bouton Export CSV */
+.export-csv-btn {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%) !important;
+    color: white !important;
+    font-weight: 600 !important;
+    border: none !important;
+    padding: 8px 16px !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 2px 4px rgba(44, 62, 80, 0.2) !important;
+    margin-left: auto !important; /* Pousse le bouton à droite */
+}
+
+.export-csv-btn:hover {
+    background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(44, 62, 80, 0.3) !important;
+}
+
+.export-csv-btn:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 2px 4px rgba(44, 62, 80, 0.2) !important;
+}
+
+.export-csv-btn i {
+    margin-right: 6px !important;
+    font-size: 0.9rem !important;
+}
+
+/* Animation au survol */
+@keyframes pulseCSV {
+    0%, 100% {
+        box-shadow: 0 2px 4px rgba(44, 62, 80, 0.2);
+    }
+    50% {
+        box-shadow: 0 4px 12px rgba(44, 62, 80, 0.4);
+    }
+}
+
+.export-csv-btn:hover {
+    animation: pulseCSV 1.5s infinite;
+}

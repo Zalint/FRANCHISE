@@ -1,0 +1,74 @@
+{
+  "Keur Bali-Crevette - Crue": {
+    "Nombre": 0,
+    "PU": "8000.00",
+    "Montant": 0,
+    "Produit": "Crevette - Crue",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Gombo01": {
+    "Nombre": 0,
+    "PU": "500.00",
+    "Montant": 0,
+    "Produit": "Gombo01",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Pack Pigeon": {
+    "Nombre": 0,
+    "PU": "2500.00",
+    "Montant": 0,
+    "Produit": "Pack Pigeon",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Oeuf": {
+    "Nombre": 0,
+    "PU": "2800.00",
+    "Montant": 0,
+    "Produit": "Oeuf",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Sans Os": {
+    "Nombre": 0,
+    "PU": "4500.00",
+    "Montant": 0,
+    "Produit": "Sans Os",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Viande Hachée": {
+    "Nombre": 0,
+    "PU": "5000.00",
+    "Montant": 0,
+    "Produit": "Viande Hachée",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Viande Mouton": {
+    "Nombre": 0,
+    "PU": "552.00",
+    "Montant": 0,
+    "Produit": "Viande Mouton",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Wass": {
+    "Nombre": 0,
+    "PU": "552.00",
+    "Montant": 0,
+    "Produit": "Wass",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  },
+  "Keur Bali-Seude": {
+    "Nombre": 0,
+    "PU": "552.00",
+    "Montant": 0,
+    "Produit": "Seude",
+    "Point de Vente": "Keur Bali",
+    "mode": "automatique"
+  }
+}

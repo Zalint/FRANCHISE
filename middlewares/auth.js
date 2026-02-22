@@ -110,6 +110,21 @@ const checkReconciliationAccess = (req, res, next) => {
     next();
 };
 
+/**
+ * Middleware de vérification des droits de changement de statut de livraison
+ * Les users, chefs livreurs et admins ont accès
+ */
+const checkStatutLivraisonAccess = (req, res, next) => {
+    const userRole = req.user.role ? req.user.role.toLowerCase() : '';
+    const hasAccess = req.user.canChangeStatutLivraison || req.user.canWrite || 
+                      ['user', 'admin', 'chef_livreur', 'superviseur', 'superutilisateur'].includes(userRole);
+    if (hasAccess) {
+        next();
+    } else {
+        return res.status(403).json({ success: false, message: 'Accès non autorisé - Vous ne pouvez pas modifier le statut de livraison' });
+    }
+};
+
 module.exports = {
     checkAuth,
     checkAdmin,
@@ -120,5 +135,6 @@ module.exports = {
     checkAdvancedAccess,
     checkCopyStockAccess,
     checkEstimationAccess,
-    checkReconciliationAccess
+    checkReconciliationAccess,
+    checkStatutLivraisonAccess
 }; 

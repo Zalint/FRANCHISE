@@ -23,6 +23,12 @@ const PrixHistorique = require('./PrixHistorique');
 // Modèle pour l'historique des imports OCR
 const OcrImport = require('./OcrImport');
 
+// Modèle pour les infos et crédits des commandes
+const CommandeInfo = require('./CommandeInfo');
+
+// Modèle pour les commandes web (weborders)
+const WebOrder = require('./WebOrder');
+
 const { sequelize } = require('../index');
 
 // =====================================================
@@ -184,6 +190,12 @@ module.exports = {
   
   // Modèle historique imports OCR
   OcrImport,
+  
+  // Modèle infos et crédits des commandes
+  CommandeInfo,
+  
+  // Modèle commandes web
+  WebOrder,
   
   // Fonctions utilitaires
   syncDatabase,

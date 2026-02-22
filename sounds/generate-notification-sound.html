@@ -1,0 +1,118 @@
+<!-- 
+    Générateur de son de notification pour WebOrders
+    Ouvrir ce fichier dans un navigateur pour télécharger le fichier audio
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Générateur Son Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Générateur de Son de Notification</h1>
+        <p>Ce générateur crée un son de notification simple pour les commandes web.</p>
+        
+        <button onclick="playSound()">▶️ Écouter le son</button>
+        <button onclick="downloadSound()">💾 Télécharger notification.mp3</button>
+        
+        <div class="info">
+            <h3>📝 Instructions:</h3>
+            <ol>
+                <li>Cliquez sur "Écouter" pour tester le son</li>
+                <li>Cliquez sur "Télécharger" pour sauvegarder</li>
+                <li>Placez le fichier dans: <code>/sounds/notification.mp3</code></li>
+            </ol>
+            <p><strong>Note:</strong> Le son est généré avec l'API Web Audio. Pour un son personnalisé, remplacez par un fichier MP3 de votre choix.</p>
+        </div>
+    </div>
+
+    <script>
+        // Créer un contexte audio
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Fonction pour créer le son de notification
+        function createNotificationSound() {
+            const duration = 0.3; // 300ms
+            const sampleRate = audioContext.sampleRate;
+            const numSamples = duration * sampleRate;
+            
+            // Créer un buffer audio
+            const buffer = audioContext.createBuffer(1, numSamples, sampleRate);
+            const channelData = buffer.getChannelData(0);
+            
+            // Générer un son de notification (deux tons courts)
+            for (let i = 0; i < numSamples; i++) {
+                const t = i / sampleRate;
+                
+                // Premier ton (880 Hz) pendant 0.1s
+                if (t < 0.1) {
+                    channelData[i] = Math.sin(2 * Math.PI * 880 * t) * Math.exp(-t * 10);
+                }
+                // Deuxième ton (1047 Hz) pendant 0.1s après une pause
+                else if (t > 0.15 && t < 0.25) {
+                    channelData[i] = Math.sin(2 * Math.PI * 1047 * (t - 0.15)) * Math.exp(-(t - 0.15) * 10);
+                }
+                else {
+                    channelData[i] = 0;
+                }
+            }
+            
+            return buffer;
+        }
+        
+        // Jouer le son
+        function playSound() {
+            const buffer = createNotificationSound();
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+            source.start(0);
+        }
+        
+        // Télécharger le son (Note: simplified version - for production use a proper audio encoding library)
+        function downloadSound() {
+            alert('⚠️ Pour un vrai fichier MP3:\n\n' +
+                  '1. Utilisez un site comme https://pixabay.com/sound-effects/ pour télécharger un son gratuit\n' +
+                  '2. Ou enregistrez votre propre son de notification\n' +
+                  '3. Renommez-le "notification.mp3"\n' +
+                  '4. Placez-le dans le dossier /sounds/\n\n' +
+                  'Le son Web Audio ci-dessus est pour test uniquement.');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=0.75, minimum-scale=0.6, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <title>Caisse - Matix</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="application-name" content="MATA POS">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MATA POS">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#dc3545">
+    <meta name="msapplication-TileColor" content="#dc3545">
+    <meta name="msapplication-tap-highlight" content="no">
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" sizes="72x72" href="/image/icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="96x96" href="/image/icon-96x96.png">
+    <link rel="apple-touch-icon" sizes="128x128" href="/image/icon-128x128.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/image/icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/image/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/image/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="384x384" href="/image/icon-384x384.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="/image/icon-512x512.png">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/image/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/image/icon-192x192.png">
+    
+    <!-- Stylesheets -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="pos.css?v=20250107e">
+    <link rel="stylesheet" href="pos-mobile.css?v=20250106h">
+    <link rel="stylesheet" href="css/payment-status.css?v=20260222">
+
+</head>
+<body>
+    <div class="pos-container">
+        <!-- Header -->
+        <header class="pos-header">
+            <div class="header-left">
+                <i class="fas fa-cash-register"></i>
+                <span class="app-name">Caisse <span class="env-indicator" id="envBadge">(<span id="envText">LOCAL</span>)</span></span>
+                
+                
+                <a href="/Realtime.html" class="btn-icon btn-dashboard" target="_blank" id="realtime-dashboard-btn-pos" style="display: none; margin-left: 15px;" title="Tableau de Bord">
+                    📊
+                </a>
+            </div>
+            <div class="header-center">
+                <i class="fas fa-user-circle"></i>
+                <span id="userName">Utilisateur</span>
+                <span class="role-badge" id="userRole">Admin</span>
+                <span class="header-date" id="currentDateTime" style="font-size:0.75rem;opacity:0.85;margin-left:0.5rem;white-space:nowrap;"></span>
+            </div>
+            <div class="header-right">
+                <div class="point-vente-selector">
+                    <label title="Point de vente"><i class="fas fa-store"></i></label>
+                    <select id="pointVenteSelect" class="form-select">
+                        <!-- Rempli dynamiquement -->
+                    </select>
+                </div>
+                <button id="refreshPWABtn" class="btn-icon btn-icon-only" onclick="forceRefreshPWA()" title="Vider cache et recharger">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button id="installPWABtn" class="btn-icon btn-icon-only" onclick="installPWA()" title="Installer l'application" style="display: none;">
+                    <i class="fas fa-download"></i>
+                </button>
+                <button class="btn-icon btn-icon-only" onclick="deconnexion()" title="Déconnexion">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+
+                <!-- Menu Admin Groupé -->
+                <div class="admin-menu-container">
+                    <button class="btn-icon btn-admin-menu" onclick="toggleAdminMenu()" title="Menu Admin">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div class="admin-menu-dropdown" id="adminMenuDropdown" style="display: none;">
+                        <button class="admin-menu-item" onclick="ouvrirTotauxDuJour(); toggleAdminMenu();">
+                            <i class="fas fa-chart-bar"></i> Totaux
+                        </button>
+                        <button class="admin-menu-item" onclick="ouvrirInventaireDuJour(); toggleAdminMenu();">
+                            <i class="fas fa-boxes"></i> Inventaire
+                        </button>
+                        <button class="admin-menu-item" onclick="afficherRecapitulatifJournee(); toggleAdminMenu();">
+                            <i class="fas fa-file-invoice"></i> Récapitulatif du jour
+                        </button>
+                    </div>
+                </div>
+
+                <button class="btn-icon btn-icon-only" onclick="window.location.href='index.html'" title="Retour mode Standard">
+                    <i class="fas fa-desktop"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="pos-main">
+            <!-- Left Panel - Products -->
+            <div class="pos-products">
+                <div class="products-header">
+                    <i class="fas fa-box"></i>
+                    <h2>Produits</h2>
+                </div>
+                
+                <!-- Search -->
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchProduct" placeholder="Rechercher un produit..." class="form-control">
+                </div>
+
+                <!-- Categories - Dropdown for mobile -->
+                <div class="category-dropdown-container">
+                    <select id="categoryDropdown" class="form-select category-select">
+                        <option value="all">Toutes les catégories</option>
+                    </select>
+                </div>
+
+                <!-- Categories - Buttons for desktop -->
+                <div class="categories" id="categoriesList">
+                    <!-- Filled dynamically -->
+                </div>
+
+                <!-- Sub-categories (Bovin, Ovin, etc.) -->
+                <div class="sub-categories" id="subCategoriesList" style="display:none;">
+                    <!-- Filled dynamically -->
+                </div>
+
+                <!-- Products Grid -->
+                <div class="products-grid" id="productsGrid">
+                    <!-- Filled dynamically -->
+                </div>
+            </div>
+
+            <!-- Center Panel - Cart -->
+            <div class="pos-cart">
+                <div class="cart-header">
+                    <div>
+                        <i class="fas fa-shopping-cart"></i>
+                        <h2>Panier</h2>
+                    </div>
+                    <div class="cart-header-actions">
+                        <button class="btn-precommande" onclick="handlePrecommandeClick()" title="Pré-commande">
+                            Pré-co
+                        </button>
+                        <button class="btn-clear" onclick="viderPanier()" title="Vider le panier">
+                            Vider
+                        </button>
+                        <button class="btn-save" onclick="sauvegarderPanier()" title="Sauvegarder le panier">
+                            Sauv.
+                        </button>
+                        <button class="btn-checkout" onclick="ouvrirModalPaiement()" title="Valider la commande">
+                            Valider
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Cart Items -->
+                <div class="cart-items" id="cartItems">
+                    <div class="cart-empty">
+                        <i class="fas fa-shopping-cart"></i>
+                        <p>Votre panier est vide</p>
+                        <small>Sélectionnez des produits pour commencer</small>
+                    </div>
+                </div>
+
+                <!-- Cart Footer -->
+                <div class="cart-footer">
+                    <!-- Bouton Voir Pré-commandes avec indicateur -->
+                    <div class="precommandes-button-container">
+                        <span class="precommandes-indicator" id="precommandesIndicator" style="display: none;"></span>
+                        <button class="btn-voir-precommandes" onclick="showPrecommandesModal()">
+                            <i class="fas fa-eye"></i> Voir Pré-commandes
+                        </button>
+                    </div>
+                    
+                    <div class="cart-totals">
+                        <div class="subtotal">
+                            <span>Sous-total :</span>
+                            <span id="subtotal">0 FCFA</span>
+                        </div>
+                        <div class="total">
+                            <span>Total :</span>
+                            <span id="total">0 FCFA</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile Cart Panel (visible only on mobile/tablet) -->
+            <div class="mobile-cart-panel cart-empty">
+                <div class="mobile-cart-header">
+                    <div>
+                        <i class="fas fa-shopping-cart"></i>
+                        <h2>Panier</h2>
+                        <span class="cart-count-badge" id="mobileCartCount">0</span>
+                    </div>
+                    <div class="mobile-cart-header-actions">
+                        <button class="btn-precommande" onclick="handlePrecommandeClick()" style="padding: 8px 12px; font-size: 12px;">
+                            <i class="fas fa-clipboard-list"></i>
+                        </button>
+                        <button class="btn-clear-mobile" onclick="viderPanier()">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <button class="btn-mobile-save" onclick="sauvegarderPanier()">
+                            <i class="fas fa-save"></i>
+                        </button>
+                        <button class="btn-mobile-checkout" onclick="ouvrirModalPaiement()">
+                            <i class="fas fa-cash-register"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mobile Cart Items -->
+                <div class="mobile-cart-items" id="mobileCartItems">
+                    <div class="cart-empty">
+                        <i class="fas fa-shopping-cart"></i>
+                        <p>Votre panier est vide</p>
+                        <small>Sélectionnez des produits pour commencer</small>
+                    </div>
+                </div>
+
+                <!-- Mobile Cart Footer -->
+                <div class="mobile-cart-footer">
+                    <div class="mobile-cart-total">
+                        <span>Total :</span>
+                        <span id="mobileTotal">0 FCFA</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Summary -->
+            <div class="pos-summary">
+                <div class="summary-header">
+                    <i class="fas fa-chart-line"></i>
+                    <h2>Résumé du jour</h2>
+                    <button class="btn-expand-transactions" onclick="toggleTransactionsView()" title="Agrandir les transactions">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="btn-order-tracking" onclick="toggleOrderTrackingView()" title="Suivi des commandes">
+                        <i class="fas fa-clipboard-list"></i>
+                    </button>
+                    <button class="btn-toggle-summary-cards" onclick="toggleSummaryCards()" title="Masquer/Afficher les statistiques" id="btnToggleSummaryCards">
+                        <i class="fas fa-eye-slash" id="iconToggleSummaryCards"></i>
+                    </button>
+                </div>
+
+                <div class="date-selector">
+                    <label>Date :</label>
+                    <input type="date" id="summaryDate" class="form-control" onchange="chargerResume()">
+                    <button class="btn-refresh" onclick="chargerResume()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+
+                <!-- Search box for transactions (visible only in expanded mode) -->
+                <div class="transactions-search-box" style="display: none;">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="transactionsSearch" placeholder="Rechercher par nom ou téléphone..." class="form-control" oninput="filtrerTransactions()">
+                    <button class="btn-clear-search" onclick="viderRechercheTransactions()" title="Effacer la recherche" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Status filters for order tracking mode -->
+                <div class="order-status-filters" style="display: none;">
+                    <button class="status-filter active" data-status="all" onclick="filtrerParStatut('all')">
+                        <i class="fas fa-list"></i> Toutes <span class="filter-count" id="count-all">0</span>
+                    </button>
+                    <button class="status-filter" data-status="en_preparation" onclick="filtrerParStatut('en_preparation')">
+                        <i class="fas fa-clock"></i> En préparation <span class="filter-count" id="count-en_preparation">0</span>
+                    </button>
+                    <button class="status-filter" data-status="pret" onclick="filtrerParStatut('pret')">
+                        <i class="fas fa-check-circle"></i> Prêt <span class="filter-count" id="count-pret">0</span>
+                    </button>
+                    <button class="status-filter" data-status="en_livraison" onclick="filtrerParStatut('en_livraison')">
+                        <i class="fas fa-shipping-fast"></i> En livraison <span class="filter-count" id="count-en_livraison">0</span>
+                    </button>
+                </div>
+
+                <div class="summary-cards" id="summaryCardsContainer">
+                    <div class="summary-card">
+                        <div class="card-icon transactions">
+                            <i class="fas fa-receipt"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value" id="totalTransactions">0</div>
+                            <div class="card-label">TRANSACTIONS</div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <div class="card-icon commandes">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value" id="totalCommandes">0</div>
+                            <div class="card-label">COMMANDES</div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <div class="card-icon revenue">
+                            <i class="fas fa-coins"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value" id="totalRevenue">0 FCFA</div>
+                            <div class="card-label">CHIFFRE D'AFFAIRES</div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <div class="card-icon articles">
+                            <i class="fas fa-shopping-bag"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value" id="totalArticles">0</div>
+                            <div class="card-label">ARTICLES VENDUS</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="recent-transactions">
+                    <h3>Dernières transactions</h3>
+                    
+                    <!-- Filtres de statut de paiement -->
+                    <div class="payment-status-filters" id="paymentStatusFilters" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 0;">
+                        <button class="psf-btn active" data-status="all" onclick="filterByPaymentStatus('all')" title="Tous les statuts">
+                            <i class="fas fa-list"></i> Tous <span class="filter-count" id="countAll"></span>
+                        </button>
+                        <button class="psf-btn psf-btn-warning" data-status="A" onclick="filterByPaymentStatus('A')" title="En attente">
+                            A <span class="filter-count" id="countA"></span>
+                        </button>
+                        <button class="psf-btn psf-btn-success" data-status="P" onclick="filterByPaymentStatus('P')" title="Payé">
+                            <i class="fas fa-check"></i> P <span class="filter-count" id="countP"></span>
+                        </button>
+                        <button class="psf-btn psf-btn-danger" data-status="C" onclick="filterByPaymentStatus('C')" title="Créance">
+                            <i class="fas fa-credit-card"></i> C <span class="filter-count" id="countC"></span>
+                        </button>
+                    </div>
+                    
+                    <!-- Somme des commandes filtrées -->
+                    <div id="filteredOrdersSum" style="display: none; padding: 10px 15px; margin-top: 8px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); border-radius: 8px; color: white; font-weight: 600; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                        <span id="filteredStatusLabel"></span>
+                        <span id="filteredOrdersTotal" style="font-size: 20px; font-weight: 700;"></span>
+                    </div>
+                    
+                    
+                    <div class="transactions-list" id="transactionsList">
+                        <!-- Filled dynamically -->
+                    </div>
+                </div>
+
+                <!-- Order Details Panel (3rd column for tracking view) -->
+                <div class="order-details-panel" id="orderDetailsPanel" style="display: none;">
+                    <div class="order-details-header">
+                        <h3>Détails de la commande</h3>
+                        <button class="btn-close-details" onclick="fermerDetailsCommande()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="order-details-content" id="orderDetailsContent">
+                        <div class="no-order-selected">
+                            <i class="fas fa-hand-pointer"></i>
+                            <p>Sélectionnez une commande pour voir les détails</p>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-close-day btn-faire-caisse" onclick="ouvrirClotureCaisse()">
+                    <i class="fas fa-cash-register"></i> Faire la caisse
+                </button>
+            </div>
+        </div>
+
+        <!-- Kanban Board for Order Tracking -->
+        <div class="kanban-board" id="kanbanBoard" style="display: none;">
+            <div class="kanban-header">
+                <button class="btn-back-kanban" onclick="fermerKanban()">
+                    <i class="fas fa-arrow-left"></i> Retour
+                </button>
+                <h2><i class="fas fa-clipboard-list"></i> SUIVI DES COMMANDES</h2>
+                <div class="kanban-filters">
+                    <select id="kanbanFilterPointVente" class="kanban-filter-select" onchange="filtrerKanban()">
+                        <option value="">Tous les points de vente</option>
+                    </select>
+                    <input type="date" id="kanbanFilterDate" class="kanban-filter-date" onchange="filtrerKanban()">
+                    <select id="kanbanFilterLivreur" class="kanban-filter-select" onchange="filtrerKanban()">
+                        <option value="">Tous les livreurs</option>
+                        <option value="non_assigne">Non assigné</option>
+                    </select>
+                </div>
+                <div class="kanban-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="kanbanSearchInput" placeholder="Rechercher par nom ou téléphone..." oninput="filtrerKanban()">
+                    <button class="btn-clear-kanban-search" onclick="effacerRechercheKanban()" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <button class="btn-refresh-livreurs-kanban" onclick="rechargerTousLesLivreurs()" title="Recharger tous les livreurs">
+                        <i class="fas fa-sync-alt"></i> Livreurs
+                    </button>
+                </div>
+            </div>
+            
+            <div class="kanban-columns">
+                        <!-- Column 1: Sur place -->
+                        <div class="kanban-column" data-status="sur_place">
+                            <div class="kanban-column-header sur_place" style="background: #F1F8E9; color: #558B2F;">
+                                <i class="fas fa-utensils"></i>
+                                <h3>SUR PLACE (0)</h3>
+                            </div>
+                            <div class="kanban-column-body" id="kanban-sur_place">
+                                <!-- Cards will be added here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Column 2: En préparation -->
+                        <div class="kanban-column" data-status="en_preparation">
+                            <div class="kanban-column-header en_preparation">
+                                <i class="fas fa-clock"></i>
+                                <h3>EN PRÉPARATION (0)</h3>
+                            </div>
+                            <div class="kanban-column-body" id="kanban-en_preparation">
+                                <!-- Cards will be added here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Column 3: Prêt -->
+                        <div class="kanban-column" data-status="pret">
+                            <div class="kanban-column-header pret">
+                                <i class="fas fa-check-circle"></i>
+                                <h3>PRÊT (0)</h3>
+                            </div>
+                            <div class="kanban-column-body" id="kanban-pret">
+                                <!-- Cards will be added here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Column 4: En livraison -->
+                        <div class="kanban-column" data-status="en_livraison">
+                            <div class="kanban-column-header en_livraison">
+                                <i class="fas fa-shipping-fast"></i>
+                                <h3>EN LIVRAISON (0)</h3>
+                            </div>
+                            <div class="kanban-column-body" id="kanban-en_livraison">
+                                <!-- Cards will be added here -->
+                            </div>
+                        </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Paiement -->
+    <div class="modal-overlay" id="modalPaiement">
+        <div class="modal-content payment-modal">
+            <div class="modal-header">
+                <h3>Traitement de la commande</h3>
+                <button class="btn-close-modal" onclick="fermerModalPaiement()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="payment-amount">
+                    <span>Montant à payer :</span>
+                    <span id="paymentAmount" class="amount">0 FCFA</span>
+                </div>
+
+                <div class="payment-methods" style="display: none;">
+                    <label>Mode de paiement :</label>
+                    <div class="payment-options">
+                        <button class="payment-option active" data-method="cash" onclick="selectionnerMethodePaiement('cash')">
+                            <i class="fas fa-money-bill-wave"></i>
+                            <span>Espèces</span>
+                        </button>
+                        <button class="payment-option" data-method="card" onclick="selectionnerMethodePaiement('card')">
+                            <i class="fas fa-credit-card"></i>
+                            <span>Carte</span>
+                        </button>
+                        <button class="payment-option" data-method="mobile" onclick="selectionnerMethodePaiement('mobile')">
+                            <i class="fas fa-mobile-alt"></i>
+                            <span>Mobile Money</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="payment-input" id="cashPaymentSection">
+                    <label>Montant reçu :</label>
+                    <input type="number" id="receivedAmount" class="form-control amount-input" placeholder="0" oninput="calculerMonnaie()">
+                    <div class="change-display" id="changeDisplay">
+                        Monnaie à rendre : <span id="changeAmount">0 FCFA</span>
+                    </div>
+                </div>
+
+                <!-- 🆕 Section crédit client -->
+                <div id="creditSection" class="credit-section" style="display: none; margin-top: 20px; padding: 15px; background: linear-gradient(135deg, #E8F5E9 0%, #F1F8E9 100%); border-radius: 8px; border: 2px solid #4CAF50;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.5rem;">🎁</span>
+                            <span style="font-weight: 600; color: #2E7D32;">Crédit disponible: <span id="creditAmount" style="font-size: 1.1rem;">0 FCFA</span></span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 12px;">
+                        <label style="display: flex; align-items: center; cursor: pointer; font-weight: 500; color: #1B5E20;">
+                            <input type="checkbox" id="useCredit" onchange="updatePaymentWithCredit()" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer; accent-color: #4CAF50;" checked>
+                            <span>✓ Utiliser le crédit pour cette commande</span>
+                        </label>
+                        <small style="display: block; color: #558B2F; margin-left: 30px; margin-top: 5px; font-size: 0.875rem;">
+                            Le crédit sera automatiquement déduit du montant total
+                        </small>
+                    </div>
+                    
+                    <!-- Montant de crédit appliqué -->
+                    <div id="creditApplied" style="display: none; margin-top: 15px; padding: 10px; background: white; border-radius: 6px; border-left: 4px solid #4CAF50;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #2E7D32; font-weight: 500;">Crédit appliqué:</span>
+                            <span class="credit-applied-amount" style="color: #2E7D32; font-weight: 700; font-size: 1.1rem;">0 FCFA</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Montant final à payer -->
+                    <div style="margin-top: 10px; padding: 12px; background: white; border-radius: 6px; border: 2px dashed #4CAF50;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #1B5E20; font-weight: 600; font-size: 1.05rem;">MONTANT À PAYER:</span>
+                            <span id="finalPaymentAmount" style="color: #1B5E20; font-weight: 800; font-size: 1.3rem;">0 FCFA</span>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="client-info">
+                    <h4>Informations client (optionnel) :</h4>
+                    
+                    <!-- Checkbox Sur Place -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <div>
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: 500;">
+                                <input type="checkbox" id="commandeSurPlace" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
+                                <span>🍽️ Commande sur place</span>
+                            </label>
+                            <small style="color: #6c757d; margin-left: 28px; display: block; margin-top: 5px; font-size: 0.875rem;">
+                                Cette commande ne sera pas affichée dans le suivi de livraison
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <input type="text" id="clientName" class="form-control" placeholder="Nom du client (optionnel)">
+                        </div>
+                        <div class="col-6">
+                            <input type="text" id="clientPhone" class="form-control" placeholder="Téléphone du client (optionnel)">
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <input type="text" id="clientAddress" class="form-control" placeholder="Adresse du client (optionnel)">
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <textarea id="clientInstructions" class="form-control" rows="3" placeholder="Instructions spéciales (optionnel)" style="resize: vertical;"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="fermerModalPaiement()">
+                    Annuler
+                </button>
+                <button class="btn-confirm" onclick="confirmerPaiement(event)">
+                    Confirmer la commande
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Details Commande -->
+    <div class="modal-overlay" id="modalDetailsCommande">
+        <div class="modal-content details-modal">
+            <div class="modal-header">
+                <h3 id="modalCommandeTitle">Détails de la commande</h3>
+                <button class="btn-close-modal" onclick="fermerModalDetailsCommande()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body" id="modalCommandeBody">
+                <!-- Content filled dynamically -->
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="fermerModalDetailsCommande()">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modern Confirmation Modal -->
+    <div class="modern-modal-overlay" id="modernConfirmModal" style="display: none;">
+        <div class="modern-modal">
+            <div class="modern-modal-icon">
+                <i class="fas fa-question-circle"></i>
+            </div>
+            <h3 class="modern-modal-title" id="modernModalTitle">Confirmation</h3>
+            <p class="modern-modal-message" id="modernModalMessage">Êtes-vous sûr ?</p>
+            <div class="modern-modal-actions">
+                <button class="modern-btn modern-btn-cancel" id="modernModalCancel">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <button class="modern-btn modern-btn-confirm" id="modernModalConfirm">
+                    <i class="fas fa-check"></i> Confirmer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pré-commande -->
+    <div class="modal-overlay" id="modalPrecommande" style="display: none;">
+        <div class="modal-content payment-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-clipboard-list"></i> Nouvelle Pré-commande</h3>
+                <button class="btn-close-modal" onclick="fermerModalPrecommande()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Récapitulatif Panier -->
+                <div class="payment-amount" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                        <i class="fas fa-shopping-cart" style="font-size: 1.5rem; color: #065f46;"></i>
+                        <h4 style="margin: 0; color: #065f46; font-size: 1.1rem;">Panier</h4>
+                    </div>
+                    <div id="precommandePanierRecap"></div>
+                    <div style="border-top: 2px solid #10b981; margin-top: 15px; padding-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 600; color: #065f46; font-size: 1.1rem;">TOTAL:</span>
+                        <span id="precommandeTotal" class="amount" style="color: #065f46; font-weight: 700; font-size: 1.3rem;">0 FCFA</span>
+                    </div>
+                </div>
+
+                <!-- Informations Client (modifiable) -->
+                <div class="client-info" style="margin-bottom: 20px;">
+                    <h4><i class="fas fa-user"></i> Informations client :</h4>
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <input type="text" id="precommandeClientName" class="form-control" placeholder="Nom du client *" required>
+                        </div>
+                        <div class="col-6">
+                            <input type="text" id="precommandeClientPhone" class="form-control" placeholder="Téléphone du client *" required>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <input type="text" id="precommandeClientAddress" class="form-control" placeholder="Adresse du client (optionnel)">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulaire Pré-commande -->
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; border-radius: 8px;">
+                    <h4 style="margin: 0 0 20px 0; color: #92400e; font-size: 1.1rem;">
+                        <i class="fas fa-calendar-alt"></i> Informations de récupération
+                    </h4>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600;">
+                                📅 Date de réception * <small style="color: #6b7280;">(Quand le client viendra chercher)</small>
+                            </label>
+                            <input type="date" id="precommandeDateReception" class="form-control" required
+                                   style="padding: 12px; font-size: 1rem;">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600;">
+                                🏷️ Label/Tag <small style="color: #6b7280;">(ex: Tabaski 2026, Mariage Fatou)</small>
+                            </label>
+                            <input type="text" id="precommandeLabel" class="form-control" placeholder="Optionnel"
+                                   style="padding: 12px; font-size: 1rem;">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600;">
+                                📝 Commentaire
+                            </label>
+                            <textarea id="precommandeCommentaire" class="form-control" rows="3" placeholder="Notes supplémentaires..."
+                                      style="padding: 12px; font-size: 1rem; resize: vertical;"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="fermerModalPrecommande()">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <button class="btn-confirm" onclick="confirmerPrecommande()" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                    <i class="fas fa-check"></i> Créer Pré-commande
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Historique Client -->
+    <div class="modal-overlay" id="historiqueClientModal" style="display: none;" onclick="if(event.target === this) fermerHistoriqueClient();">
+        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;" onclick="event.stopPropagation();">
+            <div class="modal-header">
+                <h2 id="historiqueClientTitle">
+                    <i class="fas fa-history"></i> Historique Client
+                </h2>
+                <button class="modal-close" onclick="fermerHistoriqueClient()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Info Client - Compact -->
+                <div id="historiqueClientInfo" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 5px;">
+                                <i class="fas fa-user"></i> <span id="historiqueNomClient">-</span>
+                            </div>
+                            <div style="font-size: 0.95rem; opacity: 0.95;">
+                                <i class="fas fa-phone"></i> <span id="historiqueTelClient">-</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700;" id="histStatTotal">0</div>
+                                <div style="font-size: 0.75rem; opacity: 0.9;">Commandes</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.85rem; font-weight: 600;" id="histStatFirst">-</div>
+                                <div style="font-size: 0.75rem; opacity: 0.9;">1ère</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.85rem; font-weight: 600;" id="histStatLast">-</div>
+                                <div style="font-size: 0.75rem; opacity: 0.9;">Dernière</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Liste des commandes -->
+                <div id="historiqueCommandesContainer">
+                    <div style="text-align: center; padding: 40px; color: #999;">
+                        <i class="fas fa-spinner fa-spin fa-3x"></i>
+                        <div style="margin-top: 15px;">Chargement...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="fermerHistoriqueClient()">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="js/inventaire.js?v=20260114a"></script>
+    <script src="pos-modal-details.js?v=20260110bictorys"></script>
+    <script src="pos.js?v=20260222statuts10"></script>
+    <script src="day-screening.js?v=20250107l"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('✅ Service Worker registered successfully:', registration.scope);
+                        
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', async () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New version available
+                                    const confirmed = await showModernConfirm({
+                                        title: 'Mise à jour disponible',
+                                        message: 'Une nouvelle version de l\'application est disponible. Actualiser maintenant ?',
+                                        type: 'success',
+                                        confirmText: 'Actualiser',
+                                        cancelText: 'Plus tard'
+                                    });
+                                    
+                                    if (confirmed) {
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch(error => {
+                        console.log('❌ Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // PWA Install Prompt
+        let deferredPrompt;
+        
+        // Detect iOS
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        
+        // Show iOS install instructions if on iOS and not in standalone mode
+        if (isIOS && !window.navigator.standalone) {
+            const installBtn = document.getElementById('installPWABtn');
+            if (installBtn) {
+                installBtn.style.display = 'block';
+                installBtn.innerHTML = '<i class="fas fa-info-circle"></i> Installer';
+                installBtn.onclick = function() {
+                    alert('Pour installer sur iPhone/iPad :\n\n1. Cliquez sur Partager ⬆️ (en bas)\n2. Choisissez "Sur l\'écran d\'accueil"\n3. Cliquez "Ajouter"');
+                };
+                console.log('📱 iOS detected - Showing manual install instructions');
+            }
+        }
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent the mini-infobar from appearing on mobile
+            e.preventDefault();
+            // Stash the event so it can be triggered later
+            deferredPrompt = e;
+            
+            // Show install button
+            const installBtn = document.getElementById('installPWABtn');
+            if (installBtn) {
+                installBtn.style.display = 'block';
+            }
+            console.log('💡 PWA can be installed');
+        });
+
+        // Function to trigger PWA installation
+        window.installPWA = async function() {
+            // Check if iOS - show instructions instead
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (isIOS) {
+                alert('Pour installer sur iPhone/iPad :\n\n1. Cliquez sur Partager ⬆️ (en bas)\n2. Choisissez "Sur l\'écran d\'accueil"\n3. Cliquez "Ajouter"');
+                return;
+            }
+            
+            if (!deferredPrompt) {
+                console.log('❌ No installation prompt available');
+                return;
+            }
+            
+            // Show the install prompt
+            deferredPrompt.prompt();
+            
+            // Wait for the user to respond to the prompt
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`User response to the install prompt: ${outcome}`);
+            
+            if (outcome === 'accepted') {
+                console.log('✅ User accepted the install prompt');
+            } else {
+                console.log('❌ User dismissed the install prompt');
+            }
+            
+            // Clear the deferredPrompt
+            deferredPrompt = null;
+            
+            // Hide the install button
+            const installBtn = document.getElementById('installPWABtn');
+            if (installBtn) {
+                installBtn.style.display = 'none';
+            }
+        };
+        
+        // Function to force refresh and clear PWA cache
+        window.forceRefreshPWA = async function() {
+            console.log('🔄 Force refresh PWA - Clearing cache...');
+            
+            try {
+                // Clear all caches
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    console.log('📦 Found caches:', cacheNames);
+                    
+                    for (const cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                        console.log('🗑️ Deleted cache:', cacheName);
+                    }
+                }
+                
+                // Unregister all service workers
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    console.log('👷 Found service workers:', registrations.length);
+                    
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                        console.log('🗑️ Unregistered service worker');
+                    }
+                }
+                
+                // Force reload from server (bypass cache)
+                console.log('🔄 Reloading page from server...');
+                window.location.reload(true);
+                
+            } catch (error) {
+                console.error('❌ Error during refresh:', error);
+                alert('Erreur lors du refresh. La page va se recharger.');
+                window.location.reload();
+            }
+        };
+
+        window.addEventListener('appinstalled', () => {
+            console.log('✅ PWA was installed successfully');
+            deferredPrompt = null;
+            
+            // Hide the install button
+            const installBtn = document.getElementById('installPWABtn');
+            if (installBtn) {
+                installBtn.style.display = 'none';
+            }
+        });
+
+        // Detect if app is running in standalone mode
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+            console.log('📱 App running in standalone mode (PWA)');
+            document.body.classList.add('pwa-mode');
+            
+            // Force safe area recalculation on page load (fix for Android navigation)
+            setTimeout(() => {
+                const safePadding = getComputedStyle(document.documentElement).getPropertyValue('--sab') || '20px';
+                console.log('🔧 Safe area bottom:', safePadding);
+                
+                // Force repaint to apply safe areas
+                document.body.style.paddingBottom = `max(${safePadding}, 20px)`;
+                
+                // Apply to cart footer specifically
+                const cartFooter = document.querySelector('.cart-footer');
+                if (cartFooter) {
+                    cartFooter.style.paddingBottom = `calc(1.5rem + max(${safePadding}, 20px))`;
+                }
+            }, 100);
+        }
+        
+        // Listen for page visibility changes (when navigating back)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)) {
+                console.log('🔄 Page became visible in PWA mode, recalculating safe areas');
+                setTimeout(() => {
+                    const safePadding = getComputedStyle(document.documentElement).getPropertyValue('--sab') || '20px';
+                    document.body.style.paddingBottom = `max(${safePadding}, 20px)`;
+                    
+                    const cartFooter = document.querySelector('.cart-footer');
+                    if (cartFooter) {
+                        cartFooter.style.paddingBottom = `calc(1.5rem + max(${safePadding}, 20px))`;
+                    }
+                }, 100);
+            }
+        });
+    </script>
+
+    <!-- Modal Pack Composition -->
+    <div class="modal-overlay" id="packCompositionModal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3 id="pack-modal-title">Composition du Pack</h3>
+                <button class="modal-close" onclick="fermerModalPackComposition()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-info" style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-bottom: 20px; color: #1976d2;">
+                    <i class="fas fa-info-circle"></i> Vous pouvez modifier les quantités selon les besoins du client.
+                </div>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: #f5f5f5;">
+                                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Produit</th>
+                                <th style="padding: 12px; text-align: center; border: 1px solid #ddd; width: 120px;">Quantité</th>
+                                <th style="padding: 12px; text-align: center; border: 1px solid #ddd; width: 100px;">Unité</th>
+                                <th style="padding: 12px; text-align: center; border: 1px solid #ddd; width: 80px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pack-composition-body">
+                            <!-- Lignes ajoutées dynamiquement -->
+                        </tbody>
+                    </table>
+                </div>
+                <button class="btn-add-pack-item" onclick="ajouterLignePackComposition()" style="margin-top: 15px; background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                    <i class="fas fa-plus-circle"></i> Ajouter un produit
+                </button>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid #ddd;">
+                <button onclick="reinitialiserPackComposition()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                    <i class="fas fa-undo"></i> Réinitialiser
+                </button>
+                <button onclick="fermerModalPackComposition()" style="background: #666; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                    Annuler
+                </button>
+                <button onclick="sauvegarderPackComposition()" style="background: #c41e3a; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                    <i class="fas fa-check-circle"></i> Valider
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Totaux du Jour -->
+    <div class="modal-overlay" id="totauxDuJourModal" style="display: none;">
+        <div class="modal-content modal-totaux" style="max-width: 850px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3><i class="fas fa-chart-bar"></i> Totaux du Jour</h3>
+                <button class="modal-close" onclick="fermerTotauxDuJour()">&times;</button>
+            </div>
+            <div class="modal-subheader" style="background: #f8f9fa; padding: 12px 24px; border-bottom: 1px solid #dee2e6;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-calendar-day"></i>
+                            <input type="date" 
+                                   id="totauxDateInput" 
+                                   onchange="chargerTotauxDate()"
+                                   style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9rem;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-store"></i> 
+                            <span id="totauxPointVente">---</span>
+                        </div>
+                    </div>
+                    <button onclick="chargerTotauxDate()" 
+                            style="background: #667eea; color: white; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                        <i class="fas fa-sync-alt"></i> Actualiser
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body" id="totauxContent" style="padding: 24px;">
+                <div style="text-align: center; padding: 40px; color: #999;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
+                    <p style="margin-top: 12px;">Chargement des totaux...</p>
+                </div>
+            </div>
+            <div class="modal-footer" style="background: #f8f9fa; padding: 16px 24px; border-top: 2px solid #dee2e6; display: flex; gap: 12px; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 20px; font-size: 0.95rem; color: #666;">
+                    <div>
+                        <i class="fas fa-shopping-cart"></i> <span id="totauxNombreVentes">0</span> ventes
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="imprimerTotaux()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                        <i class="fas fa-print"></i> Imprimer
+                    </button>
+                    <button onclick="fermerTotauxDuJour()" style="background: #c41e3a; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                        Fermer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Day Screening Confirmation -->
+    <div id="dayScreeningConfirmModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-shield"></i> Audit</h3>
+                <button class="modal-close" onclick="fermerDayScreeningConfirm()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <i class="fas fa-info-circle" style="font-size: 3rem; color: #2196F3; margin-bottom: 15px;"></i>
+                    <h4 style="margin: 0 0 10px 0; color: #212121;">Lancer l'analyse des clients</h4>
+                    <p style="color: #757575; margin: 0; font-size: 0.95rem;">
+                        Cette analyse va examiner l'historique de tous les clients ayant passé commande à la date sélectionnée
+                        pour détecter les risques potentiels (retards de paiement, plaintes, etc.)
+                    </p>
+                </div>
+                
+                <div style="background: #fff; padding: 15px; border: 2px solid #667eea; border-radius: 8px; margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; color: #424242; margin-bottom: 8px; font-size: 0.95rem;">
+                        <i class="fas fa-calendar-alt" style="color: #667eea;"></i> Date de l'analyse :
+                    </label>
+                    <input type="date" id="dayScreeningDateInput" 
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem;">
+                </div>
+                
+                <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <i class="fas fa-clock" style="color: #FF9800;"></i>
+                        <span style="font-size: 0.9rem;">Durée estimée : 30-60 secondes</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <i class="fas fa-desktop" style="color: #4CAF50;"></i>
+                        <span style="font-size: 0.9rem;">Le POS reste utilisable pendant l'analyse</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-bell" style="color: #2196F3;"></i>
+                        <span style="font-size: 0.9rem;">Vous recevrez une notification à la fin</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="fermerDayScreeningConfirm()" style="flex: 1; background: #e0e0e0; color: #424242; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 1rem; font-weight: 600;">
+                        Annuler
+                    </button>
+                    <button onclick="lancerDayScreening()" style="flex: 1; background: #2196F3; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 1rem; font-weight: 600;">
+                        <i class="fas fa-play"></i> Lancer l'analyse
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detachable Day Screening Résultats Panel -->
+    <div id="dayScreeningResultsModal" class="detachable-panel" style="display: none;">
+        <div class="detachable-panel-content" id="dayScreeningPanel">
+            <div class="detachable-panel-header" id="dayScreeningPanelHeader">
+                <h3><i class="fas fa-user-shield"></i> Audit - Résultats</h3>
+                <div class="panel-controls">
+                    <button class="panel-btn" onclick="toggleMinimizeDayScreening()" title="Réduire / Agrandir">
+                        <i class="fas fa-window-minimize" id="minimizeIcon"></i>
+                    </button>
+                    <button class="panel-btn" onclick="toggleMaximizeDayScreening()" title="Plein écran / Restaurer">
+                        <i class="fas fa-expand" id="maximizeIcon"></i>
+                    </button>
+                    <button class="panel-btn" onclick="fermerDayScreeningResults()" title="Fermer">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="detachable-panel-subheader" id="panelSubheader">
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 8px;">
+                        <span id="screeningDate" style="font-weight: 600; color: #212121;">--</span>
+                        <span style="color: #757575; margin-left: 10px;" id="screeningTime">--</span>
+                    </div>
+                    <div style="position: relative;">
+                        <input 
+                            type="text" 
+                            id="screeningSearchInput" 
+                            placeholder="🔍 Rechercher un client, téléphone, alerte..." 
+                            style="width: 100%; padding: 8px 12px 8px 36px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9rem; transition: border-color 0.2s;"
+                            oninput="rechercherDansScreeningDebounced(this.value)"
+                            onkeyup="if(event.key==='Escape') this.value=''; rechercherDansScreening('');"
+                        />
+                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9e9e9e; pointer-events: none;"></i>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; margin-left: 15px;">
+                    <span id="screeningStatus" style="font-size: 0.9rem; color: #757575;">
+                        <i class="fas fa-sync-alt fa-spin"></i> Analyse en cours...
+                    </span>
+                    <button onclick="telechargerResultatsTexte()" title="Télécharger en TXT" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-download"></i> TXT
+                    </button>
+                    <button onclick="rafraichirDayScreening()" title="Rafraîchir" style="background: #2196F3; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                        <i class="fas fa-sync-alt"></i> Rafraîchir
+                    </button>
+                </div>
+            </div>
+            <div class="detachable-panel-body" id="panelBody">
+                <!-- Stats Summary -->
+                <div id="screeningStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 24px;">
+                    <div class="stat-card" style="background: #fff3e0; padding: 15px; border-radius: 8px; border-left: 4px solid #FF9800;">
+                        <div style="font-size: 0.85rem; color: #E65100; font-weight: 600; margin-bottom: 5px;">CLIENTS ANALYSÉS</div>
+                        <div style="font-size: 1.8rem; font-weight: 700; color: #212121;" id="totalClients">0</div>
+                    </div>
+                    <div class="stat-card" style="background: #ffebee; padding: 15px; border-radius: 8px; border-left: 4px solid #F44336;">
+                        <div style="font-size: 0.85rem; color: #C62828; font-weight: 600; margin-bottom: 5px;">RISQUE ÉLEVÉ</div>
+                        <div style="font-size: 1.8rem; font-weight: 700; color: #212121;" id="highRiskCount">0</div>
+                    </div>
+                    <div class="stat-card" style="background: #fff9c4; padding: 15px; border-radius: 8px; border-left: 4px solid #FFC107;">
+                        <div style="font-size: 0.85rem; color: #F57C00; font-weight: 600; margin-bottom: 5px;">RISQUE MOYEN</div>
+                        <div style="font-size: 1.8rem; font-weight: 700; color: #212121;" id="mediumRiskCount">0</div>
+                    </div>
+                    <div class="stat-card" style="background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50;">
+                        <div style="font-size: 0.85rem; color: #2E7D32; font-weight: 600; margin-bottom: 5px;">RISQUE FAIBLE</div>
+                        <div style="font-size: 1.8rem; font-weight: 700; color: #212121;" id="lowRiskCount">0</div>
+                    </div>
+                </div>
+
+                <!-- Liste des clients -->
+                <div id="screeningClientsList">
+                    <!-- Généré dynamiquement -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Commandes Web (Sans backdrop, déplaçable et redimensionnable) -->
+    <!-- Modal Clôture de Caisse -->
+    <div class="modal fade" id="clotureCaisseModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header" style="background: var(--primary-color, #dc3545); color: white;">
+                    <div>
+                        <h5 class="modal-title mb-0">
+                            <i class="fas fa-cash-register"></i> Clôture de caisse
+                        </h5>
+                        <small id="clotureCaisseSubtitle" style="opacity: 0.85;"></small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="background: #f8f9fa;">
+
+                    <!-- Historique des clôtures du jour -->
+                    <div id="clotureHistoriqueSection" style="display:none; margin-bottom: 1.5rem;">
+                        <h6 class="fw-bold mb-2" style="color:#dc3545;">
+                            <i class="fas fa-history"></i> Clôtures du jour
+                        </h6>
+                        <div id="clotureHistoriqueList" style="border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; background: white;"></div>
+                    </div>
+
+                    <!-- Formulaire nouvelle clôture -->
+                    <div style="background: white; border-radius: 10px; padding: 1.5rem; border: 1px solid #dee2e6; box-shadow: 0 1px 4px rgba(0,0,0,0.05);">
+                        <h6 class="fw-bold mb-3" style="color:#dc3545; border-bottom: 1px solid #f5c6cb; padding-bottom: 0.5rem;">
+                            <i class="fas fa-plus-circle" style="color:#dc3545;"></i> Nouvelle clôture
+                        </h6>
+
+                        <!-- Montant estimatif -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" style="font-size:0.9rem; color:#6c757d;">
+                                Montant espèces estimatif (pour information)
+                            </label>
+                            <div id="clotureEstimatifDisplay" style="background:#fff5f5; border:1px solid #f5c6cb; border-radius:6px; padding:10px 14px; font-size:1.1rem; font-weight:600; color:#dc3545;">
+                                <i class="fas fa-spinner fa-spin"></i> Calcul en cours...
+                            </div>
+                            <small class="text-muted">Total ventes du jour − paiements Bictorys (statut P)</small>
+                        </div>
+
+                        <!-- Montant espèces comptées -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="clotureMontantEspeces">
+                                Montant espèces comptées (FCFA) <span class="text-danger">*</span>
+                            </label>
+                            <input type="number" class="form-control form-control-lg" id="clotureMontantEspeces"
+                                   placeholder="Ex: 150000" min="0" step="500">
+                        </div>
+
+                        <!-- Fond de caisse -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="clotureFondCaisse">
+                                Fond de caisse à garder (FCFA)
+                            </label>
+                            <input type="number" class="form-control" id="clotureFondCaisse"
+                                   placeholder="Ex: 10000" min="0" step="500" value="0">
+                        </div>
+
+                        <!-- Commercial -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="clotureCommercial">
+                                Commercial(e) <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="clotureCommercial"
+                                   placeholder="Nom de la personne qui clôture" autocomplete="off">
+                        </div>
+
+                        <!-- Commentaire -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="clotureCommentaire">
+                                Commentaire
+                            </label>
+                            <textarea class="form-control" id="clotureCommentaire" rows="2"
+                                      placeholder="Remarques, incidents..."></textarea>
+                        </div>
+
+                        <!-- Avertissement upsert -->
+                        <div id="clotureUpsertWarning" class="alert alert-warning py-2 mb-0" style="display:none; font-size:0.85rem;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Une clôture existe déjà aujourd'hui pour ce point de vente. Elle sera remplacée comme référence de réconciliation, mais l'historique est conservé.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="background:white; border-top:1px solid #f5c6cb;">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Annuler
+                    </button>
+                    <button type="button" class="btn btn-lg" onclick="validerClotureCaisse()" style="background:#dc3545; color:white; border:none;">
+                        <i class="fas fa-check-circle"></i> Valider la caisse
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+</body>
+</html>
+
