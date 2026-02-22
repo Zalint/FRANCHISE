@@ -1234,10 +1234,10 @@ if (typeof produits === 'undefined') {
     alert('Erreur: Base de données des produits non chargée. Veuillez recharger la page.');
 }
 
-// Affichage de la catégorie : remplace "Import OCR" par "Superette"
+// Affichage de la catégorie : remplace "Import OCR" par "Epicerie"
 function formatCategorie(cat) {
     if (!cat) return '';
-    return cat === 'Import OCR' ? 'Superette' : cat;
+    return cat === 'Import OCR' ? 'Epicerie' : cat;
 }
 
 // Fonction pour peupler les catégories
@@ -12007,7 +12007,7 @@ async function calculerMargeStockSoirAPI(dateDebut, dateFin, pointVente = null) 
         const response = await fetch(`/api/external/stock-soir-marge?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&pointVente=${encodeURIComponent(pointVenteParam)}${ratiosParams}`, {
             method: 'GET',
             headers: {
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4',
                 'Content-Type': 'application/json'
             }
         });
@@ -12414,7 +12414,7 @@ async function fetchQuantitesReellesAbattage(dateDebut, dateFin, pointVente) {
         
         const response = await fetch(url, {
             headers: {
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
             }
         });
         
@@ -12480,7 +12480,7 @@ async function filtrerAnalyticsParPointVente(analyticsRegroupees, pointVente, da
         const response = await fetch(`/api/external/ventes?dateDebut=${dateDebutAPI}&dateFin=${dateFinAPI}&pointVente=${encodeURIComponent(pointVente)}`, {
             method: 'GET',
             headers: {
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
             }
         });
         
@@ -12568,7 +12568,7 @@ async function calculerRatioPerteDynamique(dateDebut, dateFin, pointVente, categ
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                        'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
                     }
                 });
                 
@@ -12645,7 +12645,7 @@ async function calculerStockSoir(dateFin, pointVente = null) {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
             }
         });
 
@@ -12859,7 +12859,7 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
         
         const response = await fetch(`/api/external/achats-boeuf?startDate=${dateDebutFormatted}&endDate=${dateFinFormatted}`, {
             headers: {
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
             }
         });
 
@@ -12964,7 +12964,7 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                 
                 const packResponse = await fetch(packApiUrl, {
                     headers: {
-                        'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                        'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
                     }
                 });
                 
@@ -13123,7 +13123,7 @@ async function calculerEtAfficherProxyMarges(analyticsRegroupees) {
                         const endDateFormatted = formatDateForApi(dateFin);
                         
                         const reconResponse = await fetch(`/api/external/reconciliation/aggregated?startDate=${startDateFormatted}&endDate=${endDateFormatted}`, {
-                            headers: { 'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1' }
+                            headers: { 'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4' }
                         });
                         
                         if (reconResponse.ok) {
@@ -13888,7 +13888,7 @@ async function genererDetailStockSoir(date, pointVente = null) {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
             }
         });
 
@@ -14236,7 +14236,7 @@ async function genererDetailStockSoirVariation(dateDebut, dateFin, pointVente = 
         const margeResponse = await fetch(`/api/external/stock-soir-marge?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&pointVente=${encodeURIComponent(pointVenteParam)}${ratiosParams}`, {
             method: 'GET',
             headers: {
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1',
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4',
                 'Content-Type': 'application/json'
             }
         });
@@ -14391,7 +14391,7 @@ async function genererCalculsMargeStockSoir(stockDebut, stockFin, dateDebut, dat
             
             const response = await fetch(`/api/external/achats-boeuf?startDate=${dateDebutFormatted}&endDate=${dateFinFormatted}`, {
                 headers: {
-                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                    'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
                 }
             });
             
@@ -14746,7 +14746,7 @@ async function calculerMargeStockSoirViaAPI(dateDebut, dateFin, pointVente, prix
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
             }
         });
         
@@ -14824,7 +14824,7 @@ async function calculerMargeStockSoirTotaux(stockDebut, stockFin, dateDebut, dat
             console.log(`🔍 Récupération prix d'achat via API externe: ${dateDebut} à ${dateFin}`);
             const response = await fetch(`/api/external/achats-boeuf?startDate=${dateDebut}&endDate=${dateFin}`, {
                 headers: {
-                    'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                    'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
                 }
             });
             const data = await response.json();
@@ -15172,7 +15172,7 @@ async function calculerTotauxMargeStockSoir(stockDebut, stockFin, dateDebut, dat
                 const dateFinFormatted = dateFinObj.toISOString().split('T')[0];
                 
                 const response = await fetch(`/api/external/achats-boeuf?startDate=${dateDebutFormatted}&endDate=${dateFinFormatted}`, {
-                    headers: { 'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1' }
+                    headers: { 'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4' }
                 });
                 
                 if (response.ok) {
@@ -15288,7 +15288,7 @@ async function calculerRatiosPerteOptimise(dateDebut, dateFin, pointVente) {
         // RÉVOLUTIONNAIRE: UN SEUL appel pour toute la période au lieu de 31 appels × 2 produits = 62 appels !
         const response = await fetch(`/api/external/reconciliation/aggregated?startDate=${startDateFormatted}&endDate=${endDateFormatted}`, {
             headers: {
-                'X-API-Key': 'b326e72b67a9b508c88270b9954c5ca1'
+                'X-API-Key': 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4'
             }
         });
         

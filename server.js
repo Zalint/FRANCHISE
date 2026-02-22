@@ -308,8 +308,8 @@ app.get('/inventaire-config.json', async (req, res) => {
             for (const produit of dbProduits) {
                 if (knownProducts.has(normalize(produit.nom))) continue; // déjà couvert
 
-                const rawCatName = produit.categorie_affichage || 'Superette';
-                const catName = rawCatName === 'Import OCR' ? 'Superette' : rawCatName;
+                const rawCatName = produit.categorie_affichage || 'Epicerie';
+                const catName = rawCatName === 'Import OCR' ? 'Epicerie' : rawCatName;
                 const catKey = 'DYN_' + catName.toUpperCase().replace(/[^A-Z0-9]/g, '_');
                 const unite = produit.unite_stock === 'kilo' ? 'kg' : 'pcs';
 

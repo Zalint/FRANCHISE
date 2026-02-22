@@ -532,6 +532,7 @@ async function chargerDonnees() {
         }
         
         console.log('📋 Affichage des catégories et produits...');
+        await chargerEpicerieCategories();
         afficherCategories();
         afficherProduits('all');
         
@@ -677,10 +678,36 @@ function demarrerHorloge() {
 }
 
 // ===== Display Categories =====
-// Regroupement des catégories : Import OCR → Superette, reste → Boucherie
-const SUPERETTE_SOURCE = 'Import OCR';
+// Regroupement des catégories : Import OCR → Epicerie, reste → Boucherie
+const EPICERIE_SOURCE = 'Import OCR';
 function getCategoryGroup(catKey) {
-    return catKey === SUPERETTE_SOURCE ? 'Superette' : 'Boucherie';
+    return catKey === EPICERIE_SOURCE ? 'Epicerie' : 'Boucherie';
+}
+
+// Sous-catégories Epicerie — chargées depuis config/epicerie-categories.json
+let EPICERIE_SUBCATS_MAP = {};   // produit → sous-catégorie
+let EPICERIE_SUBCATS_ORDER = []; // ordre d'affichage
+
+async function chargerEpicerieCategories() {
+    try {
+        const res = await fetch('/config/epicerie-categories.json', { cache: 'no-cache' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        EPICERIE_SUBCATS_ORDER = Object.keys(data.subcategories);
+        EPICERIE_SUBCATS_MAP = {};
+        for (const [subcat, produits] of Object.entries(data.subcategories)) {
+            for (const nom of produits) {
+                EPICERIE_SUBCATS_MAP[nom] = subcat;
+            }
+        }
+        console.log(`✅ Epicerie : ${EPICERIE_SUBCATS_ORDER.length} sous-catégories chargées`);
+    } catch (e) {
+        console.warn('⚠️ epicerie-categories.json non chargé, pas de sous-catégories:', e.message);
+    }
+}
+
+function getEpicerieSubCat(productName) {
+    return EPICERIE_SUBCATS_MAP[productName] || 'Autres';
 }
 
 function afficherCategories() {
@@ -688,8 +715,8 @@ function afficherCategories() {
     const container = document.getElementById('categoriesList');
     container.innerHTML = '';
 
-    const grouped = ['all', 'Superette', 'Boucherie'];
-    const labels = { all: 'Tous', Superette: 'Superette', Boucherie: 'Boucherie' };
+    const grouped = ['all', 'Epicerie', 'Boucherie'];
+    const labels = { all: 'Tous', Epicerie: 'Epicerie', Boucherie: 'Boucherie' };
 
     grouped.forEach(key => {
         const btn = document.createElement('button');
@@ -700,36 +727,18 @@ function afficherCategories() {
         container.appendChild(btn);
     });
 
-    // Sous-catégories Boucherie (toutes les catégories sauf Import OCR)
+    // Sous-catégories : masquées par défaut, remplies à la sélection
     const subContainer = document.getElementById('subCategoriesList');
     if (subContainer) {
         subContainer.innerHTML = '';
-        const boucherieSubCats = Object.keys(products).filter(k => k !== SUPERETTE_SOURCE);
-        if (boucherieSubCats.length > 0) {
-            // Bouton "Tous" pour réinitialiser le filtre sous-catégorie
-            const allBtn = document.createElement('button');
-            allBtn.className = 'subcategory-btn active';
-            allBtn.textContent = 'Tous';
-            allBtn.dataset.subcat = 'all';
-            allBtn.onclick = () => selectionnerSousCategorie('all', allBtn);
-            subContainer.appendChild(allBtn);
-
-            boucherieSubCats.forEach(catKey => {
-                const btn = document.createElement('button');
-                btn.className = 'subcategory-btn';
-                btn.textContent = catKey;
-                btn.dataset.subcat = catKey;
-                btn.onclick = () => selectionnerSousCategorie(catKey, btn);
-                subContainer.appendChild(btn);
-            });
-        }
+        subContainer.style.display = 'none';
     }
 
     // Mobile dropdown
     const dropdown = document.getElementById('categoryDropdown');
     if (dropdown) {
         dropdown.innerHTML = '<option value="all">Toutes les catégories</option>';
-        ['Superette', 'Boucherie'].forEach(g => {
+        ['Epicerie', 'Boucherie'].forEach(g => {
             const option = document.createElement('option');
             option.value = g;
             option.textContent = g;
@@ -742,6 +751,25 @@ function afficherCategories() {
     }
 }
 
+function _peuplerSousCats(subContainer, subCats) {
+    subContainer.innerHTML = '';
+    const allBtn = document.createElement('button');
+    allBtn.className = 'subcategory-btn active';
+    allBtn.textContent = 'Tous';
+    allBtn.dataset.subcat = 'all';
+    allBtn.onclick = () => selectionnerSousCategorie('all', allBtn);
+    subContainer.appendChild(allBtn);
+    subCats.forEach(catKey => {
+        const btn = document.createElement('button');
+        btn.className = 'subcategory-btn';
+        btn.textContent = catKey;
+        btn.dataset.subcat = catKey;
+        btn.onclick = () => selectionnerSousCategorie(catKey, btn);
+        subContainer.appendChild(btn);
+    });
+    subContainer.style.display = 'flex';
+}
+
 function selectionnerCategorie(categoryKey, btnElement) {
     document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
     btnElement.classList.add('active');
@@ -749,14 +777,17 @@ function selectionnerCategorie(categoryKey, btnElement) {
     currentCategory = categoryKey;
     currentSubCategory = 'all';
 
-    // Afficher/masquer les sous-catégories selon la catégorie sélectionnée
     const subContainer = document.getElementById('subCategoriesList');
     if (subContainer) {
-        subContainer.style.display = (categoryKey === 'Boucherie') ? 'flex' : 'none';
-        // Réinitialiser le bouton actif
-        subContainer.querySelectorAll('.subcategory-btn').forEach(b => b.classList.remove('active'));
-        const allBtn = subContainer.querySelector('[data-subcat="all"]');
-        if (allBtn) allBtn.classList.add('active');
+        if (categoryKey === 'Boucherie') {
+            const boucherieSubCats = Object.keys(products).filter(k => k !== EPICERIE_SOURCE);
+            _peuplerSousCats(subContainer, boucherieSubCats);
+        } else if (categoryKey === 'Epicerie') {
+            _peuplerSousCats(subContainer, EPICERIE_SUBCATS_ORDER);
+        } else {
+            subContainer.innerHTML = '';
+            subContainer.style.display = 'none';
+        }
     }
 
     afficherProduits(categoryKey);
@@ -783,18 +814,23 @@ function afficherProduits(categoryKey) {
     
     let productsToShow = [];
 
-    // Superette = Import OCR, Boucherie = tout le reste
+    // Epicerie = Import OCR, Boucherie = tout le reste
     for (const [catKey, catProducts] of Object.entries(products)) {
         const group = getCategoryGroup(catKey);
         if (categoryKey !== 'all' && group !== categoryKey) continue;
-        // Filtre sous-catégorie (uniquement pour Boucherie)
+        // Filtre sous-catégorie Boucherie
         if (group === 'Boucherie' && currentSubCategory !== 'all' && catKey !== currentSubCategory) continue;
         for (const [productName, productData] of Object.entries(catProducts)) {
+            // Filtre sous-catégorie Epicerie
+            if (group === 'Epicerie' && currentSubCategory !== 'all') {
+                if (getEpicerieSubCat(productName) !== currentSubCategory) continue;
+            }
             const price = typeof productData === 'object' ? (productData.default || 0) : productData;
+            const displaySubCat = group === 'Epicerie' ? getEpicerieSubCat(productName) : catKey;
             productsToShow.push({
                 name: productName,
                 price: price,
-                category: group === 'Boucherie' ? catKey : group
+                category: group === 'Boucherie' ? catKey : displaySubCat
             });
         }
     }
@@ -822,7 +858,7 @@ function creerCarteProduct(product) {
     content.innerHTML = `
         <div class="product-name">${product.name}</div>
         <div class="product-price">${formatCurrency(product.price)}</div>
-        <div class="product-category">${product.category === 'Import OCR' ? 'Superette' : product.category}</div>
+        <div class="product-category">${product.category === 'Import OCR' ? 'Epicerie' : product.category}</div>
     `;
     
     // Add button for mobile
