@@ -1,4 +1,4 @@
-﻿// Démarrage du script
+// Démarrage du script
 
 // Variables globales pour les points de vente (déclarées en premier pour éviter les erreurs de temporal dead zone)
 var POINTS_VENTE_PHYSIQUES = [];
@@ -1213,6 +1213,12 @@ console.log('Vérification de la disponibilité de l\'objet produits:', typeof p
 if (typeof produits === 'undefined') {
     console.error('Erreur: L\'objet produits n\'est pas disponible. Vérifiez que produits.js est chargé correctement.');
     alert('Erreur: Base de données des produits non chargée. Veuillez recharger la page.');
+}
+
+// Affichage de la catégorie : remplace "Import OCR" par "Superette"
+function formatCategorie(cat) {
+    if (!cat) return '';
+    return cat === 'Import OCR' ? 'Superette' : cat;
 }
 
 // Fonction pour peupler les catégories
@@ -2434,7 +2440,7 @@ function afficherDernieresVentes(ventes) {
         row.insertCell().textContent = vente.Semaine || "";
         row.insertCell().textContent = vente.PointDeVente || vente['Point de Vente'] || vente.pointVente|| "";
         row.insertCell().textContent = vente.Preparation || "";
-        row.insertCell().textContent = vente.Categorie || vente.Catégorie || vente.categorie || "";
+        row.insertCell().textContent = formatCategorie(vente.Categorie || vente.Catégorie || vente.categorie || "");
         row.insertCell().textContent = vente.Produit || "";
         row.insertCell().textContent = vente.PU !== undefined && vente.PU !== null ? parseFloat(vente.PU).toLocaleString('fr-FR') : "";
         row.insertCell().textContent = vente.Nombre !== undefined && vente.Nombre !== null ? parseFloat(vente.Nombre).toLocaleString('fr-FR') : "";
@@ -3812,7 +3818,7 @@ function afficherPageVentes(page) {
             <td>${vente.Semaine || vente.semaine || ''}</td>
             <td>${vente['Point de Vente'] || vente.pointVente || ''}</td>
             <td>${vente.Preparation || vente.preparation || vente['Point de Vente'] || vente.pointVente || ''}</td>
-            <td>${vente.Catégorie || vente.categorie || ''}</td>
+            <td>${formatCategorie(vente.Catégorie || vente.categorie || '')}</td>
             <td>${vente.Produit || vente.produit || ''}</td>
             <td>${(parseFloat(vente.PU || vente.prixUnit || 0)).toLocaleString('fr-FR')} FCFA</td>
             <td>${vente.Nombre || vente.quantite || 0}</td>
@@ -4589,7 +4595,7 @@ function formaterDonneesVentes(ventes) {
             Semaine: v.Semaine || v.semaine || '',
             'Point de Vente': v['Point de Vente'] || v.pointVente || '',
             Preparation: v.Preparation || v.preparation || v['Point de Vente'] || v.pointVente || '',
-            Catégorie: v.Catégorie || v.categorie || '',
+            Catégorie: formatCategorie(v.Catégorie || v.categorie || ''),
             Produit: v.Produit || v.produit || '',
             PU: v.PU || v.prixUnit || '0',
             Nombre: v.Nombre || v.quantite || '0',
@@ -9472,7 +9478,7 @@ async function exportVisualisationToExcel() {
             'Semaine': vente.Semaine || vente.semaine || '',
             'Point de Vente': vente['Point de Vente'] || vente.pointVente || '',
             'Préparation': vente.Preparation || vente.preparation || vente['Point de Vente'] || vente.pointVente || '',
-            'Catégorie': vente.Catégorie || vente.categorie || '',
+            'Catégorie': formatCategorie(vente.Catégorie || vente.categorie || ''),
             'Produit': vente.Produit || vente.produit || '',
             'Prix Unitaire': parseFloat(vente.PU || vente.prixUnit || 0),
             'Quantité': parseFloat(vente.Nombre || vente.quantite || 0),

@@ -65,13 +65,7 @@ function applyClientConfig() {
         document.documentElement.style.setProperty('--client-primary-color', clientConfig.clientColor);
     }
     
-    // Mettre à jour le titre de la page
-    if (clientConfig.clientName) {
-        const currentTitle = document.title;
-        if (!currentTitle.includes(clientConfig.clientName)) {
-            document.title = `${clientConfig.clientName} - ${currentTitle}`;
-        }
-    }
+    // Titre de la page inchangé (nom client non ajouté)
     
     console.log('✅ Configuration client appliquée');
 }

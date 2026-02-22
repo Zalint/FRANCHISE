@@ -822,7 +822,7 @@ function creerCarteProduct(product) {
     content.innerHTML = `
         <div class="product-name">${product.name}</div>
         <div class="product-price">${formatCurrency(product.price)}</div>
-        <div class="product-category">${product.category}</div>
+        <div class="product-category">${product.category === 'Import OCR' ? 'Superette' : product.category}</div>
     `;
     
     // Add button for mobile
