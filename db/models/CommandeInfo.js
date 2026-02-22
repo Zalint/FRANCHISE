@@ -101,6 +101,7 @@ const CommandeInfo = sequelize.define('CommandeInfo', {
 }, {
   tableName: 'commande_infos',
   timestamps: true,
+  underscored: true,
   indexes: [
     {
       fields: ['commande_id'],
@@ -116,7 +117,7 @@ const CommandeInfo = sequelize.define('CommandeInfo', {
       fields: ['payment_status']
     },
     {
-      fields: ['createdAt']
+      fields: ['created_at']
     }
   ]
 });
