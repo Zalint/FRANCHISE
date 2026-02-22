@@ -238,15 +238,12 @@ async function loadBrandConfig() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         brandConfig = await response.json();
-        // Synchroniser KEUR_BALLI avec nomDuClient.json
+        // Synchroniser KEUR_BALLI avec nomDuClient.json (sans écraser les téléphones du JSON)
+        const existingKeurBalli = brandConfig["KEUR_BALLI"] || {};
         brandConfig["KEUR_BALLI"] = {
-            "nom_complet": nomClient.nom || "Keur BALLI",
-            "slogan": "",
-            "site_web": nomClient.site_web || "",
-            "telephones": [],
-            "adresse_siege": "Dakar, Sénégal",
-            "footer_facture": "Merci de votre confiance !",
-            "footer_whatsapp": "Merci de votre confiance !"
+            ...existingKeurBalli,
+            "nom_complet": nomClient.nom || existingKeurBalli.nom_complet || "Keur BALLI",
+            "site_web": nomClient.site_web || existingKeurBalli.site_web || "",
         };
         console.log('✅ Brand configuration loaded:', Object.keys(brandConfig));
     } catch (error) {
@@ -263,6 +260,7 @@ async function loadBrandConfig() {
                 "footer_whatsapp": "Merci de votre confiance !"
             }
         };
+        console.warn('⚠️ Fallback brand config : téléphones non chargés depuis brand-config.json');
     }
 }
 
@@ -6933,20 +6931,24 @@ async function imprimerTicketThermique(commandeId) {
     // Téléphones - use config if available
     if (config && config.telephones && config.telephones.length > 0) {
         config.telephones.forEach(tel => {
-            // Formater le numéro : enlever +221 et espaces, puis reformater
-            let numero = tel.numero.replace(/\+221\s*/g, '').replace(/\s+/g, '');
-            // Format: XX XXX XX XX (standard sénégalais)
-            if (numero.length === 9) {
-                numero = numero.substring(0, 2) + ' ' + numero.substring(2, 5) + ' ' + numero.substring(5, 7) + ' ' + numero.substring(7, 9);
+            // Support nouveau format { point_vente, numeros: [] } et ancien { point_vente, numero }
+            let numerosFormattes;
+            if (tel.numeros && Array.isArray(tel.numeros)) {
+                numerosFormattes = tel.numeros.join(' ou ');
+            } else if (tel.numero) {
+                let n = tel.numero.replace(/\+221\s*/g, '').replace(/\s+/g, '');
+                if (n.length === 9) {
+                    n = n.substring(0, 2) + ' ' + n.substring(2, 5) + ' ' + n.substring(5, 7) + ' ' + n.substring(7, 9);
+                }
+                numerosFormattes = n;
             }
-            const telLine = tel.point_vente ? `${tel.point_vente} ${numero}` : numero;
+            const telLine = tel.point_vente ? `${tel.point_vente} ${numerosFormattes}` : numerosFormattes;
             ticket += centrer(telLine) + '\n';
         });
     } else {
         // Fallback
-        ticket += centrer('O.Foire 78 480 95 95') + '\n';
-        ticket += centrer('Mbao 77 858 96 96') + '\n';
-        ticket += centrer('Keur Massar 78 777 26 26') + '\n';
+        ticket += centrer('Liberté 5 78 607 18 18 ou 78 732 57 57') + '\n';
+        ticket += centrer('Almadies 2 78 607 18 18 ou 78 732 57 57') + '\n';
     }
     ticket += SEPARATEUR + '\n';
     ticket += '\n';
