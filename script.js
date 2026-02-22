@@ -934,6 +934,25 @@ async function checkAuth() {
             if (analyticsSection) analyticsSection.style.display = 'none';
         }
         
+        // Import Image - réservé aux utilisateurs avancés (pas les users simples)
+        const importImageItem = document.getElementById('import-image-item');
+        if (importImageItem) {
+            importImageItem.style.display = currentUser.canManageAdvanced ? '' : 'none';
+        }
+
+        // Config Admin - réservé aux administrateurs uniquement
+        const configAdminItem = document.getElementById('config-admin-item');
+        if (configAdminItem) {
+            configAdminItem.style.display = currentUser.role === 'admin' ? '' : 'none';
+        }
+
+        // Bouton "Supprimer ventes du jour" - réservé aux superviseurs et admins
+        const btnSupprimerVentesJourAuth = document.getElementById('btn-supprimer-ventes-jour');
+        if (btnSupprimerVentesJourAuth) {
+            const canDelete = currentUser.role === 'admin';
+            btnSupprimerVentesJourAuth.style.display = canDelete ? 'inline-block' : 'none';
+        }
+
         // Vérifier l'accès au chat Relevance AI
         if (!currentUser.canAccessChat) {
             // Désactiver le chat pour les utilisateurs non autorisés

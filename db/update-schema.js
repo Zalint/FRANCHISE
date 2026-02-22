@@ -55,6 +55,13 @@ async function updateSchema() {
             console.log('La table cash_payments existe déjà');
         }
         
+        // Ajouter la colonne default_screen à la table users si elle n'existe pas
+        await sequelize.query(`
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS default_screen VARCHAR(100) DEFAULT NULL
+        `);
+        console.log('Colonne default_screen vérifiée/ajoutée dans la table users');
+
         console.log('Mise à jour du schéma terminée avec succès');
         return true;
     } catch (error) {

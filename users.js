@@ -24,7 +24,8 @@ async function loadUsers() {
             password: u.password,
             role: u.role,
             pointVente: u.acces_tous_points ? 'tous' : (u.pointsVente?.map(pv => pv.nom) || []),
-            active: u.active
+            active: u.active,
+            default_screen: u.default_screen || null
         }));
         
         cacheLoaded = true;
@@ -102,6 +103,7 @@ async function verifyCredentials(username, password) {
             role: role,
             pointVente: pointVente,
             active: user.active,
+            default_screen: user.default_screen || null,
             // Rôles hiérarchiques
             isAdmin: role === 'admin',
             isSuperUtilisateur: role === 'superutilisateur',
@@ -247,7 +249,8 @@ async function getAllUsers() {
         username: user.username,
         role: user.role,
         pointVente: user.acces_tous_points ? 'tous' : (user.pointsVente?.map(pv => pv.nom) || []),
-        active: user.active
+        active: user.active,
+        default_screen: user.default_screen || null
     }));
 }
 

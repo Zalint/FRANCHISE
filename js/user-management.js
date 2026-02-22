@@ -114,12 +114,25 @@ async function loadUsers() {
     }
 }
 
+// Écrans disponibles pour la sélection
+const AVAILABLE_SCREENS = [
+    { value: '', label: '— Par défaut (index.html) —' },
+    { value: 'index.html', label: 'Tableau de bord' },
+    { value: 'pos.html', label: 'Point de Vente (POS)' },
+    { value: 'Realtime.html', label: 'Temps Réel' },
+    { value: 'auditClient.html', label: 'Audit Client' }
+];
+
 // Afficher les utilisateurs dans le tableau
 function displayUsers() {
     const tbody = document.getElementById('usersTableBody');
     tbody.innerHTML = '';
     
     users.forEach(user => {
+        const screenOptions = AVAILABLE_SCREENS.map(s => 
+            `<option value="${s.value}" ${(user.default_screen || '') === s.value ? 'selected' : ''}>${s.label}</option>`
+        ).join('');
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
@@ -136,6 +149,14 @@ function displayUsers() {
                 <span class="badge ${user.active ? 'bg-success' : 'bg-secondary'} status-badge">
                     ${user.active ? 'Actif' : 'Inactif'}
                 </span>
+            </td>
+            <td>
+                ${user.username !== 'ADMIN' ? `
+                    <select class="form-select form-select-sm" style="min-width:160px"
+                            onchange="updateDefaultScreen('${user.username}', this.value, this)">
+                        ${screenOptions}
+                    </select>
+                ` : '<span class="text-muted">—</span>'}
             </td>
             <td>
                 ${user.username !== 'ADMIN' ? `
@@ -159,6 +180,37 @@ function displayUsers() {
         `;
         tbody.appendChild(tr);
     });
+}
+
+// Mettre à jour l'écran par défaut d'un utilisateur
+async function updateDefaultScreen(username, screen, selectEl) {
+    const originalValue = users.find(u => u.username === username)?.default_screen || '';
+    try {
+        selectEl.disabled = true;
+        const response = await fetch(`/api/admin/users/${username}/default-screen`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ default_screen: screen })
+        });
+        const data = await response.json();
+        if (data.success) {
+            // Mettre à jour le cache local
+            const user = users.find(u => u.username === username);
+            if (user) user.default_screen = screen || null;
+            selectEl.style.borderColor = '#198754';
+            setTimeout(() => { selectEl.style.borderColor = ''; }, 1500);
+        } else {
+            alert('Erreur : ' + data.message);
+            selectEl.value = originalValue;
+        }
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour de l\'écran par défaut:', error);
+        alert('Erreur lors de la mise à jour');
+        selectEl.value = originalValue;
+    } finally {
+        selectEl.disabled = false;
+    }
 }
 
 // Créer un nouvel utilisateur

@@ -89,7 +89,7 @@ async function reloadProduitsConfig() {
 }
 const bcrypt = require('bcrypt');
 const fsPromises = require('fs').promises;
-const { Vente, Stock, Transfert, Reconciliation, CashPayment, AchatBoeuf, Depense, WeightParams, Precommande, ClientAbonne, PaiementAbonnement, PerformanceAchat } = require('./db/models');
+const { Vente, Stock, Transfert, Reconciliation, CashPayment, AchatBoeuf, Depense, WeightParams, Precommande, ClientAbonne, PaiementAbonnement, PerformanceAchat, User } = require('./db/models');
 const { testConnection, sequelize } = require('./db');
 const { Op, fn, col, literal } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
@@ -1919,20 +1919,57 @@ app.get('/api/dernieres-ventes', checkAuth, checkReadAccess, async (req, res) =>
 });
 
 // Route pour la redirection après connexion
-app.get('/redirect', (req, res) => {
+app.get('/redirect', async (req, res) => {
     console.log('Redirection demandée, session:', req.session);
     if (req.session.user) {
         if (req.session.user.username === 'ADMIN') {
-            // L'utilisateur ADMIN va directement à la gestion des utilisateurs
-            res.sendFile(path.join(__dirname, 'user-management.html'));
-        } else if (req.session.user.isSuperAdmin) {
-            res.sendFile(path.join(__dirname, 'admin.html'));
-        } else {
-            res.sendFile(path.join(__dirname, 'index.html'));
+            return res.sendFile(path.join(__dirname, 'user-management.html'));
         }
+        if (req.session.user.isSuperAdmin) {
+            return res.sendFile(path.join(__dirname, 'admin.html'));
+        }
+
+        // Lire default_screen depuis la BDD (pas la session, qui peut être ancienne)
+        try {
+            const allowedScreens = ['index.html', 'pos.html', 'Realtime.html', 'auditClient.html'];
+            const dbUser = await User.findOne({ where: { username: req.session.user.username }, attributes: ['default_screen'] });
+            const screen = dbUser && dbUser.default_screen;
+            if (screen && allowedScreens.includes(screen)) {
+                // Mettre à jour la session pour les prochains accès
+                req.session.user.default_screen = screen;
+                return res.sendFile(path.join(__dirname, screen));
+            }
+        } catch (e) {
+            console.error('Erreur lecture default_screen:', e.message);
+        }
+
+        return res.sendFile(path.join(__dirname, 'index.html'));
     } else {
         console.log('Pas de session utilisateur, redirection vers login');
         res.redirect('/login.html');
+    }
+});
+
+// Mettre à jour l'écran par défaut d'un utilisateur
+app.patch('/api/admin/users/:username/default-screen', checkAuth, checkAdmin, async (req, res) => {
+    try {
+        const { username } = req.params;
+        const { default_screen } = req.body;
+
+        if (username === 'ADMIN') {
+            return res.status(400).json({ success: false, message: 'Impossible de modifier l\'administrateur principal' });
+        }
+
+        const allowedScreens = ['', 'index.html', 'pos.html', 'Realtime.html', 'auditClient.html'];
+        if (!allowedScreens.includes(default_screen)) {
+            return res.status(400).json({ success: false, message: 'Écran non autorisé' });
+        }
+
+        await users.updateUser(username, { default_screen: default_screen || null });
+        res.json({ success: true, message: 'Écran par défaut mis à jour' });
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour de l\'écran par défaut:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
@@ -2275,26 +2312,24 @@ function checkSaleTimeRestrictions(dateStr, username, userRole = null) {
         }
     }
     
-    // Tous les utilisateurs non privilégiés ont des restrictions temporelles (4h du matin)
+    // Tous les utilisateurs non privilégiés ont des restrictions temporelles
     try {
         // Parser la date (formats supportés : DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, YYYY/MM/DD)
-        const ddmmyyyyRegex = /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/; // DD-MM-YYYY ou DD/MM/YYYY
-        const yyyymmddRegex = /^(\d{4})[-\/](\d{2})[-\/](\d{2})$/; // YYYY-MM-DD ou YYYY/MM/DD
+        const ddmmyyyyRegex = /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/;
+        const yyyymmddRegex = /^(\d{4})[-\/](\d{2})[-\/](\d{2})$/;
         
         let match = dateStr.match(ddmmyyyyRegex);
         let day, month, year;
         
         if (match) {
-            // Format DD-MM-YYYY ou DD/MM/YYYY
             day = parseInt(match[1]);
-            month = parseInt(match[2]) - 1; // Mois commence à 0 en JavaScript
+            month = parseInt(match[2]) - 1;
             year = parseInt(match[3]);
         } else {
             match = dateStr.match(yyyymmddRegex);
             if (match) {
-                // Format YYYY-MM-DD ou YYYY/MM/DD
                 year = parseInt(match[1]);
-                month = parseInt(match[2]) - 1; // Mois commence à 0 en JavaScript
+                month = parseInt(match[2]) - 1;
                 day = parseInt(match[3]);
             } else {
                 return { allowed: false, message: 'Format de date invalide' };
@@ -2302,15 +2337,28 @@ function checkSaleTimeRestrictions(dateStr, username, userRole = null) {
         }
         
         const targetDate = new Date(year, month, day);
-        
         const now = new Date();
-        
-        // Calculer la date limite : targetDate + 1 jour + 4h
+
+        // Utilisateurs simples (role 'user') : uniquement le jour J, pas après minuit
+        if (userRole === 'user') {
+            const deadlineDate = new Date(targetDate);
+            deadlineDate.setDate(deadlineDate.getDate() + 1);
+            deadlineDate.setHours(0, 0, 0, 0); // minuit = début du jour suivant
+            if (now < deadlineDate) {
+                return { allowed: true };
+            } else {
+                return {
+                    allowed: false,
+                    message: `Vous ne pouvez pas modifier/supprimer des ventes pour cette date (${dateStr}). Les utilisateurs simples ne peuvent agir que le jour J avant minuit.`
+                };
+            }
+        }
+
+        // Autres utilisateurs non privilégiés : jusqu'à 4h du matin le lendemain
         const deadlineDate = new Date(targetDate);
         deadlineDate.setDate(deadlineDate.getDate() + 1);
         deadlineDate.setHours(4, 0, 0, 0); // 4h00 du matin
         
-        // L'action est autorisée si nous sommes avant la date limite
         if (now <= deadlineDate) {
             return { allowed: true };
         } else {
@@ -15135,6 +15183,14 @@ app.delete('/api/commandes/:commandeId', checkAuth, checkWriteAccess, async (req
                 return res.status(403).json({ success: false, message: 'Accès non autorisé à ce point de vente' });
             }
         }
+        // Vérifier les restrictions temporelles (date de la première vente de la commande)
+        const venteDate = ventes[0].date;
+        const timeRestriction = checkSaleTimeRestrictions(venteDate, req.session.user.username, req.session.user.role);
+        if (!timeRestriction.allowed) {
+            await transaction.rollback();
+            return res.status(403).json({ success: false, message: timeRestriction.message, timeRestriction: true });
+        }
+
         const commandeInfoRow = await CommandeInfo.findOne({ where: { commande_id: commandeId }, transaction });
         if (commandeInfoRow) {
             await CommandeInfo.destroy({ where: { commande_id: commandeId }, transaction });

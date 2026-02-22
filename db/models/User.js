@@ -37,6 +37,12 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: true
+  },
+  default_screen: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    defaultValue: null,
+    comment: 'Fichier HTML de l\'écran par défaut après connexion (ex: index.html, pos.html)'
   }
 }, {
   tableName: 'users',
