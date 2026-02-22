@@ -98,8 +98,16 @@
                 <button class="btn-icon btn-icon-only" onclick="window.location.href='index.html'" title="Retour mode Standard">
                     <i class="fas fa-desktop"></i>
                 </button>
+                <button class="btn-header-toggle" onclick="togglePosHeader()" title="Masquer l'en-tête">
+                    <i class="fas fa-chevron-up" id="headerToggleIcon"></i>
+                </button>
             </div>
         </header>
+
+        <!-- Reveal tab (shown when header is hidden) -->
+        <button class="header-reveal-tab" id="headerRevealTab" onclick="togglePosHeader()" title="Afficher l'en-tête">
+            <i class="fas fa-chevron-down"></i>
+        </button>
 
         <!-- Main Content -->
         <div class="pos-main">

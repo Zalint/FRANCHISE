@@ -8395,8 +8395,9 @@ app.get('/api/audit-client', checkAuth, async (req, res) => {
         console.log(`📞 Requête audit client pour: ${phone_number} par ${req.session.user.username}`);
         
         // Appel à l'API externe
-        const externalApiUrl = `https://matix-livreur-backend.onrender.com/api/external/mata/audit/client?phone_number=${encodeURIComponent(phone_number)}`;
-        const apiKey = process.env.EXTERNAL_API_KEY || 'b9463219d81f727b8c1c9dc52f622cf054eb155e49b37aad98da68ee09677be4';
+        const externalApiBaseUrl = process.env.EXTERNAL_API_BASE_URL || 'http://localhost:4000';
+        const externalApiUrl = `${externalApiBaseUrl}/api/external/mata/audit/client?phone_number=${encodeURIComponent(phone_number)}`;
+        const apiKey = process.env.EXTERNAL_API_KEY;
         
         const response = await axios.get(externalApiUrl, {
             headers: {
@@ -15630,8 +15631,8 @@ app.post('/api/credit/use', checkAuth, async (req, res) => {
         const { phone_number, amount_used, order_id, version } = req.body;
         if (!phone_number || !amount_used || !order_id) return res.status(400).json({ success: false, error: 'phone_number, amount_used et order_id sont requis' });
         if (version === undefined || version === null) return res.status(400).json({ success: false, error: 'version est requise pour éviter les conflits' });
-        const isLocal = process.env.NODE_ENV !== 'production';
-        const externalApiUrl = isLocal ? 'http://localhost:4000/api/external/clients/credits/use' : 'https://matix-livreur-backend.onrender.com/api/external/clients/credits/use';
+        const externalApiBaseUrl = process.env.EXTERNAL_API_BASE_URL || 'http://localhost:4000';
+        const externalApiUrl = `${externalApiBaseUrl}/api/external/clients/credits/use`;
         const apiKey = process.env.EXTERNAL_API_KEY;
         if (!apiKey) throw new Error('EXTERNAL_API_KEY manquant');
         const response = await axios.post(externalApiUrl, { phone_number, amount_used, order_id, version }, { headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' }, timeout: 10000 });
@@ -15647,8 +15648,8 @@ app.post('/api/credit/refund', checkAuth, async (req, res) => {
         const { phone_number, amount, order_id, version } = req.body;
         if (!phone_number || !amount || !order_id) return res.status(400).json({ success: false, error: 'phone_number, amount et order_id sont requis' });
         if (version === undefined || version === null) return res.status(400).json({ success: false, error: 'version est requise pour éviter les conflits' });
-        const isLocal = process.env.NODE_ENV !== 'production';
-        const externalApiUrl = isLocal ? 'http://localhost:4000/api/external/clients/credits/refund' : 'https://matix-livreur-backend.onrender.com/api/external/clients/credits/refund';
+        const externalApiBaseUrl = process.env.EXTERNAL_API_BASE_URL || 'http://localhost:4000';
+        const externalApiUrl = `${externalApiBaseUrl}/api/external/clients/credits/refund`;
         const apiKey = process.env.EXTERNAL_API_KEY;
         if (!apiKey) throw new Error('EXTERNAL_API_KEY manquant');
         const response = await axios.post(externalApiUrl, { phone_number, amount, order_id, version }, { headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' }, timeout: 10000 });

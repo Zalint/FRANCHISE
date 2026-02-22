@@ -75,7 +75,62 @@ input, textarea, .selectable {
     align-items: center;
     box-shadow: var(--shadow);
     z-index: 100;
+    overflow: hidden;
+    max-height: 200px;
+    transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.25s ease;
 }
+
+/* ===== Header hidden state ===== */
+.pos-container.header-hidden .pos-header {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Tab to reveal header when hidden */
+.header-reveal-tab {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 0 0 10px 10px;
+    padding: 3px 18px 5px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    z-index: 9999;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    opacity: 0.85;
+    transition: opacity 0.2s;
+}
+.header-reveal-tab:hover { opacity: 1; }
+body.header-hidden-state .header-reveal-tab {
+    display: block;
+}
+
+/* Toggle button inside header */
+.btn-header-toggle {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background 0.2s;
+    margin-left: 6px;
+    flex-shrink: 0;
+}
+.btn-header-toggle:hover { background: rgba(255,255,255,0.28); }
 
 .header-left {
     flex: 1;

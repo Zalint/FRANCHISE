@@ -1,22 +1,7 @@
 {
-  "api_url": "https://matix-livreur-backend.onrender.com",
+  "api_url": "",
   "livreurs_actifs": [
-    "Aliou",
-    "Babacar",
-    "Omar",
-    "Bamba",
-    "Diallo",
-    "Ibrahima",
-    "Malou",
-    "Mane",
-    "Massaer",
-    "Diaby",
-    "Bouna",
-    "Djibril",
-    "Ousmane",
-    "Moussa",
-    "Mamadou",
-    "Diama" 
+    "Aliou"
   ]
 }
 
