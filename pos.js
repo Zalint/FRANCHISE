@@ -7059,26 +7059,31 @@ async function imprimerTicketThermique(commandeId) {
     
     
     // Store both versions globally for use by share functions
-    window.currentTicketText = ticket;      // Human-readable for WhatsApp/SMS/Email/preview
-    window.currentTicketEscPos = ticketEscPos; // With ESC/POS codes for thermal printers
+    window.currentTicketText = ticket;
+    window.currentTicketEscPos = ticketEscPos;
     window.currentCommandeId = commandeId;
-    
-    // Partage direct via navigator.share (plus rapide)
-    if (navigator.share) {
-        navigator.share({
-            title: `Ticket - ${commandeId}`,
-            text: ticket
-        }).then(() => {
-            console.log('Ticket partagé avec succès');
-        }).catch((error) => {
-            // Si annulé ou erreur, ouvrir le modal avec options
-            console.log('Partage annulé, ouverture modal:', error);
-            ouvrirModalPartageTicket(ticket, commandeId);
+
+    // Tenter l'impression directe (sans dialog) via le serveur local
+    try {
+        const printRes = await fetch('/api/print-direct', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticket, printerName: 'Generic / Text Only' })
         });
-    } else {
-        // Desktop ou navigateur sans support : ouvrir le modal
-        ouvrirModalPartageTicket(ticket, commandeId);
+        const printData = await printRes.json();
+        if (printData.success) {
+            showToast('🖨️ Ticket envoyé à l\'imprimante', 'success');
+            return;
+        }
+        // Si échec (ex: prod), fallback vers popup
+        console.warn('⚠️ Impression directe échouée, fallback popup:', printData.message);
+    } catch (e) {
+        console.warn('⚠️ /api/print-direct non disponible, fallback popup:', e.message);
     }
+
+    // Fallback : fenêtre popup avec dialog navigateur
+    imprimerTicketClassique(ticket, commandeId);
 }
 
 /**
@@ -7443,11 +7448,17 @@ function imprimerTicketClassique(ticket, commandeId) {
         </head>
         <body>${ticket}<div class="no-print">
                 <button onclick="window.print()">🖨️ Imprimer</button>
-                <button class="usb" onclick="imprimerUSB()">🔌 Imprimante USB</button>
-                <button class="bluetooth" onclick="imprimerBluetooth()">📡 Bluetooth</button>
                 <button class="secondary" onclick="window.close()">Fermer</button>
             </div>
             <script>
+                // Auto-print dès que la fenêtre est prête
+                window.onload = function() {
+                    setTimeout(function() {
+                        window.print();
+                        window.close();
+                    }, 200);
+                };
+
                 // Store ESC/POS version for thermal printers
                 const ticketEscPosData = ${JSON.stringify(ticketEscPos)};
                 

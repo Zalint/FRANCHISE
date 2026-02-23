@@ -8494,6 +8494,62 @@ app.get('/api/audit-client', checkAuth, async (req, res) => {
 
 console.log('✅ Route proxy audit client chargée');
 
+// =====================================================
+// IMPRESSION DIRECTE TICKET THERMIQUE (sans dialog)
+// =====================================================
+app.post('/api/print-direct', checkAuth, async (req, res) => {
+    // Uniquement disponible en local (pas sur Render)
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ success: false, message: 'Impression directe non disponible en production' });
+    }
+
+    const { ticket, printerName } = req.body;
+    if (!ticket) {
+        return res.status(400).json({ success: false, message: 'Contenu du ticket manquant' });
+    }
+
+    const os = require('os');
+    const fs = require('fs');
+    const path = require('path');
+    const { exec } = require('child_process');
+
+    const printer = printerName || 'Generic / Text Only';
+    const tmpFile = path.join(os.tmpdir(), `ticket_${Date.now()}.txt`);
+
+    try {
+        // Écrire le ticket dans un fichier temporaire (encoding CP850 pour imprimante thermique)
+        fs.writeFileSync(tmpFile, ticket, 'utf8');
+
+        let cmd;
+        if (process.platform === 'win32') {
+            // PowerShell : lire le fichier et envoyer à l'imprimante thermique (raw text)
+            const psScript = `
+$printerName = '${printer.replace(/'/g, "''")}';
+$content = [System.IO.File]::ReadAllText('${tmpFile.replace(/\\/g, '\\\\')}', [System.Text.Encoding]::UTF8);
+$content | Out-Printer -Name $printerName;
+`.trim();
+            cmd = `powershell -NoProfile -NonInteractive -Command "${psScript.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`;
+        } else {
+            cmd = `lpr -P "${printer}" "${tmpFile}"`;
+        }
+
+        exec(cmd, (error, stdout, stderr) => {
+            try { fs.unlinkSync(tmpFile); } catch (_) {}
+            if (error) {
+                console.error('❌ Erreur impression directe:', error.message);
+                return res.status(500).json({ success: false, message: error.message });
+            }
+            console.log(`🖨️ Ticket imprimé directement sur "${printer}"`);
+            res.json({ success: true });
+        });
+    } catch (err) {
+        try { fs.unlinkSync(tmpFile); } catch (_) {}
+        console.error('❌ Erreur impression directe:', err.message);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+console.log('✅ Route impression directe chargée');
+
 // Démarrage du serveur
 app.listen(PORT, async () => {
     console.log(`Serveur démarré sur le port ${PORT}`);
