@@ -833,6 +833,15 @@ function afficherProduits(categoryKey) {
         }
     }
     
+    // Sort: "Boeuf en détail" first within Bovin
+    productsToShow.sort((a, b) => {
+        if (a.category === 'Bovin' && b.category === 'Bovin') {
+            if (a.name === 'Boeuf en détail') return -1;
+            if (b.name === 'Boeuf en détail') return 1;
+        }
+        return 0;
+    });
+
     // Create product cards
     productsToShow.forEach(product => {
         const card = creerCarteProduct(product);
