@@ -1904,19 +1904,17 @@ function supprimerPrixSpecial(categorie, produit, pointVente) {
 async function supprimerProduit(categorie, produit) {
     if (confirm(`Êtes-vous sûr de vouloir supprimer le produit "${produit}" ?`)) {
         try {
-            const response = await fetch('/api/admin/config/produits/by-name', {
+            const response = await fetch(`/api/admin/config/produits/by-name?nom=${encodeURIComponent(produit)}&type_catalogue=vente`, {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ nom: produit, type_catalogue: 'vente' })
+                credentials: 'include'
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
-                delete currentProduitsConfig[categorie][produit];
-                afficherProduitsConfig();
                 alert(`Produit "${produit}" supprimé avec succès`);
+                // Recharger depuis le serveur pour confirmer la suppression
+                await chargerConfigProduits();
             } else {
                 alert(`Erreur: ${data.error}`);
             }
@@ -2306,23 +2304,16 @@ function trouverConfigProduitInventaire(produit, categorie = null) {
 async function supprimerProduitInventaire(produit, categorie = null) {
     if (confirm(`Êtes-vous sûr de vouloir supprimer le produit d'inventaire "${produit}" ?`)) {
         try {
-            const response = await fetch('/api/admin/config/produits/by-name', {
+            const response = await fetch(`/api/admin/config/produits/by-name?nom=${encodeURIComponent(produit)}&type_catalogue=inventaire`, {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ nom: produit, type_catalogue: 'inventaire' })
+                credentials: 'include'
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
-                if (categorie && currentInventaireConfig[categorie]) {
-                    delete currentInventaireConfig[categorie][produit];
-                } else {
-                    delete currentInventaireConfig[produit];
-                }
-                afficherInventaireConfig();
                 alert(`Produit d'inventaire "${produit}" supprimé avec succès`);
+                await chargerConfigInventaire();
             } else {
                 alert(`Erreur: ${data.error}`);
             }
@@ -2580,19 +2571,16 @@ function supprimerPrixSpecialAbonnement(categorie, produit, pointVente) {
 async function supprimerProduitAbonnement(categorie, produit) {
     if (confirm(`Êtes-vous sûr de vouloir supprimer le produit d'abonnement "${produit}" ?`)) {
         try {
-            const response = await fetch('/api/admin/config/produits/by-name', {
+            const response = await fetch(`/api/admin/config/produits/by-name?nom=${encodeURIComponent(produit)}&type_catalogue=abonnement`, {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ nom: produit, type_catalogue: 'abonnement' })
+                credentials: 'include'
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
-                delete currentAbonnementConfig[categorie][produit];
-                afficherAbonnementConfig();
                 alert(`Produit d'abonnement "${produit}" supprimé avec succès`);
+                await chargerConfigAbonnement();
             } else {
                 alert(`Erreur: ${data.error}`);
             }

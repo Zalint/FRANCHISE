@@ -1361,6 +1361,16 @@ function imprimerTicketClassique(ticket, commandeId) {
                     white-space: pre;
                     line-height: 1.3;
                 }
+                .ticket-logo {
+                    text-align: left;
+                    margin-bottom: 5px;
+                    white-space: normal;
+                }
+                .ticket-logo img {
+                    max-width: 150px;
+                    height: auto;
+                    filter: grayscale(100%) contrast(1.5);
+                }
                 @media print {
                     @page {
                         margin: 0;
@@ -1373,6 +1383,9 @@ function imprimerTicketClassique(ticket, commandeId) {
                     html {
                         margin: 0;
                         padding: 0;
+                    }
+                    .ticket-logo {
+                        margin-top: 0;
                     }
                     .no-print {
                         display: none;
@@ -1406,7 +1419,8 @@ function imprimerTicketClassique(ticket, commandeId) {
                 }
             </style>
         </head>
-        <body>${ticket}<div class="no-print">
+        <body><div class="ticket-logo"><img src="/image/keurbally.png" alt="Logo"></div>
+${ticket}<div class="no-print">
                 <button onclick="window.print()">🖨️ Imprimer</button>
                 <button class="usb" onclick="imprimerUSB()">🔌 Imprimante USB</button>
                 <button class="bluetooth" onclick="imprimerBluetooth()">📡 Bluetooth</button>

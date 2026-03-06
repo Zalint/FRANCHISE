@@ -961,42 +961,37 @@ router.put('/produits/:id', requireAdmin, async (req, res) => {
 /**
  * DELETE /api/admin/config/produits/by-name
  * Supprime un produit par son nom et type_catalogue
+ * Accepte les paramètres via query string OU body
  * ⚠️ IMPORTANT: Cette route DOIT être AVANT /produits/:id pour éviter le conflit de paramètres
  */
 router.delete('/produits/by-name', requireAdmin, async (req, res) => {
   try {
-    const { nom, type_catalogue } = req.body;
-    
+    // Accepter les paramètres via query string ou body
+    const nom = req.query.nom || req.body?.nom;
+    const type_catalogue = req.query.type_catalogue || req.body?.type_catalogue;
+
     if (!nom || !type_catalogue) {
       return res.status(400).json({ success: false, error: 'Nom et type_catalogue requis' });
     }
-    
+
     const produit = await Produit.findOne({
       where: { nom, type_catalogue }
     });
-    
+
     if (!produit) {
-      return res.status(404).json({ success: false, error: 'Produit non trouvé' });
+      return res.status(404).json({ success: false, error: `Produit "${nom}" non trouvé dans ${type_catalogue}` });
     }
-    
-    // Supprimer les prix associés
+
+    // Supprimer les enregistrements liés AVANT de supprimer le produit
+    await PrixHistorique.destroy({ where: { produit_id: produit.id } });
     await PrixPointVente.destroy({ where: { produit_id: produit.id } });
-    
-    // Enregistrer dans l'historique
-    await PrixHistorique.create({
-      produit_id: produit.id,
-      ancien_prix: produit.prix_defaut,
-      nouveau_prix: 0,
-      type_modification: 'suppression',
-      modifie_par: req.session.user?.username || 'admin'
-    });
-    
+
     // Supprimer le produit
     await produit.destroy();
     configService.invalidateCache();
-    
-    console.log(`🗑️ Produit supprimé: ${nom} (${type_catalogue})`);
-    res.json({ success: true, message: 'Produit supprimé' });
+
+    console.log(`🗑️ Produit supprimé: ${nom} (${type_catalogue}) par ${req.session.user?.username}`);
+    res.json({ success: true, message: `Produit "${nom}" supprimé` });
   } catch (error) {
     console.error('Erreur suppression produit par nom:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -1124,37 +1119,6 @@ router.get('/produits/by-name', requireAdmin, async (req, res) => {
     res.json({ success: true, data: produit });
   } catch (error) {
     console.error('Erreur récupération produit par nom:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * DELETE /api/admin/config/produits/by-name
- * Supprime un produit par nom et type_catalogue
- */
-router.delete('/produits/by-name', requireAdmin, async (req, res) => {
-  try {
-    const { nom, type_catalogue } = req.body;
-    
-    if (!nom || !type_catalogue) {
-      return res.status(400).json({ success: false, error: 'Nom et type_catalogue requis' });
-    }
-    
-    const produit = await Produit.findOne({
-      where: { nom, type_catalogue }
-    });
-    
-    if (!produit) {
-      return res.status(404).json({ success: false, error: 'Produit non trouvé' });
-    }
-    
-    await produit.destroy();
-    configService.invalidateCache();
-    
-    console.log(`✅ Produit supprimé par nom: ${nom} (${type_catalogue}) par ${req.session.user?.username}`);
-    res.json({ success: true, message: 'Produit supprimé' });
-  } catch (error) {
-    console.error('Erreur suppression produit par nom:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
