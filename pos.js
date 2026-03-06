@@ -7401,11 +7401,17 @@ function imprimerTicketClassique(ticket, commandeId) {
                     text-align: left;
                     margin-bottom: 5px;
                     white-space: normal;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
                 }
                 .ticket-logo img {
                     max-width: 150px;
                     height: auto;
                     filter: grayscale(100%) contrast(1.5);
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                    display: block !important;
+                    visibility: visible !important;
                 }
                 @media print {
                     @page {
@@ -7422,6 +7428,14 @@ function imprimerTicketClassique(ticket, commandeId) {
                     }
                     .ticket-logo {
                         margin-top: 0;
+                        display: block !important;
+                    }
+                    .ticket-logo img {
+                        display: block !important;
+                        max-width: 150px;
+                        filter: grayscale(100%) contrast(1.5);
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
                     }
                     .no-print {
                         display: none;
