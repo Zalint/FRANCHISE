@@ -1419,7 +1419,7 @@ function imprimerTicketClassique(ticket, commandeId) {
                 }
             </style>
         </head>
-        <body><div class="ticket-logo"><img src="/image/keurbally.png" alt="Logo"></div>
+        <body><div class="ticket-logo"><img id="ticketLogo" src="/image/keurbally.png" alt="Logo"></div>
 ${ticket}<div class="no-print">
                 <button onclick="window.print()">🖨️ Imprimer</button>
                 <button class="usb" onclick="imprimerUSB()">🔌 Imprimante USB</button>

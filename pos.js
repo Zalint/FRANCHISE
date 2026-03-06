@@ -7455,18 +7455,26 @@ function imprimerTicketClassique(ticket, commandeId) {
                 }
             </style>
         </head>
-        <body><div class="ticket-logo"><img src="/image/keurbally.png" alt="Logo"></div>
+        <body><div class="ticket-logo"><img id="ticketLogo" src="/image/keurbally.png" alt="Logo"></div>
 ${ticket}<div class="no-print">
                 <button onclick="window.print()">🖨️ Imprimer</button>
                 <button class="secondary" onclick="window.close()">Fermer</button>
             </div>
             <script>
-                // Auto-print dès que la fenêtre est prête
-                window.onload = function() {
+                // Auto-print après chargement du logo
+                var logo = document.getElementById('ticketLogo');
+                function lancerImpression() {
                     setTimeout(function() {
                         window.print();
                         window.close();
-                    }, 200);
+                    }, 100);
+                }
+                if (logo.complete) {
+                    lancerImpression();
+                } else {
+                    logo.onload = lancerImpression;
+                    logo.onerror = lancerImpression; // imprimer même si le logo échoue
+                }
                 };
 
                 // Store ESC/POS version for thermal printers
