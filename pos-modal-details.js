@@ -899,8 +899,8 @@ function imprimerTicketThermique(commandeId) {
     const clientAddress = firstItem.adresseClient || firstItem['Client Address'] || '';
     const clientInstructions = firstItem.instructionsClient || firstItem['Client Instructions'] || '';
     
-    // Configuration du ticket (32 caractères de large pour imprimante 58mm)
-    const LARGEUR = 32;
+    // Configuration du ticket (42 caractères de large)
+    const LARGEUR = 42;
     const SEPARATEUR = '='.repeat(LARGEUR);
     const LIGNE = '-'.repeat(LARGEUR);
     
@@ -915,15 +915,12 @@ function imprimerTicketThermique(commandeId) {
         return ' '.repeat(Math.max(0, LARGEUR - texte.length)) + texte;
     };
     
-    // Fonction pour formater une ligne produit (58mm = 32 car)
+    // Fonction pour formater une ligne produit
     const formatLigneProduit = (produit, qte, pu, total) => {
-        // Pour 32 caractères : Produit(15) Qte(2) Total(15)
-        // On simplifie pour 58mm : pas de prix unitaire
-        let ligneProduit = produit.substring(0, 15).padEnd(15);
-        // Quantité (2 char)
-        ligneProduit += String(qte).padStart(2) + ' ';
-        // Total (14 char)
-        ligneProduit += String(total).padStart(14);
+        // Produit(20) Qte(3) Total(19)
+        let ligneProduit = produit.substring(0, 20).padEnd(20);
+        ligneProduit += String(qte).padStart(3) + ' ';
+        ligneProduit += String(total).padStart(18);
         return ligneProduit;
     };
     
@@ -1363,19 +1360,12 @@ function imprimerTicketClassique(ticket, commandeId) {
                 }
                 .ticket-logo {
                     text-align: left;
-                    margin-bottom: 5px;
-                    white-space: normal;
-                    -webkit-print-color-adjust: exact !important;
-                    print-color-adjust: exact !important;
-                }
-                .ticket-logo img {
-                    max-width: 150px;
-                    height: auto;
-                    filter: grayscale(100%) contrast(1.5);
-                    -webkit-print-color-adjust: exact !important;
-                    print-color-adjust: exact !important;
-                    display: block !important;
-                    visibility: visible !important;
+                    margin-bottom: 0;
+                    white-space: pre;
+                    font-family: 'Courier New', monospace;
+                    font-size: 12px;
+                    line-height: 1.15;
+                    font-weight: bold;
                 }
                 @media print {
                     @page {
@@ -1393,13 +1383,6 @@ function imprimerTicketClassique(ticket, commandeId) {
                     .ticket-logo {
                         margin-top: 0;
                         display: block !important;
-                    }
-                    .ticket-logo img {
-                        display: block !important;
-                        max-width: 150px;
-                        filter: grayscale(100%) contrast(1.5);
-                        -webkit-print-color-adjust: exact !important;
-                        print-color-adjust: exact !important;
                     }
                     .no-print {
                         display: none;
@@ -1433,7 +1416,14 @@ function imprimerTicketClassique(ticket, commandeId) {
                 }
             </style>
         </head>
-        <body><div class="ticket-logo"><img id="ticketLogo" src="/image/keurbally.png" alt="Logo"></div>
+        <body><div class="ticket-logo">
+ _  __  ____
+| |/ / | __ )
+| ' /  |  _ \\
+| . \\  | |_) |
+|_|\\_\\ |____/
+ MINI - MARKET
+</div>
 ${ticket}<div class="no-print">
                 <button onclick="window.print()">🖨️ Imprimer</button>
                 <button class="usb" onclick="imprimerUSB()">🔌 Imprimante USB</button>
