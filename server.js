@@ -948,6 +948,50 @@ app.post('/api/logout', (req, res) => {
     });
 });
 
+// ===== FAVORIS =====
+const FAVORIS_PATH = path.join(__dirname, 'data', 'by-date', 'favoris.json');
+
+function lireFavoris() {
+    try {
+        if (fs.existsSync(FAVORIS_PATH)) {
+            return JSON.parse(fs.readFileSync(FAVORIS_PATH, 'utf8'));
+        }
+    } catch (e) {
+        console.warn('Erreur lecture favoris.json:', e.message);
+    }
+    return {};
+}
+
+function ecrireFavoris(data) {
+    const dir = path.dirname(FAVORIS_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(FAVORIS_PATH, JSON.stringify(data, null, 2), 'utf8');
+}
+
+app.get('/api/favoris', (req, res) => {
+    if (!req.session || !req.session.user) {
+        return res.status(401).json({ success: false, message: 'Non connecte' });
+    }
+    const username = req.session.user.username;
+    const all = lireFavoris();
+    res.json({ success: true, favoris: all[username] || [] });
+});
+
+app.post('/api/favoris', (req, res) => {
+    if (!req.session || !req.session.user) {
+        return res.status(401).json({ success: false, message: 'Non connecte' });
+    }
+    const username = req.session.user.username;
+    const { favoris } = req.body;
+    if (!Array.isArray(favoris)) {
+        return res.status(400).json({ success: false, message: 'favoris doit etre un tableau' });
+    }
+    const all = lireFavoris();
+    all[username] = favoris;
+    ecrireFavoris(all);
+    res.json({ success: true });
+});
+
 // Route pour vérifier la session
 app.get('/api/check-session', (req, res) => {
     console.log('Vérification de la session');

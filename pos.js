@@ -68,6 +68,9 @@ let cart = [];
 let categories = {};
 let products = {};
 let currentCategory = 'all';
+let userFavoris = [];
+let showFavorisOnly = false;
+let editFavorisMode = false;
 let currentSubCategory = 'all';
 let selectedPaymentMethod = 'cash';
 let brandConfig = null; // Brand configuration (MATA, SACRE_COEUR, etc.)
@@ -88,6 +91,40 @@ let savedClientInfoBeforeEdit = null; // Sauvegarde des infos client avant modif
 let precommandesData = []; // Stocker les pré-commandes
 let precommandesTodayCount = 0; // Nombre de pré-commandes du jour
 let checkPrecommandesInterval = null; // Intervalle pour vérifier
+
+// ===== FAVORIS =====
+async function chargerFavoris() {
+    try {
+        const res = await fetch('/api/favoris');
+        const data = await res.json();
+        if (data.success) userFavoris = data.favoris || [];
+    } catch (e) {
+        console.warn('Favoris non charges:', e.message);
+    }
+}
+
+async function sauverFavoris() {
+    try {
+        await fetch('/api/favoris', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ favoris: userFavoris })
+        });
+    } catch (e) {
+        console.warn('Erreur sauvegarde favoris:', e.message);
+    }
+}
+
+function toggleFavori(productName) {
+    const idx = userFavoris.indexOf(productName);
+    if (idx === -1) {
+        userFavoris.push(productName);
+    } else {
+        userFavoris.splice(idx, 1);
+    }
+    sauverFavoris();
+    afficherProduits(currentCategory);
+}
 
 // ===== Helper Functions =====
 /**
@@ -531,6 +568,7 @@ async function chargerDonnees() {
         
         console.log('📋 Affichage des catégories et produits...');
         await chargerEpicerieCategories();
+        await chargerFavoris();
         afficherCategories();
         afficherProduits('all');
         
@@ -721,9 +759,45 @@ function afficherCategories() {
         btn.className = 'category-btn' + (key === 'all' ? ' active' : '');
         btn.textContent = labels[key];
         btn.dataset.group = key;
-        btn.onclick = () => selectionnerCategorie(key, btn);
+        btn.onclick = () => {
+            showFavorisOnly = false;
+            selectionnerCategorie(key, btn);
+        };
         container.appendChild(btn);
     });
+
+    // Bouton Favoris (filtre)
+    const favBtn = document.createElement('button');
+    favBtn.className = 'category-btn favoris-btn';
+    favBtn.innerHTML = '<i class="fas fa-star"></i> Favoris';
+    favBtn.dataset.group = 'favoris';
+    favBtn.onclick = () => {
+        showFavorisOnly = !showFavorisOnly;
+        document.querySelectorAll('.category-btn').forEach(b => {
+            if (b !== favEditBtn) b.classList.remove('active');
+        });
+        if (showFavorisOnly) {
+            favBtn.classList.add('active');
+        } else {
+            container.querySelector('[data-group="all"]').classList.add('active');
+        }
+        afficherProduits(currentCategory);
+    };
+    container.appendChild(favBtn);
+
+    // Bouton edit favoris (toggle etoiles)
+    const favEditBtn = document.createElement('button');
+    favEditBtn.className = 'category-btn fav-edit-btn' + (editFavorisMode ? ' active' : '');
+    favEditBtn.innerHTML = '<i class="fas fa-pen"></i>';
+    favEditBtn.title = 'Modifier les favoris';
+    favEditBtn.onclick = () => {
+        editFavorisMode = !editFavorisMode;
+        favEditBtn.classList.toggle('active', editFavorisMode);
+        document.querySelectorAll('.product-fav').forEach(s => {
+            s.style.display = editFavorisMode ? '' : 'none';
+        });
+    };
+    container.appendChild(favEditBtn);
 
     // Sous-catégories : masquées par défaut, remplies à la sélection
     const subContainer = document.getElementById('subCategoriesList');
@@ -833,6 +907,11 @@ function afficherProduits(categoryKey) {
         }
     }
     
+    // Filtre favoris
+    if (showFavorisOnly) {
+        productsToShow = productsToShow.filter(p => userFavoris.includes(p.name));
+    }
+
     // Sort: "Boeuf en détail" first within Bovin
     productsToShow.sort((a, b) => {
         if (a.category === 'Bovin' && b.category === 'Bovin') {
@@ -858,7 +937,18 @@ function afficherProduits(categoryKey) {
 function creerCarteProduct(product) {
     const card = document.createElement('div');
     card.className = 'product-card';
-    
+
+    // Star favori
+    const isFav = userFavoris.includes(product.name);
+    const star = document.createElement('span');
+    star.className = 'product-fav' + (isFav ? ' active' : '');
+    star.innerHTML = isFav ? '<i class="fas fa-star"></i>' : '<i class="far fa-star"></i>';
+    if (!editFavorisMode) star.style.display = 'none';
+    star.onclick = (e) => {
+        e.stopPropagation();
+        toggleFavori(product.name);
+    };
+
     // Content container
     const content = document.createElement('div');
     content.className = 'product-card-content';
@@ -867,7 +957,7 @@ function creerCarteProduct(product) {
         <div class="product-price">${formatCurrency(product.price)}</div>
         <div class="product-category">${product.category === 'Import OCR' ? 'Epicerie' : product.category}</div>
     `;
-    
+
     // Add button for mobile
     const addBtn = document.createElement('button');
     addBtn.className = 'product-add-btn';
@@ -876,17 +966,18 @@ function creerCarteProduct(product) {
         e.stopPropagation();
         ajouterAuPanier(product);
     };
-    
+
     // Desktop: click on card
     card.onclick = () => {
         if (window.innerWidth > 768) {
             ajouterAuPanier(product);
         }
     };
-    
+
+    card.appendChild(star);
     card.appendChild(content);
     card.appendChild(addBtn);
-    
+
     return card;
 }
 
