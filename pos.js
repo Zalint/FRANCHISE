@@ -5065,7 +5065,11 @@ function afficherModalPosAvecBictorys(commandeId, commande, clientName, clientPh
                     style="background: #795548; color: white; border: none; padding: 0.7rem 1rem; border-radius: 6px; cursor: pointer; flex: 1; min-width: 120px;">
                 <i class="fas fa-receipt"></i> Ticket
             </button>
-            <button onclick="envoyerFactureWhatsAppFromList('${commandeId}')" 
+            <button onclick="imprimerTicketBluetooth('${commandeId}')"
+                    style="background: #1565C0; color: white; border: none; padding: 0.7rem 1rem; border-radius: 6px; cursor: pointer; flex: 1; min-width: 120px;">
+                <i class="fab fa-bluetooth-b"></i> BT Ticket
+            </button>
+            <button onclick="envoyerFactureWhatsAppFromList('${commandeId}')"
                     style="background: #25D366; color: white; border: none; padding: 0.7rem 1rem; border-radius: 6px; cursor: pointer; flex: 1; min-width: 120px;">
                 <i class="fab fa-whatsapp"></i> WhatsApp
             </button>
@@ -7177,6 +7181,114 @@ async function imprimerTicketThermique(commandeId) {
 
     // Fallback : fenêtre popup avec dialog navigateur
     imprimerTicketClassique(ticket, commandeId);
+}
+
+// ===== BT TICKET (via navigator.share → RawBT) =====
+
+async function imprimerTicketBluetooth(commandeId) {
+    // Fermer le modal de commande
+    const modalCommande = document.getElementById('modalDetailsCommande');
+    if (modalCommande) modalCommande.style.display = 'none';
+
+    // Générer le ticket via imprimerTicketThermique's globals si pas déjà fait
+    if (window.currentCommandeId !== commandeId || !window.currentTicketEscPos) {
+        // Appeler la génération du ticket (même logique que Ticket)
+        // On simule en appelant imprimerTicketThermique qui set les globales
+        // mais on ne veut pas qu'il imprime, donc on génère manuellement
+        await _genererTicketPourBT(commandeId);
+    }
+
+    const text = window.currentTicketEscPos || window.currentTicketText || '';
+    if (!text) { showToast('Ticket vide', 'error'); return; }
+
+    // Utiliser navigator.share pour que RawBT apparaisse dans les options
+    if (navigator.share) {
+        try {
+            await navigator.share({ title: 'Ticket', text: text });
+        } catch (error) {
+            console.log('Partage annulé ou erreur:', error);
+        }
+    } else {
+        // Fallback : copier dans le presse-papier
+        try {
+            await navigator.clipboard.writeText(text);
+            showToast('Ticket copié ! Ouvrez RawBT manuellement.', 'info');
+        } catch (error) {
+            showToast('Impossible de partager. Copiez manuellement.', 'error');
+        }
+    }
+}
+
+async function _genererTicketPourBT(commandeId) {
+    const commande = commandesData.get(commandeId);
+    if (!commande) return;
+
+    let paymentStatus = 'A', montantRestantDu = 0;
+    try {
+        const pd = await getCommandePaymentStatus(commandeId);
+        paymentStatus = pd.posStatus || 'A';
+        montantRestantDu = pd.montantRestantDu || 0;
+    } catch (e) { /* ignore */ }
+
+    const firstItem = commande.items[0] || {};
+    const clientName = firstItem.nomClient || firstItem['Client Name'] || '';
+    const clientPhone = firstItem.numeroClient || firstItem['Client Phone'] || '';
+    const clientAddress = firstItem.adresseClient || firstItem['Client Address'] || '';
+    const clientInstructions = firstItem.instructionsClient || firstItem['Client Instructions'] || '';
+    const credit = firstItem.credit || null;
+    const creditUsed = credit?.credit_used || 0;
+    const creditStatus = credit?.credit_status || null;
+    const amountPaidAfterCredit = credit?.amount_paid_after_credit || null;
+    const hasValidCredit = creditUsed > 0 && creditStatus !== 'failed';
+    const finalAmount = hasValidCredit ? (amountPaidAfterCredit || (commande.totalAmount - creditUsed)) : commande.totalAmount;
+
+    const L = 42, SEP = '='.repeat(L), LIG = '-'.repeat(L);
+    const c = t => ' '.repeat(Math.max(0, Math.floor((L - t.length) / 2))) + t;
+    const fp = (p, q, t) => { let r = p.substring(0,20).padEnd(20); r += String(q).padStart(3)+' '; r += String(t).padStart(18); return r; };
+    const config = typeof getBrandConfig === 'function' ? getBrandConfig(commandeId) : null;
+
+    let tk = SEP+'\n' + c(config ? config.nom_complet : '')+'\n';
+    if (config && config.site_web) tk += c(config.site_web)+'\n';
+    tk += '\n';
+    if (config && config.telephones && config.telephones.length > 0) {
+        config.telephones.forEach(tel => {
+            let nf; if (tel.numeros && Array.isArray(tel.numeros)) { nf = tel.numeros.join(' ou '); } else if (tel.numero) { let n = tel.numero.replace(/\+221\s*/g,'').replace(/\s+/g,''); if(n.length===9) n=n.substring(0,2)+' '+n.substring(2,5)+' '+n.substring(5,7)+' '+n.substring(7,9); nf=n; }
+            tk += c(tel.point_vente ? `${tel.point_vente} ${nf}` : nf)+'\n';
+        });
+    } else { tk += c('Liberté 5 78 607 18 18 ou 78 732 57 57')+'\n'; tk += c('Almadies 2 78 607 18 18 ou 78 732 57 57')+'\n'; }
+    tk += SEP+'\n\n';
+    tk += 'COMMANDE: '+commandeId+'\n';
+    const now = new Date();
+    tk += `DATE: ${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}\n\n`;
+    if (clientName||clientPhone||clientAddress||clientInstructions) {
+        tk += LIG+'\nINFORMATIONS CLIENT\n'+LIG+'\n';
+        if (clientName) tk += 'Nom: '+clientName+'\n';
+        if (clientPhone) tk += 'Tel: '+clientPhone+'\n';
+        if (clientAddress) tk += 'Adresse: '+clientAddress+'\n';
+        if (clientInstructions) { tk += LIG+'\n*** INSTRUCTIONS ***\n'+clientInstructions+'\n'; }
+        tk += '\n';
+    }
+    tk += LIG+'\nARTICLES\n'+LIG+'\n'+fp('Produit','Qte','Total')+'\n'+LIG+'\n';
+    commande.items.forEach(item => {
+        tk += fp(item.Produit||item.produit||'Produit', item.Nombre||item.nombre||1, formatCurrency(item.Montant||item.montant||0))+'\n';
+    });
+    tk += '\n'+SEP+'\n';
+    if (hasValidCredit) {
+        tk += 'Sous-total'+formatCurrency(commande.totalAmount).padStart(L-10)+'\n';
+        tk += 'Credit'+('-'+formatCurrency(creditUsed)).padStart(L-6)+'\n'+LIG+'\n';
+        tk += 'A PAYER'+formatCurrency(finalAmount).padStart(L-7)+'\n';
+    } else { tk += 'TOTAL'+formatCurrency(commande.totalAmount).padStart(L-5)+'\n'; }
+    tk += SEP+'\n\n';
+    if (paymentStatus==='P') tk += c('*** PAYE ***')+'\n\n';
+    else if (paymentStatus==='M') tk += c('*** PAYE (CASH/MANUEL) ***')+'\n\n';
+    else if (paymentStatus==='C') { const dp=commande.totalAmount-montantRestantDu; tk += c('*** CREANCE ***')+'\n'+c(`Montant du: ${formatCurrency(montantRestantDu)}`)+'\n'+c(`Deja paye: ${formatCurrency(dp)}`)+'\n\n'; }
+    if (config&&config.footer_facture) tk += c(config.footer_facture)+'\n'; else tk += c('Merci de votre confiance!')+'\n';
+    if (config&&config.slogan) tk += c(config.slogan)+'\n'; else tk += c('Bon appetit!')+'\n';
+    tk += SEP;
+
+    window.currentTicketText = tk;
+    window.currentTicketEscPos = tk;
+    window.currentCommandeId = commandeId;
 }
 
 /**
