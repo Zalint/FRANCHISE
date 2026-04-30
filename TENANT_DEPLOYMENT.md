@@ -1,9 +1,11 @@
 # Multi-tenant deployment runbook
 
-This branch (`maas-app`) is a fork of the Mata app set up to be deployed
-**once per tenant** on Render — one Render Web Service + one Render Postgres
-per tenant. There is no cross-tenant data path inside the application; each
-tenant runs as its own isolated Node process talking to its own database.
+This branch (`maas-app`) is a fork of the Mata app deployed as **one Render
+Web Service per tenant + one shared Render Postgres for all tenants**.
+Each tenant runs as its own isolated Node process; tenant data isolation
+is enforced at the database layer via Postgres schemas (one schema per
+tenant, search_path locked to that schema on every connection — no
+cross-tenant fallback).
 
 Three tenants are pre-configured: **Mbao**, **Keur Massar**, **Sacre Coeur**.
 All have abattage (Suivi Achat Boeuf) disabled by default.
@@ -16,25 +18,40 @@ A single shared codebase with no in-app tenancy logic. At deploy time, the
 `tenant:apply` build step reads the `TENANT_SLUG` env var and copies the
 matching files from `config/tenants/<slug>/` over the runtime config files
 (`nomDuClient.json`, `brand-config.json`, `config/modules-state.json`,
-`config/client-config.json`). The frontend reads the tenant identity from
-`/api/tenant` and prefixes the page title with the tenant name.
+`config/client-config.json`). At runtime, `db/index.js` reads `DB_SCHEMA`
+and runs `SET search_path TO "<schema>"` on every Postgres connection so
+all queries (Sequelize and raw SQL) are constrained to that tenant's
+schema. The frontend reads the tenant identity from `/api/tenant` and
+prefixes the page title with the tenant name.
+
+---
+
+## One-time setup: the shared Postgres cluster
+
+Done **once for the whole platform**, not per tenant. Skip this section if
+the shared cluster already exists — go straight to "Per-tenant resources".
+
+- Dashboard → New → Postgres
+- Name: `maas-shared-db`
+- Region: same region as the web services (latency)
+- Plan: Starter is fine to begin with; bump to Standard once you're past
+  ~5 tenants or the dataset grows past Starter's 1 GB / 256 MB RAM
+  limits.
+- After creation, copy the **Internal Database URL**. Every tenant's web
+  service will use this same URL as their `DATABASE_URL`.
+
+> **Sizing note:** at 10 tenants on Standard ($95/mo) you're well within
+> connection-count headroom (Sequelize uses a pool of 5 per process, so
+> 10 × 5 = 50 active connections out of ~100). Past 20 tenants, put
+> PgBouncer in front to multiplex.
 
 ---
 
 ## Per-tenant resources to create on Render
 
-For **each** of `mbao`, `keur-massar`, `sacre-coeur`:
+For **each** of `mbao`, `keur-massar`, `sacre-coeur` (or any new tenant):
 
-### 1. Create a Render Postgres
-
-- Dashboard → New → Postgres
-- Name: `maas-<slug>-db` (e.g. `maas-mbao-db`)
-- Region: same region as the web service (latency)
-- Plan: Starter is fine to begin with
-- After creation, copy the **Internal Database URL** — you'll paste it as
-  `DATABASE_URL` in the web service env vars.
-
-### 2. Create a Render Web Service
+### 1. Create a Render Web Service
 
 - Dashboard → New → Web Service
 - Connect this Git repo and pick branch `maas-app`
@@ -44,12 +61,24 @@ For **each** of `mbao`, `keur-massar`, `sacre-coeur`:
   ```
   npm install && npm run tenant:apply
   ```
+- **Pre-deploy command** *(this is what makes new tenants self-bootstrap — see step 3 below for what it does)*:
+  ```
+  npm run tenant:init
+  ```
 - Start command:
   ```
   npm start
   ```
 
-### 3. Set the env vars on the web service
+The pre-deploy command runs after the build and before traffic flips
+to the new instance, on **every deploy**. `tenant:init` is idempotent:
+on first deploy it creates the schema, syncs models, seeds catalog
+and ADMIN; on subsequent deploys it's a no-op (schema already exists,
+sync finds nothing to add, seeds skip because rows exist). So a brand
+new tenant doesn't need a manual `npm run tenant:init` step in the
+Render shell — the first successful deploy bootstraps everything.
+
+### 2. Set the env vars on the web service
 
 Open `config/tenants/<slug>/.env.tenant` for the matching tenant and paste
 each line as an environment variable in the Render dashboard.
@@ -63,18 +92,33 @@ The file already has a randomly generated `SESSION_SECRET` and
 > the originals (and update Render env vars to the new values).
 
 You must additionally set:
-- `DATABASE_URL` → the **Internal Database URL** from the Postgres you
-  created in step 1.
+- `DATABASE_URL` → the **Internal Database URL** of the shared Postgres
+  cluster (see "One-time setup" above). All tenants use the same URL.
+- `DB_SCHEMA` → the tenant's slug (e.g. `mbao`, `keur_massar`,
+  `sacre_coeur`). Use underscores, not hyphens — Postgres prefers them
+  for unquoted identifiers. The next step (`tenant:init`) creates this
+  schema if it doesn't exist; thereafter every connection from this
+  service runs `SET search_path TO "<schema>"` so all queries resolve
+  inside the tenant's schema only.
 
 Optional, only if the corresponding module is enabled for that tenant:
 - `OPENAI_API_KEY`, `OPENAI_MODEL` — for AI features
 - `BICTORYS_API_KEY`, `BICTORYS_BASE_URL` — for the payment-links module
 - `BASE_URL` — for absolute URLs in generated invoices
 
-### 4. Initialize the tenant's database
+> ⚠️ **`BICTORYS_API_KEY` quirk:** even when the payment-links module is
+> off, `server.js` currently does a hard `throw` at module-load time if
+> `BICTORYS_API_KEY` is empty (see `server.js:7249`). Until that check
+> gets wrapped in a module-enabled guard, set
+> `BICTORYS_API_KEY=dev-placeholder-not-used` (or any non-empty string)
+> on every tenant — otherwise the Render service crashes on boot before
+> it even gets to the rest of the env.
 
-After the first deploy succeeds, open the Render shell on the web service
-and run **once**:
+### 3. (Reference) What `tenant:init` does on every deploy
+
+You don't run this by hand — the `preDeployCommand` from step 1 runs
+it automatically. This section documents what it does so you can
+predict what shows up on first boot.
 
 ```
 npm run tenant:init
@@ -110,7 +154,7 @@ create real staff accounts there.
 > tenants for runbook simplicity. **Change it on every tenant on first
 > login** before letting anyone else in.
 
-### 5. (Optional) Add a per-tenant cron for daily stock copy
+### 4. (Optional) Add a per-tenant cron for daily stock copy
 
 If the tenant uses the Stock module and wants automated overnight copy
 ("stock soir" → next-day "stock matin"):
@@ -122,12 +166,14 @@ If the tenant uses the Stock module and wants automated overnight copy
 - Build command: `npm install && npm run tenant:apply`
 - Start command: `node scripts/copy-stock-cron.js`
 - Env vars: same as the web service (`TENANT_SLUG`, `TENANT_NAME`,
-  `TENANT_BRAND_KEY`, `DATABASE_URL`, plus `LOG_LEVEL=info`,
-  `DATA_PATH=./data/by-date`).
+  `TENANT_BRAND_KEY`, `DATABASE_URL`, `DB_SCHEMA`, plus `LOG_LEVEL=info`,
+  `DATA_PATH=./data/by-date`). The cron is currently file-based (doesn't
+  touch the DB), so `DB_SCHEMA` is included for future-proofing in case
+  the script is later refactored to use Sequelize.
 
 Skip this entirely if the tenant doesn't run an end-of-day stock workflow.
 
-### 6. Set the custom domain
+### 5. Set the custom domain
 
 - Web service → Settings → Custom Domains → Add
   - `mbao.yourdomain.com` for `maas-mbao`
@@ -201,60 +247,114 @@ missing) — fix it to `npm install && npm run tenant:apply` and redeploy.
 
 ---
 
-## What this setup does NOT do
+## Why Variant A (and when other patterns make sense)
 
-This is the **process-per-tenant** model. It satisfies "no cross-tenant
-impact at all" because each tenant is a separate process. It does
-**not** scale economically past ~15–20 tenants if you also keep one
-Postgres per tenant — the per-tenant Postgres bill becomes the dominant
-line item.
+This guide describes **Variant A**: per-tenant Node process, shared
+Postgres, one schema per tenant. Three other patterns exist:
 
-The supported next step is **schema-per-tenant on a shared Postgres**
-(per-tenant process kept, per-tenant DB collapsed to one cluster with
-one schema per tenant). The wiring is already in place — see below.
-The further step (single-process multi-tenant, hostname-based tenant
-resolution) is **not** supported by this codebase and would require a
-significant refactor.
+|   | Process | DB | Best when |
+|---|---|---|---|
+| Silo | per-tenant | per-tenant | A tenant contractually requires their own DB |
+| **Variant A** *(this guide)* | per-tenant | shared, schema-per-tenant | Default for 1–30 tenants |
+| Variant C | shared | per-tenant | A specific tenant insists on its own DB while others share |
+| Variant B (Pool) | shared | shared, `tenant_id` column on every table | 30+ tenants *and* engineering bandwidth for the rewrite |
 
-## Schema-per-tenant mode (shared Postgres)
+**Cost picture at 10 tenants on Render Standard plans** (web $25, Postgres $95):
 
-Set `DB_SCHEMA=<slug>` on each tenant's web service env vars (in
-addition to `TENANT_SLUG`, `TENANT_NAME`, `TENANT_BRAND_KEY`). When set:
+- Silo: 10 × ($25 + $95) = **$1,200/mo**
+- Variant A: 10 × $25 + 1 × $95 = **$345/mo**  ← this guide
+- Variant B: 1 × $25 + 1 × $95 = **$120/mo**
 
-- `db/index.js` runs `SET search_path TO "<schema>"` on every new
-  connection, so all queries (Sequelize and raw SQL) resolve to that
-  schema only — no cross-tenant fallback.
-- `npm run tenant:init` runs `CREATE SCHEMA IF NOT EXISTS "<schema>"`
-  before `sequelize.sync()`, so models land in the tenant's schema.
+**Why Variant A is the default here:**
 
-When `DB_SCHEMA` is unset, behavior is unchanged (search_path stays at
-`public`, sync runs in the public schema) — so existing DB-per-tenant
-deploys keep working.
+- **Process isolation is preserved.** A bug in one tenant's running
+  process can't read another tenant's data — the runtime never has
+  multiple tenants in scope.
+- **Schema isolation is enforced at connection level**, not in
+  application code. `db/index.js` runs `SET search_path TO "<schema>"`
+  on every new connection. A missed `WHERE tenant_id = ?` in a future
+  PR can't cause a leak because there's no `tenant_id` column to begin
+  with — Postgres won't let queries see other schemas.
+- **DB cost collapses** to one Postgres for the whole platform.
+- **Hybrid is one env var away.** A single tenant can be moved back to
+  its own DB by clearing `DB_SCHEMA` and pointing `DATABASE_URL` at a
+  separate Postgres — useful if a contract demands physical isolation.
 
-### Migrating an existing tenant from its own DB to a shared cluster
+**Why not Variant B (Pool):** the codebase has no `tenant_id` columns,
+no per-request tenant resolution middleware, and a 720 KB `server.js`
+with embedded raw SQL. Refactoring for shared-process multi-tenancy is
+a 2–3 week effort with real risk of cross-tenant data leakage. Defer
+until tenant count crosses 30 and the engineering bandwidth is there
+to audit every query.
+
+**Why not Variant C:** ~80% of Variant B's engineering work for ~50% of
+its savings — generally the wrong stop on the spectrum unless a
+specific tenant requires their own DB while others share, in which case
+the hybrid setup above (clear `DB_SCHEMA` for that tenant only) is
+simpler than committing the whole platform to Variant C.
+
+---
+
+## Migrating a legacy Silo tenant onto the shared cluster
+
+Use this recipe when an existing tenant runs on its own Render
+Postgres (Silo model) and you want to move them onto the shared cluster
+without losing data:
 
 ```bash
-# 1. From the source tenant DB, dump just the schema + data
-pg_dump --no-owner --no-privileges -Fp \
-  --dbname=<old-tenant-database-url> > tenant.sql
+# 1. Dump + rewrite + restore in one shot (pg_dump pipeline that
+#    rewrites public.<obj> → "<slug>".<obj> in the SQL stream, then
+#    pipes into psql). Requires pg_dump and psql to be on PATH or
+#    PG_BIN env var pointed at the postgres bin/ directory.
+npm run tenant:migrate -- \
+  --slug=<slug> \
+  --source-url=<old-tenant-database-url> \
+  --shared-url=<shared-database-url>
 
-# 2. On the shared cluster, create the schema
-psql --dbname=<shared-database-url> -c 'CREATE SCHEMA "<slug>"'
+# Pass --dry-run to preview the rewritten SQL without applying it.
+# The script also runs a sanity check at the end and asserts zero
+# remaining "public." references in the rewritten dump.
 
-# 3. Restore into that schema by setting search_path before piping
-psql --dbname=<shared-database-url> -c \
-  "SET search_path TO \"<slug>\"; \i tenant.sql"
-
-# 4. On Render, swap the tenant's web service env:
+# 2. On Render, swap the tenant's web service env vars:
 #    DATABASE_URL  →  shared cluster URL
 #    DB_SCHEMA     →  <slug>
-#    Redeploy. The afterConnect hook constrains all queries to the schema.
+#    Redeploy. The afterConnect hook now constrains all queries to the
+#    new schema; sequelize.sync() on next boot is a no-op since all
+#    tables already exist.
 
-# 5. Verify with npm run tenant:verify, then decommission the old DB.
+# 3. Verify: npm run tenant:verify against the live URL, log in,
+#    record a test sale, run a cash-up. Once happy, decommission the
+#    old per-tenant Render Postgres.
 ```
 
-Tested locally with three tenants (mbao, keur-massar, sacre-coeur) on a
-single `maas_shared_dev` database — see commit history.
+> ⚠️ Hyphens vs underscores: tenant slugs use hyphens (`keur-massar`)
+> but Postgres schemas should use underscores (`keur_massar`). The
+> migrate / drop scripts enforce this — pass `--slug=keur_massar` to
+> them, and set `DB_SCHEMA=keur_massar` on Render. `TENANT_SLUG`
+> stays `keur-massar`.
+
+This pipeline was tested locally migrating `maas_db`'s legacy public
+schema into `maas_shared_dev` as a `legacy_test` schema and then
+booting the server against the migrated data — all 260 produits, 9
+categories, 1 POS, and 2 sales preserved.
+
+## Decommissioning a tenant
+
+When a tenant is permanently shut down:
+
+1. Cancel their Render Web Service (and cron, if any).
+2. Drop their schema from the shared cluster:
+
+   ```bash
+   npm run tenant:drop -- \
+     --slug=<schema-name> \
+     --shared-url=<shared-database-url> \
+     --yes
+   ```
+
+   The script refuses without `--yes`, refuses to drop `public` or any
+   reserved schema, and is idempotent (re-running on a missing schema
+   exits cleanly).
 
 ---
 
@@ -271,6 +371,10 @@ single `maas_shared_dev` database — see commit history.
   Run via `npm run tenant:init` from the Render shell.
 - `scripts/verify-tenant.js` — post-deploy health check
   (`npm run tenant:verify -- --url=<host> --slug=<x> --name=<X>`).
+- `scripts/migrate-tenant-to-shared.js` — moves a Silo tenant onto the
+  shared cluster as a schema (`npm run tenant:migrate`).
+- `scripts/drop-tenant-schema.js` — destructively decommissions a
+  tenant's schema (`npm run tenant:drop`).
 - `config/tenants/<slug>/` — per-tenant config bundles. Each contains:
   - `nomDuClient.json`
   - `brand-config.json`
@@ -287,8 +391,10 @@ single `maas_shared_dev` database — see commit history.
 ## npm script reference
 
 ```
-npm run tenant:create -- --slug=<x> --name="<X>"   # generate bundle
-npm run tenant:apply                               # build-time copier (Render)
-npm run tenant:init                                # first-time DB seed (Render shell)
-npm run tenant:verify -- --url=<host> --slug=<x> --name=<X>   # post-deploy QA
+npm run tenant:create  -- --slug=<x> --name="<X>"                                       # generate bundle (local)
+npm run tenant:apply                                                                    # build-time copier (Render)
+npm run tenant:init                                                                     # first-time DB seed (Render shell)
+npm run tenant:verify  -- --url=<host> --slug=<x> --name=<X>                            # post-deploy QA (local)
+npm run tenant:migrate -- --slug=<x> --source-url=<old> --shared-url=<shared>           # Silo → Variant A (local)
+npm run tenant:drop    -- --slug=<x> --shared-url=<shared> --yes                        # decommission a tenant (local)
 ```

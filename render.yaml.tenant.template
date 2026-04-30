@@ -1,20 +1,30 @@
-# Render blueprint template for a single tenant.
+# Render blueprint template for a single tenant (Variant A:
+# per-tenant Web Service, shared Postgres, schema-per-tenant).
 #
 # Copy this file to render.yaml in a per-tenant branch (or just create
 # the service manually in the Render dashboard) and replace TENANT_SLUG
-# / TENANT_NAME / TENANT_BRAND_KEY with the tenant's values.
+# / TENANT_NAME / TENANT_BRAND_KEY / DB_SCHEMA_VALUE with the tenant's
+# values.
 #
-# Each tenant gets its own Render Web Service AND its own Render Postgres
-# database, so cross-tenant impact is impossible at the infrastructure
-# level (separate Node processes, separate DBs).
+# All tenants share one Render Postgres (created once for the platform).
+# Tenant data isolation is enforced via Postgres schemas — db/index.js
+# runs `SET search_path TO "<DB_SCHEMA>"` on every connection.
+#
+# preDeployCommand runs `npm run tenant:init` on every deploy. The
+# script is idempotent: it creates the schema if missing, syncs
+# tables (no-op if already in sync), seeds catalog/admin/POS only on
+# first run. Safe to run on every deploy; means a brand new tenant
+# gets a working DB without any manual Render-shell step.
 #
 # To onboard a new tenant:
 #   1. Run: npm run tenant:create -- --slug=<slug> --name="<Display Name>"
 #      This creates config/tenants/<slug>/ with all defaults.
 #   2. Edit config/tenants/<slug>/brand-config.json (phones, address).
 #   3. Commit the bundle.
-#   4. In Render, create a Postgres + a Web Service from this template,
-#      pasting env vars from config/tenants/<slug>/.env.tenant.
+#   4. In Render: create a new Web Service from this template,
+#      pasting env vars from config/tenants/<slug>/.env.tenant plus
+#      DATABASE_URL (the shared cluster's Internal URL) and DB_SCHEMA
+#      (the slug with hyphens → underscores).
 #   5. Set the custom domain (e.g. <slug>.yourdomain.com).
 
 services:
@@ -24,6 +34,7 @@ services:
     plan: starter
     branch: maas-app
     buildCommand: npm install && npm run tenant:apply
+    preDeployCommand: npm run tenant:init    # idempotent; runs every deploy
     startCommand: npm start
     envVars:
       - key: TENANT_SLUG
@@ -32,6 +43,8 @@ services:
         value: TENANT_NAME          # e.g. Mbao
       - key: TENANT_BRAND_KEY
         value: TENANT_BRAND_KEY     # e.g. MBAO
+      - key: DB_SCHEMA
+        value: DB_SCHEMA_VALUE      # slug with hyphens → underscores: e.g. keur_massar
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -42,16 +55,19 @@ services:
       # NOT in the YAML (so they don't get committed):
       #   SESSION_SECRET
       #   EXTERNAL_API_KEY
-      #   DATABASE_URL          (from this tenant's Render Postgres)
+      #   DATABASE_URL          (the SHARED cluster's Internal URL)
       # Optional, depending on enabled modules:
       #   OPENAI_API_KEY
       #   OPENAI_MODEL
-      #   BICTORYS_API_KEY
+      #   BICTORYS_API_KEY      (set to any non-empty string even if
+      #                          payment-links is off — see
+      #                          server.js:7249 hard-throw note in
+      #                          TENANT_DEPLOYMENT.md)
       #   BASE_URL
 
   # Optional per-tenant cron: copies "stock soir" of day J to "stock matin"
   # of day J+1. Skip this block if the tenant doesn't need automated stock
-  # copy. Each tenant gets its OWN cron service operating on its OWN data.
+  # copy. Each tenant gets its OWN cron service.
   - type: cron
     name: maas-TENANT_SLUG-stock-copy
     env: node
@@ -67,10 +83,13 @@ services:
         value: TENANT_NAME
       - key: TENANT_BRAND_KEY
         value: TENANT_BRAND_KEY
+      - key: DB_SCHEMA
+        value: DB_SCHEMA_VALUE      # same value as the web service
       - key: NODE_ENV
         value: production
       - key: LOG_LEVEL
         value: info
       - key: DATA_PATH
         value: ./data/by-date
-      # Plus the same DATABASE_URL as the web service (set in dashboard).
+      # Plus the same DATABASE_URL as the web service (the shared
+      # cluster URL; set in dashboard, not here).

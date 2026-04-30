@@ -30,9 +30,18 @@ function arg(name) {
     return m ? m.slice(prefix.length) : null;
 }
 
-const slug = arg('slug');
+// Prefer --slug=… on the command line; fall back to the TENANT_SLUG
+// env var. The env-var fallback is the reliable path on Windows /
+// PowerShell where `npm run X -- --flag` strips arguments before they
+// reach the script (npm.ps1 wrapper quirk). Documented workaround:
+//   $env:TENANT_SLUG='mbao'; npm run tenant:dev
+const slug = arg('slug') || process.env.TENANT_SLUG;
 if (!slug) {
-    console.error('Usage: npm run tenant:dev -- --slug=<slug>');
+    console.error('Usage:');
+    console.error('  npm run tenant:dev -- --slug=<slug>          (Linux/macOS)');
+    console.error('  $env:TENANT_SLUG=\'<slug>\'; npm run tenant:dev   (Windows/PowerShell)');
+    console.error('  node scripts/dev-tenant.js --slug=<slug>     (any shell, bypasses npm)');
+    console.error('');
     console.error('Available tenants:');
     const tenantsDir = path.join(__dirname, '..', 'config', 'tenants');
     if (fs.existsSync(tenantsDir)) {
@@ -76,26 +85,46 @@ if (apply.status !== 0) {
     process.exit(apply.status || 1);
 }
 
-// Step 2: spawn nodemon with tenant env injected
+// Step 2: spawn nodemon with tenant env injected.
+//
+// DB_SCHEMA defaults to the slug with hyphens turned into underscores
+// (Variant A: shared local Postgres, schema-per-tenant). That mirrors
+// the production env-var convention and means switching tenants in
+// dev is just `npm run tenant:dev -- --slug=<x>`. Set DB_SCHEMA
+// explicitly in .env.local or the shell to override (e.g. =public for
+// legacy single-DB local setups).
+const dbSchema = process.env.DB_SCHEMA || slug.replace(/-/g, '_');
+
 const env = {
     ...process.env,
     TENANT_SLUG: slug,
     TENANT_NAME: tenantName,
     TENANT_BRAND_KEY: brandKey,
+    DB_SCHEMA: dbSchema,
 };
+
+console.log(`[tenant:dev] DB_SCHEMA=${dbSchema}`);
 
 // Use the local nodemon if it exists; fall back to plain `node server.js`.
 const nodemonBin = path.join(__dirname, '..', 'node_modules', '.bin', process.platform === 'win32' ? 'nodemon.cmd' : 'nodemon');
 const useNodemon = fs.existsSync(nodemonBin);
 const cmd = useNodemon ? nodemonBin : process.execPath;
-const args = useNodemon ? ['-r', 'dotenv/config', 'server.js'] : ['-r', 'dotenv/config', 'server.js'];
+const args = ['-r', 'dotenv/config', 'server.js'];
+
+// shell:true is needed on Windows ONLY when running a .cmd file
+// (nodemon.cmd needs cmd.exe to resolve). For plain node.exe we must
+// NOT use shell:true — cmd.exe breaks on the space in
+// "C:\Program Files\nodejs\node.exe" and reports
+// 'C:\Program' is not recognized'.
+const useShell = useNodemon && process.platform === 'win32';
+
 console.log(`[tenant:dev] starting ${useNodemon ? 'nodemon' : 'node'} server.js (Ctrl-C to stop)\n`);
 
 const child = spawn(cmd, args, {
     cwd: path.join(__dirname, '..'),
     stdio: 'inherit',
     env,
-    shell: process.platform === 'win32',
+    shell: useShell,
 });
 
 child.on('exit', (code) => process.exit(code ?? 0));
