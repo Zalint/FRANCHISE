@@ -18,6 +18,7 @@ const PaymentLink = require('./db/models/PaymentLink');
 // CONFIGURATION DEPUIS LA BASE DE DONNÉES
 // =====================================================
 const configService = require('./db/config-service');
+const tenant = require('./config/tenant');
 
 // Variables globales pour la configuration (chargées depuis la BDD)
 let pointsVente = {};
@@ -233,6 +234,16 @@ app.use(session({
         sameSite: 'lax'
     }
 }));
+
+// Tenant identity endpoint — exposes TENANT_SLUG/TENANT_NAME/TENANT_BRAND_KEY
+// to the frontend for branding (page title, headers). Public on purpose.
+app.get('/api/tenant', (req, res) => {
+    res.json({
+        slug: tenant.slug,
+        name: tenant.name,
+        brandKey: tenant.brandKey,
+    });
+});
 
 
 // Route dynamique pour la config inventaire - fusionne les catégories de base avec les produits OCR/superette en BDD

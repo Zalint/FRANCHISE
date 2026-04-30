@@ -29,6 +29,12 @@ const CommandeInfo = require('./CommandeInfo');
 // Modèle pour les commandes web (weborders)
 const WebOrder = require('./WebOrder');
 
+// Modèle pour la clôture de caisse (POS cash-up)
+// Doit être enregistré ici pour que sequelize.sync() crée la table
+// `clotures_caisse` au moment de l'init d'un nouveau tenant. Sans ça,
+// le premier appel à /api/clotures plante avec "relation does not exist".
+const ClotureCaisse = require('./ClotureCaisse');
+
 const { sequelize } = require('../index');
 
 // =====================================================
@@ -196,7 +202,10 @@ module.exports = {
   
   // Modèle commandes web
   WebOrder,
-  
+
+  // Modèle clôture de caisse
+  ClotureCaisse,
+
   // Fonctions utilitaires
   syncDatabase,
   syncNewModels,

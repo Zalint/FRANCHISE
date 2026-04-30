@@ -38,7 +38,12 @@
     "stock:copy:dry-run": "node scripts/copy-stock-cron.js --dry-run",
     "stock:copy:test": "node scripts/test-copy-stock.js",
     "stock:copy:create-test": "node scripts/test-copy-stock.js --create-test-data",
-    "stock:copy:clean-test": "node scripts/test-copy-stock.js --clean-test-data"
+    "stock:copy:clean-test": "node scripts/test-copy-stock.js --clean-test-data",
+    "tenant:apply": "node scripts/apply-tenant-config.js",
+    "tenant:create": "node scripts/setup-tenant.js",
+    "tenant:init": "node scripts/init-tenant-db.js",
+    "tenant:verify": "node scripts/verify-tenant.js",
+    "tenant:dev": "node scripts/dev-tenant.js"
   },
   "keywords": [],
   "author": "",

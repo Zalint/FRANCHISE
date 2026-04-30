@@ -8,6 +8,11 @@ package-lock.json
 .env.example
 config.json
 
+# Per-tenant secret bundles — generated locally by `npm run tenant:create`,
+# pasted into Render dashboard, NEVER committed (contain SESSION_SECRET
+# and EXTERNAL_API_KEY).
+config/tenants/*/.env.tenant
+
 # Fichiers de données
 *.csv
 *.xlsx

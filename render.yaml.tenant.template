@@ -1,0 +1,76 @@
+# Render blueprint template for a single tenant.
+#
+# Copy this file to render.yaml in a per-tenant branch (or just create
+# the service manually in the Render dashboard) and replace TENANT_SLUG
+# / TENANT_NAME / TENANT_BRAND_KEY with the tenant's values.
+#
+# Each tenant gets its own Render Web Service AND its own Render Postgres
+# database, so cross-tenant impact is impossible at the infrastructure
+# level (separate Node processes, separate DBs).
+#
+# To onboard a new tenant:
+#   1. Run: npm run tenant:create -- --slug=<slug> --name="<Display Name>"
+#      This creates config/tenants/<slug>/ with all defaults.
+#   2. Edit config/tenants/<slug>/brand-config.json (phones, address).
+#   3. Commit the bundle.
+#   4. In Render, create a Postgres + a Web Service from this template,
+#      pasting env vars from config/tenants/<slug>/.env.tenant.
+#   5. Set the custom domain (e.g. <slug>.yourdomain.com).
+
+services:
+  - type: web
+    name: maas-TENANT_SLUG          # e.g. maas-mbao
+    env: node
+    plan: starter
+    branch: maas-app
+    buildCommand: npm install && npm run tenant:apply
+    startCommand: npm start
+    envVars:
+      - key: TENANT_SLUG
+        value: TENANT_SLUG          # e.g. mbao
+      - key: TENANT_NAME
+        value: TENANT_NAME          # e.g. Mbao
+      - key: TENANT_BRAND_KEY
+        value: TENANT_BRAND_KEY     # e.g. MBAO
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DB_SSL
+        value: "true"
+      # Secrets — set these from .env.tenant in the Render dashboard,
+      # NOT in the YAML (so they don't get committed):
+      #   SESSION_SECRET
+      #   EXTERNAL_API_KEY
+      #   DATABASE_URL          (from this tenant's Render Postgres)
+      # Optional, depending on enabled modules:
+      #   OPENAI_API_KEY
+      #   OPENAI_MODEL
+      #   BICTORYS_API_KEY
+      #   BASE_URL
+
+  # Optional per-tenant cron: copies "stock soir" of day J to "stock matin"
+  # of day J+1. Skip this block if the tenant doesn't need automated stock
+  # copy. Each tenant gets its OWN cron service operating on its OWN data.
+  - type: cron
+    name: maas-TENANT_SLUG-stock-copy
+    env: node
+    plan: starter
+    branch: maas-app
+    buildCommand: npm install && npm run tenant:apply
+    schedule: "0 5 * * *"           # daily 5am UTC
+    startCommand: node scripts/copy-stock-cron.js
+    envVars:
+      - key: TENANT_SLUG
+        value: TENANT_SLUG
+      - key: TENANT_NAME
+        value: TENANT_NAME
+      - key: TENANT_BRAND_KEY
+        value: TENANT_BRAND_KEY
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: DATA_PATH
+        value: ./data/by-date
+      # Plus the same DATABASE_URL as the web service (set in dashboard).

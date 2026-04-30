@@ -714,10 +714,11 @@ function demarrerHorloge() {
 }
 
 // ===== Display Categories =====
-// Regroupement des catégories : Import OCR → Epicerie, reste → Boucherie
-const EPICERIE_SOURCE = 'Import OCR';
+// Boucherie = liste fermée des catégories viande ; tout le reste (Autres,
+// Conserve, Riz & Féculents, Superette, …) est regroupé sous Epicerie.
+const BOUCHERIE_CATEGORIES = new Set(['Bovin', 'Ovin', 'Volaille', 'Pack', 'Caprin']);
 function getCategoryGroup(catKey) {
-    return catKey === EPICERIE_SOURCE ? 'Epicerie' : 'Boucherie';
+    return BOUCHERIE_CATEGORIES.has(catKey) ? 'Boucherie' : 'Epicerie';
 }
 
 // Sous-catégories Epicerie — chargées depuis config/epicerie-categories.json
@@ -852,7 +853,7 @@ function selectionnerCategorie(categoryKey, btnElement) {
     const subContainer = document.getElementById('subCategoriesList');
     if (subContainer) {
         if (categoryKey === 'Boucherie') {
-            const boucherieSubCats = Object.keys(products).filter(k => k !== EPICERIE_SOURCE);
+            const boucherieSubCats = Object.keys(products).filter(k => BOUCHERIE_CATEGORIES.has(k));
             _peuplerSousCats(subContainer, boucherieSubCats);
         } else if (categoryKey === 'Epicerie') {
             _peuplerSousCats(subContainer, EPICERIE_SUBCATS_ORDER);
