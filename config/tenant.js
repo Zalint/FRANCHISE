@@ -17,7 +17,15 @@ const slug = process.env.TENANT_SLUG || 'default';
 const name = process.env.TENANT_NAME || 'Mata';
 const brandKey = process.env.TENANT_BRAND_KEY || 'KEUR_BALLI';
 
-const tenant = Object.freeze({ slug, name, brandKey });
+// Postgres schema for this tenant's tables.
+//   Default 'public'        → legacy DB-per-tenant behavior, unchanged.
+//   Set DB_SCHEMA=<schema>  → shared-Postgres / schema-per-tenant.
+// db/index.js sets search_path to this schema on every connection so all
+// queries (Sequelize and raw SQL) resolve here. scripts/init-tenant-db.js
+// creates the schema if needed before running sequelize.sync().
+const schema = process.env.DB_SCHEMA || 'public';
+
+const tenant = Object.freeze({ slug, name, brandKey, schema });
 
 console.log(`[tenant] slug=${slug} name="${name}" brandKey=${brandKey}`);
 

@@ -204,14 +204,57 @@ missing) — fix it to `npm install && npm run tenant:apply` and redeploy.
 ## What this setup does NOT do
 
 This is the **process-per-tenant** model. It satisfies "no cross-tenant
-impact at all" because each tenant is a separate process with a separate
-DB. It does **not** scale economically past ~15–20 tenants (each is a
-paid Render Web Service + Postgres).
+impact at all" because each tenant is a separate process. It does
+**not** scale economically past ~15–20 tenants if you also keep one
+Postgres per tenant — the per-tenant Postgres bill becomes the dominant
+line item.
 
-Before tenant count grows past ~10, plan the migration to **schema-per-tenant
-on a single shared Postgres**. The `pg_dump` → restore-as-schema → flip a
-`tenants.db_url` row path is straightforward and can be done one tenant at
-a time without downtime.
+The supported next step is **schema-per-tenant on a shared Postgres**
+(per-tenant process kept, per-tenant DB collapsed to one cluster with
+one schema per tenant). The wiring is already in place — see below.
+The further step (single-process multi-tenant, hostname-based tenant
+resolution) is **not** supported by this codebase and would require a
+significant refactor.
+
+## Schema-per-tenant mode (shared Postgres)
+
+Set `DB_SCHEMA=<slug>` on each tenant's web service env vars (in
+addition to `TENANT_SLUG`, `TENANT_NAME`, `TENANT_BRAND_KEY`). When set:
+
+- `db/index.js` runs `SET search_path TO "<schema>"` on every new
+  connection, so all queries (Sequelize and raw SQL) resolve to that
+  schema only — no cross-tenant fallback.
+- `npm run tenant:init` runs `CREATE SCHEMA IF NOT EXISTS "<schema>"`
+  before `sequelize.sync()`, so models land in the tenant's schema.
+
+When `DB_SCHEMA` is unset, behavior is unchanged (search_path stays at
+`public`, sync runs in the public schema) — so existing DB-per-tenant
+deploys keep working.
+
+### Migrating an existing tenant from its own DB to a shared cluster
+
+```bash
+# 1. From the source tenant DB, dump just the schema + data
+pg_dump --no-owner --no-privileges -Fp \
+  --dbname=<old-tenant-database-url> > tenant.sql
+
+# 2. On the shared cluster, create the schema
+psql --dbname=<shared-database-url> -c 'CREATE SCHEMA "<slug>"'
+
+# 3. Restore into that schema by setting search_path before piping
+psql --dbname=<shared-database-url> -c \
+  "SET search_path TO \"<slug>\"; \i tenant.sql"
+
+# 4. On Render, swap the tenant's web service env:
+#    DATABASE_URL  →  shared cluster URL
+#    DB_SCHEMA     →  <slug>
+#    Redeploy. The afterConnect hook constrains all queries to the schema.
+
+# 5. Verify with npm run tenant:verify, then decommission the old DB.
+```
+
+Tested locally with three tenants (mbao, keur-massar, sacre-coeur) on a
+single `maas_shared_dev` database — see commit history.
 
 ---
 

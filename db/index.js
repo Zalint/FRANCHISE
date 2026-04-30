@@ -1,6 +1,7 @@
 const { Sequelize } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
+const tenant = require('../config/tenant');
 
 let sequelize;
 
@@ -18,7 +19,10 @@ if (process.env.NODE_ENV === 'production') {
     DB_SSL: process.env.DB_SSL
   };
 } else {
-  // In local development, read from .env.local file
+  // In local development, read from .env.local file but let any
+  // already-set process.env values WIN. This lets shell overrides like
+  // `$env:DB_NAME='maas_shared_dev'` work for one-off testing without
+  // editing the file.
   try {
     const envPath = path.resolve(__dirname, '..', '.env.local');
     const envContent = fs.readFileSync(envPath, 'utf8')
@@ -26,7 +30,6 @@ if (process.env.NODE_ENV === 'production') {
       .replace(/\r\n/g, '\n')  // Normalize line endings
       .replace(/\r/g, '\n');   // Normalize line endings
 
-    // Parse environment variables
     envContent.split('\n').forEach(line => {
       line = line.trim();
       if (line && !line.startsWith('#')) {
@@ -38,14 +41,14 @@ if (process.env.NODE_ENV === 'production') {
     });
   } catch (error) {
     console.log('No .env.local file found, using system environment variables');
-    envVars = {
-      DB_HOST: process.env.DB_HOST,
-      DB_PORT: process.env.DB_PORT,
-      DB_USER: process.env.DB_USER,
-      DB_PASSWORD: process.env.DB_PASSWORD,
-      DB_NAME: process.env.DB_NAME,
-      DB_SSL: process.env.DB_SSL
-    };
+  }
+
+  // Process env always wins over .env.local \u2014 same precedence dotenv
+  // would give us. Critical for shell-driven multi-tenant testing.
+  for (const k of ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'DB_SSL']) {
+    if (process.env[k] !== undefined && process.env[k] !== '') {
+      envVars[k] = process.env[k];
+    }
   }
 }
 
@@ -59,6 +62,31 @@ const commonOptions = {
     min: 0,
     acquire: 30000,
     idle: 10000
+  },
+  hooks: {
+    // Constrain every query on this connection to the tenant's schema.
+    // The trailing 'public' keeps shared catalogs (extensions, sequences
+    // belonging to global tables) visible. Identifiers are double-quoted
+    // to defend against any unusual characters in the schema name.
+    //
+    // When DB_SCHEMA is unset, tenant.schema === 'public' and this
+    // statement is a harmless no-op (search_path defaults to public).
+    afterConnect: async (connection) => {
+      // Set search_path to the tenant schema ONLY. Do not include 'public'
+      // as a fallback — that would let queries silently read another
+      // tenant's data when this tenant's schema doesn't have the table
+      // yet (e.g. between CREATE SCHEMA and Sequelize's CREATE TABLE).
+      // Identifier double-quoted to defend against unusual chars.
+      try {
+        await connection.query(`SET search_path TO "${tenant.schema}"`);
+      } catch (err) {
+        console.error(
+          `[db] failed to SET search_path to "${tenant.schema}":`,
+          err.message
+        );
+        throw err;
+      }
+    }
   }
 };
 

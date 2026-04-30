@@ -132,6 +132,16 @@ async function main() {
         process.exit(1);
     }
 
+    // Ensure the tenant's schema exists before sync. When DB_SCHEMA is
+    // unset, tenant.schema is 'public' and this is a no-op (public always
+    // exists). When set, this is the only place where shared-Postgres
+    // schemas are created — keeps schema lifecycle next to model lifecycle.
+    if (tenant.schema && tenant.schema !== 'public') {
+        console.log(`🔧 Ensuring schema "${tenant.schema}" exists...`);
+        await sequelize.query(`CREATE SCHEMA IF NOT EXISTS "${tenant.schema}"`);
+        console.log('✅ Schema ready.\n');
+    }
+
     console.log('🔧 Syncing models (creates missing tables, leaves existing data alone)...');
     await sequelize.sync();
     console.log('✅ Sync complete.\n');
