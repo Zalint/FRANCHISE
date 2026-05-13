@@ -95,6 +95,7 @@ const { Op, fn, col, literal } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 const Estimation = require('./db/models/Estimation');
 const { spawn } = require('child_process');
+const cron = require('node-cron');
 
 // Import the schema update scripts
 const { updateSchema } = require('./db/update-schema');
@@ -919,7 +920,7 @@ app.post('/api/login', async (req, res) => {
             canWrite: ['user', 'admin', 'superutilisateur', 'superviseur'].includes(user.role),
             canManageReconciliation: ['admin', 'superutilisateur', 'superviseur'].includes(user.role),
             canAccessAllPointsVente: ['admin', 'superutilisateur', 'superviseur'].includes(user.role),
-            canCopyStock: ['admin', 'superutilisateur', 'superviseur'].includes(user.role),
+            canCopyStock: ['user', 'admin', 'superutilisateur', 'superviseur'].includes(user.role),
             canManageAdvanced: ['admin', 'superutilisateur', 'superviseur'].includes(user.role),
             canManageEstimation: ['admin', 'superutilisateur', 'superviseur'].includes(user.role)
         };
@@ -8611,6 +8612,23 @@ app.listen(PORT, async () => {
     console.log('- GET /api/payment-links/archives');
     console.log('- GET /api/payment-links/archives/:weekStart');
     console.log('- POST /api/payment-links/update-open-payments');
+
+    // Cron in-process: chaque jour a 5h UTC, copier Stock Soir J -> Stock Matin J+1.
+    // Equivalent au service cron Render (qui est payant), evite cette dependance.
+    cron.schedule('0 5 * * *', () => {
+        const ts = new Date().toISOString();
+        console.log(`[cron-stock-copy] ${ts} start`);
+        const child = spawn('node', ['scripts/copy-stock-cron.js'], {
+            cwd: __dirname,
+            env: process.env,
+            stdio: ['ignore', 'pipe', 'pipe']
+        });
+        child.stdout.on('data', d => process.stdout.write(`[cron-stock-copy] ${d}`));
+        child.stderr.on('data', d => process.stderr.write(`[cron-stock-copy] ${d}`));
+        child.on('close', code => console.log(`[cron-stock-copy] exit ${code}`));
+        child.on('error', err => console.error('[cron-stock-copy] spawn error:', err.message));
+    }, { timezone: 'UTC' });
+    console.log('Cron stock-copy programme: 0 5 * * * UTC');
 });
 
 // API endpoint for showing estimation section

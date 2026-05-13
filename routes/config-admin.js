@@ -34,12 +34,23 @@ const requireAdminOrSupervisor = (req, res, next) => {
   if (!req.session || !req.session.user) {
     return res.status(401).json({ success: false, error: 'Non authentifié' });
   }
-  
+
   const allowedRoles = ['admin', 'superutilisateur', 'superviseur'];
   if (!allowedRoles.includes(req.session.user.role)) {
     return res.status(403).json({ success: false, error: 'Accès réservé aux administrateurs et superviseurs' });
   }
-  
+
+  next();
+};
+
+// Authentification simple: tout utilisateur connecte (lecteur, user, super*,
+// admin). Utilise pour les endpoints de lecture qui exposent uniquement des
+// metadonnees de configuration (mode_stock, unite_stock, prix par defaut)
+// necessaires aux UI cote utilisateur.
+const requireAuthenticated = (req, res, next) => {
+  if (!req.session || !req.session.user) {
+    return res.status(401).json({ success: false, error: 'Non authentifié' });
+  }
   next();
 };
 
@@ -448,7 +459,7 @@ router.get('/produits', requireAdmin, async (req, res) => {
  * Liste les produits d'inventaire formatés pour l'interface admin
  * Accessible aux admin, superutilisateur et superviseur
  */
-router.get('/produits-inventaire', requireAdminOrSupervisor, async (req, res) => {
+router.get('/produits-inventaire', requireAuthenticated, async (req, res) => {
   try {
     const produits = await Produit.findAll({
       where: { type_catalogue: 'inventaire' },
