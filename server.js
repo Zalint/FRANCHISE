@@ -97,6 +97,12 @@ const Estimation = require('./db/models/Estimation');
 const { spawn } = require('child_process');
 const cron = require('node-cron');
 
+// Cron stock-copy: re-entrancy guard + timeout pour eviter les child processes
+// hangs qui bloqueraient les ticks suivants.
+let isCopyStockRunning = false;
+const STOCK_COPY_TIMEOUT_MS = parseInt(process.env.STOCK_COPY_TIMEOUT_MS, 10) || 10 * 60 * 1000;
+const STOCK_COPY_KILL_GRACE_MS = 10 * 1000;
+
 // Import the schema update scripts
 const { updateSchema } = require('./db/update-schema');
 const { updateVenteSchema } = require('./db/update-vente-schema');
@@ -8617,18 +8623,47 @@ app.listen(PORT, async () => {
     // Equivalent au service cron Render (qui est payant), evite cette dependance.
     cron.schedule('0 5 * * *', () => {
         const ts = new Date().toISOString();
+        if (isCopyStockRunning) {
+            console.warn(`[cron-stock-copy] ${ts} skip: previous run still in progress`);
+            return;
+        }
+        isCopyStockRunning = true;
         console.log(`[cron-stock-copy] ${ts} start`);
+
         const child = spawn('node', ['scripts/copy-stock-cron.js'], {
             cwd: __dirname,
             env: process.env,
             stdio: ['ignore', 'pipe', 'pipe']
         });
+
+        let killTimer = null;
+        const timeoutTimer = setTimeout(() => {
+            console.warn(`[cron-stock-copy] timeout ${STOCK_COPY_TIMEOUT_MS}ms reached, sending SIGTERM`);
+            try { child.kill('SIGTERM'); } catch (_) {}
+            killTimer = setTimeout(() => {
+                console.warn('[cron-stock-copy] still alive after grace, sending SIGKILL');
+                try { child.kill('SIGKILL'); } catch (_) {}
+            }, STOCK_COPY_KILL_GRACE_MS);
+        }, STOCK_COPY_TIMEOUT_MS);
+
+        const cleanup = () => {
+            clearTimeout(timeoutTimer);
+            if (killTimer) clearTimeout(killTimer);
+            isCopyStockRunning = false;
+        };
+
         child.stdout.on('data', d => process.stdout.write(`[cron-stock-copy] ${d}`));
         child.stderr.on('data', d => process.stderr.write(`[cron-stock-copy] ${d}`));
-        child.on('close', code => console.log(`[cron-stock-copy] exit ${code}`));
-        child.on('error', err => console.error('[cron-stock-copy] spawn error:', err.message));
+        child.on('close', code => {
+            cleanup();
+            console.log(`[cron-stock-copy] exit ${code}`);
+        });
+        child.on('error', err => {
+            cleanup();
+            console.error('[cron-stock-copy] spawn error:', err.message);
+        });
     }, { timezone: 'UTC' });
-    console.log('Cron stock-copy programme: 0 5 * * * UTC');
+    console.log(`Cron stock-copy programme: 0 5 * * * UTC (timeout ${STOCK_COPY_TIMEOUT_MS}ms)`);
 });
 
 // API endpoint for showing estimation section
