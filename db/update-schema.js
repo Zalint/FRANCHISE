@@ -117,33 +117,66 @@ async function updateSchema() {
             await ProduitAlias.sync();
             console.log('Table produit_alias creee');
         }
-        // Seed des aliases standards (libelles couramment vus en POS).
+        // Seed des aliases reels FRANCHISE (libelles observes en BDD).
         // ON CONFLICT DO NOTHING => idempotent, ne touche pas aux mappings
         // deja saisis manuellement cote prod.
-        // Couvre les variantes "en gros / en detail" et leurs typos casse.
+        // Couvre les variantes "en gros / en detail / encodage casse '??'".
         await sequelize.query(`
             INSERT INTO produit_alias (alias_produit, produit_catalog, updated_at) VALUES
+              -- Bovin: morceaux Boeuf et toutes les variantes
               ('Boeuf en gros',     'Boeuf',  NOW()),
+              ('Boeuf En Gros',     'Boeuf',  NOW()),
               ('Boeuf en détail',   'Boeuf',  NOW()),
               ('Boeuf en detail',   'Boeuf',  NOW()),
-              ('Boeuf En Gros',     'Boeuf',  NOW()),
               ('Boeuf En Détail',   'Boeuf',  NOW()),
+              ('Boeuf en d??tail',  'Boeuf',  NOW()),
+              ('Boeuf sur pied',    'Boeuf',  NOW()),
+              ('Foie',              'Boeuf',  NOW()),
+              ('Yell',              'Boeuf',  NOW()),
+              ('Abats',             'Boeuf',  NOW()),
+              ('Dechet',            'Boeuf',  NOW()),
+              ('Jarret',            'Boeuf',  NOW()),
+              ('Sans Os',           'Boeuf',  NOW()),
+              ('Filet',             'Boeuf',  NOW()),
+              ('Faux Filet',        'Boeuf',  NOW()),
+              ('Merguez',           'Boeuf',  NOW()),
+              ('Peaux',             'Boeuf',  NOW()),
+              ('Viande hachée',     'Boeuf',  NOW()),
+              ('Viande Hach??e',    'Boeuf',  NOW()),
+              ('Viande hach??e',    'Boeuf',  NOW()),
+              -- Veau
               ('Veau en gros',      'Veau',   NOW()),
+              ('Veau En Gros',      'Veau',   NOW()),
               ('Veau en détail',    'Veau',   NOW()),
               ('Veau en detail',    'Veau',   NOW()),
-              ('Veau En Gros',      'Veau',   NOW()),
-              ('Agneau en gros',    'Agneau', NOW()),
-              ('Agneau en détail',  'Agneau', NOW()),
-              ('Agneau en detail',  'Agneau', NOW()),
+              ('Veau En Détail',    'Veau',   NOW()),
+              ('Veau en d??tail',   'Veau',   NOW()),
+              ('Veau sur pied',     'Veau',   NOW()),
+              -- Ovin (mouton/agneau)
               ('Mouton',            'Agneau', NOW()),
               ('Mouton en gros',    'Agneau', NOW()),
               ('Mouton en détail',  'Agneau', NOW()),
+              ('Mouton en detail',  'Agneau', NOW()),
+              ('Tete Agneau',       'Agneau', NOW()),
+              ('Tête Agneau',       'Agneau', NOW()),
+              ('Agneau en gros',    'Agneau', NOW()),
+              ('Agneau en détail',  'Agneau', NOW()),
+              ('Agneau en detail',  'Agneau', NOW()),
+              -- Caprin
+              ('Chevre sur pied',   'Agneau', NOW()),
+              ('Chèvre sur pied',   'Agneau', NOW()),
+              -- Volaille
               ('Poulet en gros',    'Poulet', NOW()),
               ('Poulet en détail',  'Poulet', NOW()),
-              ('Poulet en detail',  'Poulet', NOW())
+              ('Poulet en detail',  'Poulet', NOW()),
+              ('Poulet en d??tail', 'Poulet', NOW()),
+              ('Pilon',             'Poulet', NOW()),
+              ('Merguez poulet',    'Poulet', NOW()),
+              ('Oeuf',              'Poulet', NOW()),
+              ('Pack Pigeon',       'Poulet', NOW())
             ON CONFLICT (alias_produit) DO NOTHING
         `);
-        console.log('Table produit_alias: seed aliases standards applique (idempotent)');
+        console.log('Table produit_alias: seed aliases FRANCHISE applique (idempotent)');
 
         // Finance: historique point-in-time du prix_vente catalogue (commission 3%).
         const prixVenteHistoryExists = await checkTableExists('prix_vente_history');
