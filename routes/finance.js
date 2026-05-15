@@ -1,37 +1,59 @@
 /**
  * Routes Finance — onglet "Creances Fournisseur".
  *
- * Adaptation FRANCHISE (multi-PV) du module Finance Maas. Scope reduit:
+ * Adaptation FRANCHISE (multi-PV) du module Finance Maas. Scope:
  *   - GET /api/finance/creances?dateDebut=&dateFin=&pointVente=
- *       Renvoie { local: {...calcul commission 3% local...},
+ *       Renvoie { local: {...calcul commission 3% local avec resolver
+ *                          + historique temporel...},
  *                 cdb:   {...solde MataBanq...} | null,
  *                 cdb_per_label: {...detail par label si cumul multi-PV...} }
  *   - GET /api/finance/paiements?dateDebut=&dateFin=&pointVente=
  *   - POST /api/finance/paiements
  *   - DELETE /api/finance/paiements/:id
+ *   - GET /api/finance/prix       (catalogue fournisseur_prix)
+ *   - PUT /api/finance/prix       (upsert + historise)
+ *   - DELETE /api/finance/prix/:produit
+ *   - GET /api/finance/alias
+ *   - PUT /api/finance/alias
+ *   - DELETE /api/finance/alias/:alias
+ *   - GET /api/finance/config
  *
- * NB: pas de centre de decoupe, pas d'alias produits, pas d'historique
- * temporel des prix, pas de FinanceConfig — simplifie par rapport a Maas
- * (cf. demande utilisateur "pas de commande centre de decoupe pour l'instant").
+ * Logique calcul (mirror Maas):
+ *   resolverMaps = (catalog, aliases) cache 60s
+ *   pour chaque vente:
+ *     resolved = resolveProduit(vente.produit, resolverMaps)
+ *     prixVenteEff = lookup point-in-time dans prix_vente_history a vente.date,
+ *                    fallback resolved.value.prix_vente
+ *     dette += (commission_pct / 100) * prixVenteEff * vente.nombre
+ *   Les ventes dont le produit n'est PAS resolu sont silencieusement ignorees
+ *   (cf. Maas, voir doc resolver).
  */
 
 'use strict';
 
 const express = require('express');
 const { Op } = require('sequelize');
-const { Vente, FournisseurPaiement } = require('../db/models');
+const {
+    Vente,
+    FournisseurPaiement,
+    FournisseurPrix,
+    ProduitAlias,
+    PrixVenteHistory,
+    PrixAchatHistory
+} = require('../db/models');
 const {
     fetchCreanceCdb,
     labelForPointVente,
     PV_TO_MATABANQ_LABEL,
     allLabels
 } = require('../lib/depenses-creance-client');
+const { resolveProduit, buildResolverMaps } = require('../lib/produit-resolver');
+const financeCache = require('../lib/finance-cache');
 
 const router = express.Router();
 
 // ============================================================
-// Auth: tout utilisateur connecte peut LIRE; seuls les utilisateurs
-// avec droits d'ecriture peuvent CREER/SUPPRIMER des paiements.
+// Auth
 // ============================================================
 function requireAuth(req, res, next) {
     if (!req.session || !req.session.user) {
@@ -39,7 +61,6 @@ function requireAuth(req, res, next) {
     }
     next();
 }
-
 function requireWrite(req, res, next) {
     if (!req.session || !req.session.user) {
         return res.status(401).json({ success: false, error: 'Non authentifie' });
@@ -49,9 +70,19 @@ function requireWrite(req, res, next) {
     }
     next();
 }
+function requireAdvanced(req, res, next) {
+    if (!req.session || !req.session.user) {
+        return res.status(401).json({ success: false, error: 'Non authentifie' });
+    }
+    const role = req.session.user.role;
+    if (!['admin', 'superutilisateur', 'superviseur'].includes(role)) {
+        return res.status(403).json({ success: false, error: 'Droits avances requis' });
+    }
+    next();
+}
 
 // ============================================================
-// Helpers periode
+// Helpers
 // ============================================================
 function toISO(input) {
     if (!input) return null;
@@ -62,18 +93,13 @@ function toISO(input) {
     if (m) return `${m[3]}-${m[2]}-${m[1]}`;
     return null;
 }
-
 function defaultPeriode() {
     const now = new Date();
     const yyyy = now.getUTCFullYear();
     const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
     const dd = String(now.getUTCDate()).padStart(2, '0');
-    return {
-        dateDebut: `${yyyy}-${mm}-01`,
-        dateFin: `${yyyy}-${mm}-${dd}`
-    };
+    return { dateDebut: `${yyyy}-${mm}-01`, dateFin: `${yyyy}-${mm}-${dd}` };
 }
-
 function generateDateRange(startISO, endISO) {
     const parse = (s) => new Date(`${s}T00:00:00Z`);
     const fmt = (d) => {
@@ -88,57 +114,144 @@ function generateDateRange(startISO, endISO) {
     }
     return list;
 }
+function round2(n) { return Math.round(n * 100) / 100; }
 
-function round2(n) {
-    return Math.round(n * 100) / 100;
+// ============================================================
+// Resolver temporel des prix (port verbatim de Maas)
+// ============================================================
+/**
+ * Construit un lookup point-in-time generique pour les history tables
+ * (prix_vente_history, prix_achat_history). Retourne une fonction
+ * (produitLower, dateISO) -> prix_effectif|null.
+ */
+function buildTemporalResolver(historyRows, prixField) {
+    const byProduit = new Map();
+    for (const h of historyRows) {
+        const key = h.produit.toLowerCase();
+        if (!byProduit.has(key)) byProduit.set(key, []);
+        byProduit.get(key).push({
+            ts: new Date(h.created_at).getTime(),
+            prix: parseFloat(h[prixField])
+        });
+    }
+    for (const arr of byProduit.values()) {
+        arr.sort((a, b) => a.ts - b.ts);
+    }
+    function lastIndexBefore(arr, cutoffMs) {
+        let lo = 0, hi = arr.length - 1, ans = -1;
+        while (lo <= hi) {
+            const mid = (lo + hi) >>> 1;
+            if (arr[mid].ts <= cutoffMs) { ans = mid; lo = mid + 1; }
+            else { hi = mid - 1; }
+        }
+        return ans;
+    }
+    return function getPrixAtDate(produitNomLower, dateISO) {
+        const arr = byProduit.get(produitNomLower);
+        if (!arr || arr.length === 0) return null;
+        const cutoffMs = new Date(dateISO + 'T23:59:59.999Z').getTime();
+        const i = lastIndexBefore(arr, cutoffMs);
+        return i < 0 ? null : arr[i].prix;
+    };
 }
 
 // ============================================================
-// Configuration commission (override possible via env)
+// Configuration commission (env-overridable)
 // ============================================================
 const COMMISSION_PCT = parseFloat(process.env.FINANCE_COMMISSION_PCT) || 3.0;
 const CATEGORIES_ELIGIBLES = (process.env.FINANCE_CATEGORIES_ELIGIBLES
     || 'Bovin,Ovin,Caprin,Volaille,Poisson').split(',').map(s => s.trim()).filter(Boolean);
 
 // ============================================================
-// Calcul local: commission COMMISSION_PCT % sur les ventes eligibles
+// Calcul local: commission 3% via resolver + temporal pricing
 // ============================================================
 async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
     const dDeb = toISO(dateDebut) || defaultPeriode().dateDebut;
     const dFin = toISO(dateFin) || defaultPeriode().dateFin;
     const dateList = generateDateRange(dDeb, dFin);
 
-    const where = {
+    // 1. Catalogue + aliases (cache 60s)
+    const { catalog: prixRows, aliases: aliasRows } = await financeCache.getCatalogAndAliases();
+    const resolverMaps = buildResolverMaps(prixRows, aliasRows);
+
+    // 2. Historiques temporels (prix vente + prix achat)
+    const [pvHistory, paHistory] = await Promise.all([
+        PrixVenteHistory.findAll({ order: [['created_at', 'ASC']] }),
+        PrixAchatHistory.findAll({ order: [['created_at', 'ASC']] })
+    ]);
+    const prixVenteAtDate = buildTemporalResolver(pvHistory, 'prix_vente');
+    const prixAchatAtDate = buildTemporalResolver(paHistory, 'prix_achat');
+
+    // Resout le prix_vente catalogue effectif pour (produit_vente, date).
+    // Cascade: history point-in-time -> catalog courant -> null si unmapped.
+    const lookupPrixVenteAtDate = (produitVenteNom, venteDateISO) => {
+        const r = resolveProduit(produitVenteNom, resolverMaps);
+        if (!r.resolved) return null;
+        const fromHistory = prixVenteAtDate(r.resolved.toLowerCase(), venteDateISO);
+        if (fromHistory != null) return fromHistory;
+        return r.value ? r.value.prix_vente : null;
+    };
+
+    // 3. Ventes de la periode (filtre PV si specifie)
+    const venteWhere = {
         date: { [Op.in]: dateList },
         categorie: { [Op.in]: CATEGORIES_ELIGIBLES }
     };
     if (pointVente && pointVente !== 'tous') {
-        where.pointVente = pointVente;
+        venteWhere.pointVente = pointVente;
     }
-
     const ventes = await Vente.findAll({
-        where,
+        where: venteWhere,
         attributes: ['date', 'produit', 'categorie', 'pointVente', 'nombre', 'prixUnit']
     });
 
-    const detail = new Map(); // produit -> agg
+    // 4. Calcul commission 3% via resolver + point-in-time
+    const detail = new Map();
     let totalDette = 0;
+    let ventesNonResolues = 0;
+    let qteNonResolue = 0;
 
     for (const v of ventes) {
         const qte = parseFloat(v.nombre) || 0;
-        const prix = parseFloat(v.prixUnit) || 0;
-        if (qte <= 0 || prix <= 0) continue;
-        const detteLigne = (COMMISSION_PCT / 100) * prix * qte;
+        if (qte <= 0) continue;
+
+        const resolved = resolveProduit(v.produit, resolverMaps);
+        if (!resolved.resolved) {
+            // Vente d'un produit non present dans le catalogue (ni alias).
+            // On l'ignore pour le calcul mais on l'agrege en "non resolu"
+            // pour faciliter le diagnostic cote UI.
+            ventesNonResolues++;
+            qteNonResolue += qte;
+            continue;
+        }
+
+        const prixVenteEff = lookupPrixVenteAtDate(v.produit, v.date);
+        if (prixVenteEff == null || prixVenteEff <= 0) {
+            // Catalog n'a pas (encore) de prix_vente: skip silencieux,
+            // cote Maas c'est le meme comportement.
+            continue;
+        }
+
+        const detteLigne = (COMMISSION_PCT / 100) * prixVenteEff * qte;
         totalDette += detteLigne;
 
-        const key = v.produit;
-        const agg = detail.get(key) || { produit: key, quantite: 0, dette: 0 };
+        // Agreger par produit resolu (= entree catalogue)
+        const key = resolved.resolved;
+        const agg = detail.get(key) || {
+            produit: key,
+            produit_vente_originaux: new Set(),
+            quantite: 0,
+            prix_vente_courant: resolved.value ? resolved.value.prix_vente : null,
+            dette: 0,
+            statut: resolved.statut
+        };
+        agg.produit_vente_originaux.add(v.produit);
         agg.quantite += qte;
         agg.dette += detteLigne;
         detail.set(key, agg);
     }
 
-    // Paiements de la periode (filtre PV optionnel)
+    // 5. Paiements (filtre PV optionnel)
     const paiementWhere = { date: { [Op.gte]: dDeb, [Op.lte]: dFin } };
     if (pointVente && pointVente !== 'tous') {
         paiementWhere.point_vente = pointVente;
@@ -157,8 +270,19 @@ async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
         ce_que_je_dois: round2(totalDette),
         paiements_effectues: round2(totalPaiements),
         reste_a_payer: round2(totalDette - totalPaiements),
+        ventes_non_resolues: ventesNonResolues,
+        quantite_non_resolue: round2(qteNonResolue),
+        catalog_size: prixRows.length,
+        alias_size: aliasRows.length,
         detail: Array.from(detail.values())
-            .map(d => ({ produit: d.produit, quantite: round2(d.quantite), dette: round2(d.dette) }))
+            .map(d => ({
+                produit: d.produit,
+                produit_vente_originaux: Array.from(d.produit_vente_originaux),
+                quantite: round2(d.quantite),
+                prix_vente_courant: d.prix_vente_courant == null ? null : round2(d.prix_vente_courant),
+                dette: round2(d.dette),
+                statut: d.statut
+            }))
             .sort((a, b) => b.dette - a.dette)
     };
 }
@@ -170,9 +294,6 @@ router.get('/creances', requireAuth, async (req, res) => {
     try {
         const { dateDebut, dateFin, pointVente } = req.query;
 
-        // Determiner les labels MataBanq a interroger:
-        //   - filtre PV explicite => 1 seul label
-        //   - sinon (cumul) => tous les labels mappes (Liberte 5 + Almadies 2)
         let labelsToFetch;
         if (pointVente && pointVente !== 'tous') {
             const lbl = labelForPointVente(pointVente);
@@ -181,7 +302,6 @@ router.get('/creances', requireAuth, async (req, res) => {
             labelsToFetch = allLabels();
         }
 
-        // Local + remote en parallele
         const [localResult, ...remoteResults] = await Promise.allSettled([
             computeCreancesLocal({ dateDebut, dateFin, pointVente }),
             ...labelsToFetch.map(label => fetchCreanceCdb({ dateDebut, dateFin, label }))
@@ -189,21 +309,15 @@ router.get('/creances', requireAuth, async (req, res) => {
 
         if (localResult.status === 'rejected') throw localResult.reason;
 
-        // Construire le payload CDB:
-        //   - cdb_per_label: dict label -> reponse MataBanq (ou null/disabled)
-        //   - cdb: agregat (sum des soldes) si plusieurs labels, sinon = unique
         const cdbPerLabel = {};
         labelsToFetch.forEach((label, idx) => {
             const r = remoteResults[idx];
             cdbPerLabel[label] = r.status === 'fulfilled' ? r.value : { _error: r.reason && r.reason.message };
         });
 
-        // Agregation simple: somme des soldes numeriques si presents.
-        // Le format MataBanq exact peut varier; on tente plusieurs cles communes.
         function extractSolde(payload) {
             if (!payload || typeof payload !== 'object') return null;
             if (payload._disabled || payload._error) return null;
-            // Essais successifs de la cle "solde"
             const candidates = [
                 payload.solde,
                 payload.solde_creance,
@@ -231,10 +345,7 @@ router.get('/creances', requireAuth, async (req, res) => {
                 continue;
             }
             const s = extractSolde(payload);
-            if (s != null) {
-                cdbHasData = true;
-                cdbSum += s;
-            }
+            if (s != null) { cdbHasData = true; cdbSum += s; }
         }
         if (cdbHasData) {
             cdbAgrege = { solde: round2(cdbSum), labels: labelsToFetch };
@@ -258,7 +369,7 @@ router.get('/creances', requireAuth, async (req, res) => {
 });
 
 // ============================================================
-// GET /api/finance/paiements
+// PAIEMENTS
 // ============================================================
 router.get('/paiements', requireAuth, async (req, res) => {
     try {
@@ -282,9 +393,6 @@ router.get('/paiements', requireAuth, async (req, res) => {
     }
 });
 
-// ============================================================
-// POST /api/finance/paiements
-// ============================================================
 router.post('/paiements', requireWrite, async (req, res) => {
     try {
         const { date, montant, mode, reference, commentaire, pointVente } = req.body;
@@ -311,9 +419,6 @@ router.post('/paiements', requireWrite, async (req, res) => {
     }
 });
 
-// ============================================================
-// DELETE /api/finance/paiements/:id
-// ============================================================
 router.delete('/paiements/:id', requireWrite, async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
@@ -327,6 +432,143 @@ router.delete('/paiements/:id', requireWrite, async (req, res) => {
         res.json({ success: true });
     } catch (e) {
         console.error('DELETE /api/finance/paiements/:id:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// ============================================================
+// PRIX FOURNISSEUR (catalogue)
+// ============================================================
+router.get('/prix', requireAuth, async (req, res) => {
+    try {
+        const rows = await FournisseurPrix.findAll({ order: [['produit', 'ASC']] });
+        res.json({ success: true, data: rows });
+    } catch (e) {
+        console.error('GET /api/finance/prix:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// PUT /api/finance/prix
+// Body: { produit, prix_vente, prix_achat? }
+// Upsert + insert into prix_vente_history / prix_achat_history pour le
+// point-in-time. Reservé aux roles avances (admin / super*).
+router.put('/prix', requireAdvanced, async (req, res) => {
+    try {
+        const { produit, prix_vente, prix_achat } = req.body;
+        if (!produit) {
+            return res.status(400).json({ success: false, error: 'produit requis' });
+        }
+        const pv = parseFloat(prix_vente);
+        if (!Number.isFinite(pv) || pv < 0) {
+            return res.status(400).json({ success: false, error: 'prix_vente doit etre un nombre >= 0' });
+        }
+        let pa = null;
+        if (prix_achat !== undefined && prix_achat !== null && prix_achat !== '') {
+            pa = parseFloat(prix_achat);
+            if (!Number.isFinite(pa) || pa < 0) {
+                return res.status(400).json({ success: false, error: 'prix_achat doit etre un nombre >= 0' });
+            }
+        }
+        const changedBy = (req.session.user && req.session.user.username) || null;
+
+        // Upsert catalog
+        const existing = await FournisseurPrix.findByPk(produit);
+        if (existing) {
+            const updates = { prix_vente: pv, updated_at: new Date() };
+            if (pa != null) updates.prix_achat = pa;
+            await existing.update(updates);
+        } else {
+            await FournisseurPrix.create({
+                produit,
+                prix_vente: pv,
+                prix_achat: pa,
+                updated_at: new Date()
+            });
+        }
+
+        // Historiser
+        await PrixVenteHistory.create({
+            produit, prix_vente: pv, changed_by: changedBy, created_at: new Date()
+        });
+        if (pa != null) {
+            await PrixAchatHistory.create({
+                produit, prix_achat: pa, changed_by: changedBy, created_at: new Date()
+            });
+        }
+
+        financeCache.invalidate();
+        res.json({ success: true });
+    } catch (e) {
+        console.error('PUT /api/finance/prix:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+router.delete('/prix/:produit', requireAdvanced, async (req, res) => {
+    try {
+        const produit = req.params.produit;
+        const rows = await FournisseurPrix.destroy({ where: { produit } });
+        if (rows === 0) {
+            return res.status(404).json({ success: false, error: 'Produit catalogue introuvable' });
+        }
+        financeCache.invalidate();
+        res.json({ success: true });
+    } catch (e) {
+        console.error('DELETE /api/finance/prix/:produit:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// ============================================================
+// ALIAS PRODUITS
+// ============================================================
+router.get('/alias', requireAuth, async (req, res) => {
+    try {
+        const rows = await ProduitAlias.findAll({ order: [['alias_produit', 'ASC']] });
+        res.json({ success: true, data: rows });
+    } catch (e) {
+        console.error('GET /api/finance/alias:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+router.put('/alias', requireAdvanced, async (req, res) => {
+    try {
+        const { alias_produit, produit_catalog } = req.body;
+        if (!alias_produit || !produit_catalog) {
+            return res.status(400).json({ success: false, error: 'alias_produit et produit_catalog requis' });
+        }
+        // Verifier que produit_catalog existe vraiment
+        const catalogExists = await FournisseurPrix.findByPk(produit_catalog);
+        if (!catalogExists) {
+            return res.status(400).json({ success: false, error: `produit_catalog "${produit_catalog}" inexistant dans fournisseur_prix` });
+        }
+        const existing = await ProduitAlias.findByPk(alias_produit);
+        if (existing) {
+            await existing.update({ produit_catalog, updated_at: new Date() });
+        } else {
+            await ProduitAlias.create({ alias_produit, produit_catalog, updated_at: new Date() });
+        }
+        financeCache.invalidate();
+        res.json({ success: true });
+    } catch (e) {
+        console.error('PUT /api/finance/alias:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+router.delete('/alias/:alias', requireAdvanced, async (req, res) => {
+    try {
+        const alias = req.params.alias;
+        const rows = await ProduitAlias.destroy({ where: { alias_produit: alias } });
+        if (rows === 0) {
+            return res.status(404).json({ success: false, error: 'Alias introuvable' });
+        }
+        financeCache.invalidate();
+        res.json({ success: true });
+    } catch (e) {
+        console.error('DELETE /api/finance/alias/:alias:', e);
         res.status(500).json({ success: false, error: e.message });
     }
 });

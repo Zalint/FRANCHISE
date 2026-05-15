@@ -32,6 +32,12 @@ const WebOrder = require('./WebOrder');
 // Modèle Finance: paiements faits au fournisseur viande
 const FournisseurPaiement = require('./FournisseurPaiement');
 
+// Modèles Finance: catalogue prix fournisseur + aliases + historique
+const FournisseurPrix = require('./FournisseurPrix');
+const ProduitAlias = require('./ProduitAlias');
+const PrixVenteHistory = require('./PrixVenteHistory');
+const PrixAchatHistory = require('./PrixAchatHistory');
+
 const { sequelize } = require('../index');
 
 // =====================================================
@@ -202,6 +208,12 @@ module.exports = {
 
   // Finance — paiements fournisseur
   FournisseurPaiement,
+
+  // Finance — catalogue prix + alias + historique temporel
+  FournisseurPrix,
+  ProduitAlias,
+  PrixVenteHistory,
+  PrixAchatHistory,
 
   // Fonctions utilitaires
   syncDatabase,

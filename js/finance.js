@@ -228,18 +228,50 @@
             </div>`
         ].join('');
 
+        // Bandeau diagnostic: catalog vide ou ventes non resolues.
+        // (Pas un blocage, juste un avertissement pour aider a debugger
+        // la config /api/finance/prix + /api/finance/alias.)
+        const warnSlot = document.createElement('div');
+        warnSlot.className = 'col-12';
+        const warnings = [];
+        if (local.catalog_size === 0) {
+            warnings.push(`<i class="bi bi-exclamation-triangle text-warning me-1"></i>Le catalogue <code>fournisseur_prix</code> est vide → toutes les ventes sont ignorées. Popüle via <code>PUT /api/finance/prix</code>.`);
+        }
+        if (local.ventes_non_resolues > 0) {
+            warnings.push(`<i class="bi bi-info-circle text-info me-1"></i><strong>${local.ventes_non_resolues}</strong> ventes (qte ${local.quantite_non_resolue}) non résolues sur la période (produit absent du catalogue + sans alias). Ces ventes sont exclues du calcul 3%.`);
+        }
+        if (warnings.length > 0) {
+            warnSlot.innerHTML = `<div class="alert alert-light border small mb-0 mt-2">${warnings.join('<br>')}</div>`;
+            cardsContainer.appendChild(warnSlot);
+        }
+
         totalBadge.textContent = 'Je dois: ' + fmt(local.ce_que_je_dois);
 
-        // Detail produits
+        // Detail produits (agreges par entree catalogue resolue)
         const detail = local.detail || [];
         if (detail.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" class="text-muted small">Aucune vente éligible sur la période.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" class="text-muted small">Aucune vente éligible avec un produit catalogue résolu sur la période.</td></tr>`;
             return;
         }
         for (const d of detail) {
             const tr = document.createElement('tr');
+            // Statut badge: exact / alias / prefix
+            let statutBadge = '';
+            if (d.statut === 'exact') statutBadge = '<span class="badge bg-success ms-1" title="Match exact catalogue">exact</span>';
+            else if (d.statut === 'alias') statutBadge = '<span class="badge bg-info ms-1" title="Resolu via alias">alias</span>';
+            else if (d.statut === 'prefix') statutBadge = '<span class="badge bg-warning text-dark ms-1" title="Match prefix (legacy)">prefix</span>';
+
+            // Tooltip avec libelles vente originaux si different du nom catalogue
+            const originaux = Array.isArray(d.produit_vente_originaux) ? d.produit_vente_originaux : [];
+            const sublabel = originaux.length > 0 && !(originaux.length === 1 && originaux[0] === d.produit)
+                ? `<div class="small text-muted">${originaux.map(esc).join(', ')}</div>`
+                : '';
+
             tr.innerHTML = `
-                <td>${esc(d.produit)}</td>
+                <td>
+                    <strong>${esc(d.produit)}</strong>${statutBadge}
+                    ${sublabel}
+                </td>
                 <td class="text-end">${new Intl.NumberFormat('fr-FR').format(d.quantite)}</td>
                 <td class="text-end">${fmt(d.dette)}</td>
             `;

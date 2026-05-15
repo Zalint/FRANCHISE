@@ -2,6 +2,10 @@ const { sequelize } = require('./index');
 const Reconciliation = require('./models/Reconciliation');
 const CashPayment = require('./models/CashPayment');
 const FournisseurPaiement = require('./models/FournisseurPaiement');
+const FournisseurPrix = require('./models/FournisseurPrix');
+const ProduitAlias = require('./models/ProduitAlias');
+const PrixVenteHistory = require('./models/PrixVenteHistory');
+const PrixAchatHistory = require('./models/PrixAchatHistory');
 
 /**
  * Met à jour le schéma de la base de données sans perdre les données existantes
@@ -76,6 +80,38 @@ async function updateSchema() {
                 ALTER TABLE fournisseur_paiements
                 ADD COLUMN IF NOT EXISTS point_vente VARCHAR(100) DEFAULT NULL
             `);
+        }
+
+        // Finance: catalogue prix fournisseur (base du resolver + commission 3%).
+        const fournisseurPrixExists = await checkTableExists('fournisseur_prix');
+        if (!fournisseurPrixExists) {
+            console.log('Table fournisseur_prix manquante, creation...');
+            await FournisseurPrix.sync();
+            console.log('Table fournisseur_prix creee');
+        }
+
+        // Finance: aliases produits (libelle vente -> entree catalogue).
+        const produitAliasExists = await checkTableExists('produit_alias');
+        if (!produitAliasExists) {
+            console.log('Table produit_alias manquante, creation...');
+            await ProduitAlias.sync();
+            console.log('Table produit_alias creee');
+        }
+
+        // Finance: historique point-in-time du prix_vente catalogue (commission 3%).
+        const prixVenteHistoryExists = await checkTableExists('prix_vente_history');
+        if (!prixVenteHistoryExists) {
+            console.log('Table prix_vente_history manquante, creation...');
+            await PrixVenteHistory.sync();
+            console.log('Table prix_vente_history creee');
+        }
+
+        // Finance: historique point-in-time du prix_achat catalogue.
+        const prixAchatHistoryExists = await checkTableExists('prix_achat_history');
+        if (!prixAchatHistoryExists) {
+            console.log('Table prix_achat_history manquante, creation...');
+            await PrixAchatHistory.sync();
+            console.log('Table prix_achat_history creee');
         }
 
         console.log('Mise à jour du schéma terminée avec succès');
