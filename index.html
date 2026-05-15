@@ -328,6 +328,86 @@
             font-weight: bold;
         }
 
+        /* ============ Navbar style Maas (tenant badge + user chip + Caisse CTA) ============ */
+        .tenant-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.12);
+            color: #ffd84d;
+            font-weight: 600;
+            font-size: 0.875rem;
+            line-height: 1;
+        }
+        .tenant-badge i { font-size: 0.95rem; }
+
+        .nav-cta-caisse {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.4rem 0.85rem !important;
+            border-radius: 0.5rem;
+            background: rgba(255,255,255,0.95);
+            color: #1f2937 !important;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: background 0.15s ease;
+        }
+        .nav-cta-caisse:hover {
+            background: #ffd84d;
+            color: #1f2937 !important;
+        }
+
+        .user-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            font-size: 0.825rem;
+        }
+        .user-avatar {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.6rem;
+            height: 1.6rem;
+            border-radius: 50%;
+            background: #ffd84d;
+            color: #1f2937;
+            font-weight: 700;
+            font-size: 0.75rem;
+        }
+        .user-info-text {
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        .nav-link-logout {
+            color: rgba(255,255,255,0.85) !important;
+            font-size: 0.85rem;
+        }
+        .nav-link-logout:hover { color: #ffd84d !important; }
+
+        /* ============ Look general cards/tables modernise ============ */
+        .card.shadow-sm {
+            border: 1px solid #e5e7eb;
+        }
+        .card-header {
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .table thead.table-light th {
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.85rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .table tbody td { vertical-align: middle; }
+        .badge.bg-warning { color: #1f2937; }
+
         /* ============ Accordion Stock + Transfert (style Maas) ============ */
         .stock-accordion .accordion-button {
             background-color: #f8f9fa;
@@ -447,11 +527,26 @@
                             </a>
                         </li>
                     </ul>
-                    <div class="navbar-nav text-end">
-                        <span id="client-name-display" class="nav-link fw-bold text-warning"></span>
-                        <a class="nav-link fw-semibold" href="/pos.html" title="Point de vente"><i class="bi bi-cash-register me-1"></i>Caisse</a>
-                        <span class="nav-item nav-link" id="user-info"></span>
-                        <a class="nav-link" href="#" id="logout-btn">Déconnexion</a>
+                    <div class="navbar-nav text-end align-items-lg-center flex-lg-row gap-lg-2">
+                        <!-- Tenant badge: nom de l'enseigne -->
+                        <span class="tenant-badge" title="Point de vente">
+                            <i class="bi bi-shop"></i>
+                            <span id="client-name-display"></span>
+                        </span>
+
+                        <!-- Caisse: CTA distinct (action frequente) -->
+                        <a class="nav-link nav-cta-caisse" href="/pos.html" title="Point de vente">
+                            <i class="bi bi-cash-register me-1"></i>Caisse
+                        </a>
+
+                        <!-- User chip: utilise user-info (rempli par script.js) + bouton Deconnexion -->
+                        <span class="user-chip" id="user-chip">
+                            <span class="user-avatar" id="user-avatar" aria-hidden="true">·</span>
+                            <span class="user-info-text" id="user-info"></span>
+                        </span>
+                        <a class="nav-link nav-link-logout" href="#" id="logout-btn" title="Deconnexion">
+                            <i class="bi bi-box-arrow-right me-1"></i>Déconnexion
+                        </a>
                     </div>
                 </div>
             </div>

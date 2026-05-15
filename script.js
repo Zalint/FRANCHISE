@@ -799,6 +799,13 @@ async function checkAuth() {
         // Afficher les informations de l'utilisateur avec le rôle
         const roleDisplayName = getUserRoleDisplayName(currentUser);
         document.getElementById('user-info').textContent = `Connecté en tant que ${currentUser.username} (${roleDisplayName})`;
+        // Avatar: 1ere lettre du username (chip navbar)
+        const _avatar = document.getElementById('user-avatar');
+        if (_avatar && currentUser.username) {
+            _avatar.textContent = currentUser.username.charAt(0).toUpperCase();
+        }
+        // Expose pour les modules (ex: js/finance.js prefille le filtre PV)
+        window.currentUser = currentUser;
         
         // Charger l'état des modules si le gestionnaire est disponible
         if (window.ModulesHandler) {
@@ -4918,6 +4925,11 @@ function initCopierStock() {
 async function afficherOngletsSuivantDroits(userData) {
     const roleDisplayName = getUserRoleDisplayName(userData);
     document.getElementById('user-info').textContent = `Connecté en tant que ${userData.username} (${roleDisplayName})`;
+    const _avatar2 = document.getElementById('user-avatar');
+    if (_avatar2 && userData.username) {
+        _avatar2.textContent = userData.username.charAt(0).toUpperCase();
+    }
+    window.currentUser = userData;
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('main-content').style.display = 'block';
     
