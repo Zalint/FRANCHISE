@@ -305,6 +305,8 @@ function hideAllSections() {
     document.getElementById('reconciliation-mois-section').style.display = 'none';
     document.getElementById('stock-alerte-section').style.display = 'none';
     document.getElementById('cash-payment-section').style.display = 'none';
+    const _financeSection = document.getElementById('finance-section');
+    if (_financeSection) _financeSection.style.display = 'none';
     document.getElementById('estimation-section').style.display = 'none';
 
     // Ensure content-section elements are also hidden
@@ -797,6 +799,13 @@ async function checkAuth() {
         // Afficher les informations de l'utilisateur avec le rôle
         const roleDisplayName = getUserRoleDisplayName(currentUser);
         document.getElementById('user-info').textContent = `Connecté en tant que ${currentUser.username} (${roleDisplayName})`;
+        // Avatar: 1ere lettre du username (chip navbar)
+        const _avatar = document.getElementById('user-avatar');
+        if (_avatar && currentUser.username) {
+            _avatar.textContent = currentUser.username.charAt(0).toUpperCase();
+        }
+        // Expose pour les modules (ex: js/finance.js prefille le filtre PV)
+        window.currentUser = currentUser;
         
         // Charger l'état des modules si le gestionnaire est disponible
         if (window.ModulesHandler) {
@@ -859,6 +868,14 @@ async function checkAuth() {
         
         // Onglet Cash Paiement - module cash-paiement + utilisateurs avancés
         setElementVisibility(cashPaymentItem, 'cash-payment-item', currentUser.canManageAdvanced);
+
+        // Onglet Finance - tout user authentifie peut LIRE; ecriture gatee cote API.
+        // Visibilite alignee sur canRead (lecteur, user, super*, admin) — bypass
+        // ModulesHandler car pas de module "finance" enregistre.
+        const financeItem = document.getElementById('finance-item');
+        if (financeItem) {
+            financeItem.style.display = currentUser.canRead ? 'block' : 'none';
+        }
         
         // Onglet Suivi achat boeuf - module suivi-achat-boeuf + utilisateurs avancés
         setElementVisibility(suiviAchatBoeufItem, 'suivi-achat-boeuf-item', currentUser.canManageAdvanced);
@@ -4908,6 +4925,11 @@ function initCopierStock() {
 async function afficherOngletsSuivantDroits(userData) {
     const roleDisplayName = getUserRoleDisplayName(userData);
     document.getElementById('user-info').textContent = `Connecté en tant que ${userData.username} (${roleDisplayName})`;
+    const _avatar2 = document.getElementById('user-avatar');
+    if (_avatar2 && userData.username) {
+        _avatar2.textContent = userData.username.charAt(0).toUpperCase();
+    }
+    window.currentUser = userData;
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('main-content').style.display = 'block';
     
@@ -4953,6 +4975,12 @@ async function afficherOngletsSuivantDroits(userData) {
     // Onglet Cash Paiement - pour utilisateurs avancés
     if (cashPaymentItem) {
         cashPaymentItem.style.display = shouldShowElement('cash-payment-item', userData.canManageAdvanced) ? 'block' : 'none';
+    }
+
+    // Onglet Finance - tout user authentifie peut LIRE; ecriture gatee cote API.
+    const financeItem = document.getElementById('finance-item');
+    if (financeItem) {
+        financeItem.style.display = userData.canRead ? 'block' : 'none';
     }
     
     // Onglet Suivi achat boeuf - pour utilisateurs avancés
@@ -8365,10 +8393,22 @@ document.getElementById('stock-alerte-tab').addEventListener('click', function(e
 document.getElementById('cash-payment-tab').addEventListener('click', function(e) {
     e.preventDefault();
     showSection('cash-payment-section');
-    
+
     // Vérifier les permissions admin pour afficher le bouton "Effacer les données"
     checkCashPaymentAdminPermissions();
 });
+
+// Onglet Finance - delegue l'init a window.FinanceUI (js/finance.js)
+const _financeTab = document.getElementById('finance-tab');
+if (_financeTab) {
+    _financeTab.addEventListener('click', function(e) {
+        e.preventDefault();
+        showSection('finance-section');
+        if (window.FinanceUI && typeof window.FinanceUI.init === 'function') {
+            window.FinanceUI.init();
+        }
+    });
+}
 
 
 // Fonction pour initialiser la section de réconciliation mensuelle

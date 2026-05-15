@@ -1,7 +1,7 @@
 {
-  "name": "Keur BALLI - Point de Vente",
-  "short_name": "Keur BALLI",
-  "description": "Système de point de vente pour Keur BALLI",
+  "name": "Keur BALLY - Point de Vente",
+  "short_name": "Keur BALLY",
+  "description": "Système de point de vente pour Keur BALLY",
   "start_url": "/pos.html",
   "scope": "/",
   "display": "standalone",

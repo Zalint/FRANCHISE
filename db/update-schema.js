@@ -1,6 +1,12 @@
 const { sequelize } = require('./index');
 const Reconciliation = require('./models/Reconciliation');
 const CashPayment = require('./models/CashPayment');
+const FournisseurPaiement = require('./models/FournisseurPaiement');
+const FournisseurPrix = require('./models/FournisseurPrix');
+const ProduitAlias = require('./models/ProduitAlias');
+const PrixVenteHistory = require('./models/PrixVenteHistory');
+const PrixAchatHistory = require('./models/PrixAchatHistory');
+const FinanceConfig = require('./models/FinanceConfig');
 
 /**
  * Met à jour le schéma de la base de données sans perdre les données existantes
@@ -61,6 +67,196 @@ async function updateSchema() {
             ADD COLUMN IF NOT EXISTS default_screen VARCHAR(100) DEFAULT NULL
         `);
         console.log('Colonne default_screen vérifiée/ajoutée dans la table users');
+
+        // Finance: table fournisseur_paiements (CRUD onglet Creances Fournisseur).
+        const fournisseurPaiementsExists = await checkTableExists('fournisseur_paiements');
+        if (!fournisseurPaiementsExists) {
+            console.log('Table fournisseur_paiements manquante, creation...');
+            await FournisseurPaiement.sync();
+            console.log('Table fournisseur_paiements creee');
+        } else {
+            // Defense en profondeur: si la table existe mais sans la colonne
+            // point_vente (ancienne version), on l'ajoute.
+            await sequelize.query(`
+                ALTER TABLE fournisseur_paiements
+                ADD COLUMN IF NOT EXISTS point_vente VARCHAR(100) DEFAULT NULL
+            `);
+        }
+
+        // Finance: catalogue prix fournisseur (base du resolver + commission 3%).
+        const fournisseurPrixExists = await checkTableExists('fournisseur_prix');
+        if (!fournisseurPrixExists) {
+            console.log('Table fournisseur_prix manquante, creation...');
+            await FournisseurPrix.sync();
+            console.log('Table fournisseur_prix creee');
+        }
+        // Seed des prix par defaut (port Maas: 5 produits boucherie).
+        // ON CONFLICT DO NOTHING => idempotent, ne touche pas aux prix
+        // deja saisis cote prod.
+        await sequelize.query(`
+            INSERT INTO fournisseur_prix (produit, prix_vente, prix_achat, updated_at) VALUES
+              ('Boeuf',  4350, 3835, NOW()),
+              ('Veau',   4600, 4035, NOW()),
+              ('Agneau', 5300, 4500, NOW()),
+              ('Poulet', 3500, 2600, NOW()),
+              ('Laxass',  300,  200, NOW())
+            ON CONFLICT (produit) DO NOTHING
+        `);
+        // Backfill Poulet.prix_achat si NULL (ex: deploiement anterieur qui
+        // avait seede Poulet avec NULL). N'ecrase pas une valeur deja saisie.
+        await sequelize.query(`
+            UPDATE fournisseur_prix
+            SET prix_achat = 2600, updated_at = NOW()
+            WHERE produit = 'Poulet' AND prix_achat IS NULL
+        `);
+        console.log('Table fournisseur_prix: seed 5 produits applique (idempotent)');
+
+        // Finance: aliases produits (libelle vente -> entree catalogue).
+        const produitAliasExists = await checkTableExists('produit_alias');
+        if (!produitAliasExists) {
+            console.log('Table produit_alias manquante, creation...');
+            await ProduitAlias.sync();
+            console.log('Table produit_alias creee');
+        }
+        // Defense en profondeur: Sequelize.sync() ne genere PAS la FK
+        // produit_alias.produit_catalog -> fournisseur_prix.produit. Sans elle,
+        // supprimer une entree catalogue laisse des aliases orphelins (resolver
+        // retourne 'alias' puis echoue le 2e lookup catalogue -> ventes
+        // silencieusement exclues). Ajout idempotent via pg_constraint check.
+        await sequelize.query(`
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'produit_alias_produit_catalog_fk'
+                      AND conrelid = 'produit_alias'::regclass
+                ) THEN
+                    -- Nettoyer d'eventuels aliases deja orphelins avant d'ajouter la FK
+                    -- (sinon ALTER TABLE rejette).
+                    DELETE FROM produit_alias
+                    WHERE produit_catalog NOT IN (SELECT produit FROM fournisseur_prix);
+                    ALTER TABLE produit_alias
+                    ADD CONSTRAINT produit_alias_produit_catalog_fk
+                    FOREIGN KEY (produit_catalog) REFERENCES fournisseur_prix(produit)
+                    ON DELETE CASCADE;
+                END IF;
+            END $$;
+        `);
+        console.log('Table produit_alias: FK CASCADE produit_catalog -> fournisseur_prix verifiee');
+        // Seed des aliases reels FRANCHISE (libelles observes en BDD).
+        // ON CONFLICT DO NOTHING => idempotent, ne touche pas aux mappings
+        // deja saisis manuellement cote prod.
+        // Couvre les variantes "en gros / en detail / encodage casse '??'".
+        await sequelize.query(`
+            INSERT INTO produit_alias (alias_produit, produit_catalog, updated_at) VALUES
+              -- Bovin: morceaux Boeuf et toutes les variantes
+              ('Boeuf en gros',     'Boeuf',  NOW()),
+              ('Boeuf En Gros',     'Boeuf',  NOW()),
+              ('Boeuf en détail',   'Boeuf',  NOW()),
+              ('Boeuf en detail',   'Boeuf',  NOW()),
+              ('Boeuf En Détail',   'Boeuf',  NOW()),
+              ('Boeuf en d??tail',  'Boeuf',  NOW()),
+              ('Boeuf sur pied',    'Boeuf',  NOW()),
+              ('Foie',              'Boeuf',  NOW()),
+              ('Yell',              'Boeuf',  NOW()),
+              ('Abats',             'Boeuf',  NOW()),
+              ('Dechet',            'Boeuf',  NOW()),
+              ('Jarret',            'Boeuf',  NOW()),
+              ('Sans Os',           'Boeuf',  NOW()),
+              ('Filet',             'Boeuf',  NOW()),
+              ('Faux Filet',        'Boeuf',  NOW()),
+              ('Merguez',           'Boeuf',  NOW()),
+              ('Peaux',             'Boeuf',  NOW()),
+              ('Viande hachée',     'Boeuf',  NOW()),
+              ('Viande Hach??e',    'Boeuf',  NOW()),
+              ('Viande hach??e',    'Boeuf',  NOW()),
+              -- Veau
+              ('Veau en gros',      'Veau',   NOW()),
+              ('Veau En Gros',      'Veau',   NOW()),
+              ('Veau en détail',    'Veau',   NOW()),
+              ('Veau en detail',    'Veau',   NOW()),
+              ('Veau En Détail',    'Veau',   NOW()),
+              ('Veau en d??tail',   'Veau',   NOW()),
+              ('Veau sur pied',     'Veau',   NOW()),
+              -- Ovin (mouton/agneau)
+              ('Mouton',            'Agneau', NOW()),
+              ('Mouton en gros',    'Agneau', NOW()),
+              ('Mouton en détail',  'Agneau', NOW()),
+              ('Mouton en detail',  'Agneau', NOW()),
+              ('Tete Agneau',       'Agneau', NOW()),
+              ('Tête Agneau',       'Agneau', NOW()),
+              ('Agneau en gros',    'Agneau', NOW()),
+              ('Agneau en détail',  'Agneau', NOW()),
+              ('Agneau en detail',  'Agneau', NOW()),
+              -- Caprin
+              ('Chevre sur pied',   'Agneau', NOW()),
+              ('Chèvre sur pied',   'Agneau', NOW()),
+              -- Volaille
+              ('Poulet en gros',    'Poulet', NOW()),
+              ('Poulet en détail',  'Poulet', NOW()),
+              ('Poulet en detail',  'Poulet', NOW()),
+              ('Poulet en d??tail', 'Poulet', NOW()),
+              ('Pilon',             'Poulet', NOW()),
+              ('Merguez poulet',    'Poulet', NOW()),
+              ('Oeuf',              'Poulet', NOW()),
+              ('Pack Pigeon',       'Poulet', NOW())
+            ON CONFLICT (alias_produit) DO NOTHING
+        `);
+        console.log('Table produit_alias: seed aliases FRANCHISE applique (idempotent)');
+
+        // Finance: table cle/valeur des parametres (commission_pct, categories_eligibles, ...).
+        const financeConfigExists = await checkTableExists('finance_config');
+        if (!financeConfigExists) {
+            console.log('Table finance_config manquante, creation...');
+            await FinanceConfig.sync();
+            console.log('Table finance_config creee');
+        }
+        // Seed des cles par defaut. ON CONFLICT DO NOTHING => idempotent.
+        await sequelize.query(`
+            INSERT INTO finance_config (key, value, updated_at) VALUES
+              ('commission_pct',       '3.0',                                   NOW()),
+              ('categories_eligibles', 'Bovin,Ovin,Caprin,Volaille,Poisson',    NOW())
+            ON CONFLICT (key) DO NOTHING
+        `);
+        console.log('Table finance_config: seed commission_pct=3.0 + categories_eligibles applique (idempotent)');
+
+        // Finance: historique point-in-time du prix_vente catalogue (commission 3%).
+        const prixVenteHistoryExists = await checkTableExists('prix_vente_history');
+        if (!prixVenteHistoryExists) {
+            console.log('Table prix_vente_history manquante, creation...');
+            await PrixVenteHistory.sync();
+            console.log('Table prix_vente_history creee');
+        }
+        // Genesis seed: 1 ligne created_at = epoch 1970 par produit catalogue.
+        // Garantit que toute vente, meme anterieure, resoud un prix_vente
+        // point-in-time non nul. Idempotent (skip si une entree existe deja).
+        await sequelize.query(`
+            INSERT INTO prix_vente_history (produit, prix_vente, changed_by, created_at)
+            SELECT fp.produit, fp.prix_vente, '_seed_', '1970-01-01 00:00:00+00'::timestamptz
+            FROM fournisseur_prix fp
+            WHERE NOT EXISTS (
+                SELECT 1 FROM prix_vente_history h WHERE h.produit = fp.produit
+            )
+        `);
+        console.log('prix_vente_history: genesis seedee (1970-01-01)');
+
+        // Finance: historique point-in-time du prix_achat catalogue.
+        const prixAchatHistoryExists = await checkTableExists('prix_achat_history');
+        if (!prixAchatHistoryExists) {
+            console.log('Table prix_achat_history manquante, creation...');
+            await PrixAchatHistory.sync();
+            console.log('Table prix_achat_history creee');
+        }
+        // Genesis seed (skip si prix_achat IS NULL, ex: Poulet).
+        await sequelize.query(`
+            INSERT INTO prix_achat_history (produit, prix_achat, changed_by, created_at)
+            SELECT fp.produit, fp.prix_achat, '_seed_', '1970-01-01 00:00:00+00'::timestamptz
+            FROM fournisseur_prix fp
+            WHERE fp.prix_achat IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM prix_achat_history h WHERE h.produit = fp.produit
+              )
+        `);
+        console.log('prix_achat_history: genesis seedee (1970-01-01)');
 
         console.log('Mise à jour du schéma terminée avec succès');
         return true;

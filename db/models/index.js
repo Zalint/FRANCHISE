@@ -29,6 +29,16 @@ const CommandeInfo = require('./CommandeInfo');
 // Modèle pour les commandes web (weborders)
 const WebOrder = require('./WebOrder');
 
+// Modèle Finance: paiements faits au fournisseur viande
+const FournisseurPaiement = require('./FournisseurPaiement');
+
+// Modèles Finance: catalogue prix fournisseur + aliases + historique
+const FournisseurPrix = require('./FournisseurPrix');
+const ProduitAlias = require('./ProduitAlias');
+const PrixVenteHistory = require('./PrixVenteHistory');
+const PrixAchatHistory = require('./PrixAchatHistory');
+const FinanceConfig = require('./FinanceConfig');
+
 const { sequelize } = require('../index');
 
 // =====================================================
@@ -196,7 +206,17 @@ module.exports = {
   
   // Modèle commandes web
   WebOrder,
-  
+
+  // Finance — paiements fournisseur
+  FournisseurPaiement,
+
+  // Finance — catalogue prix + alias + historique temporel
+  FournisseurPrix,
+  ProduitAlias,
+  PrixVenteHistory,
+  PrixAchatHistory,
+  FinanceConfig,
+
   // Fonctions utilitaires
   syncDatabase,
   syncNewModels,

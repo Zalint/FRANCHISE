@@ -327,6 +327,180 @@
             text-align: center;
             font-weight: bold;
         }
+
+        /* ============ Visualisation KPI cards + charts (style Maas) ============ */
+        .kpi-row .kpi-card {
+            border-radius: 10px;
+            transition: transform 120ms ease, box-shadow 120ms ease;
+        }
+        .kpi-row .kpi-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+        }
+        .kpi-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        .kpi-icon-primary { background: #e7f1ff; color: #0d6efd; }
+        .kpi-icon-info    { background: #cff4fc; color: #055160; }
+        .kpi-icon-success { background: #d1e7dd; color: #146c43; }
+
+        /* Visualisation: card-header en bg blanc + titre avec icone */
+        #visualisation-section .card.shadow-sm {
+            border-radius: 10px;
+        }
+        #visualisation-section .card-header.bg-white {
+            border-bottom: 1px solid #e2e8f0;
+            background: #fff !important;
+        }
+        #visualisation-section .card-title {
+            color: #1f2937;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        /* ============ Finance sub-tabs (lisibilite sur fond clair) ============ */
+        #finance-subnav .nav-link {
+            color: #475569 !important;
+            font-weight: 500;
+            background: transparent;
+            border: 1px solid transparent;
+        }
+        #finance-subnav .nav-link:hover {
+            color: #1e3a8a !important;
+            background: rgba(99, 102, 241, 0.06);
+            border-color: transparent;
+        }
+        #finance-subnav .nav-link.active {
+            color: #1e3a8a !important;
+            background: #fff;
+            border-color: #e5e7eb #e5e7eb #fff;
+            font-weight: 600;
+        }
+
+        /* ============ Navbar style Maas (tenant badge + user chip + Caisse CTA) ============ */
+        .tenant-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.12);
+            color: #ffd84d;
+            font-weight: 600;
+            font-size: 0.875rem;
+            line-height: 1;
+        }
+        .tenant-badge i { font-size: 0.95rem; }
+
+        .nav-cta-caisse {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.4rem 0.85rem !important;
+            border-radius: 0.5rem;
+            background: rgba(255,255,255,0.95);
+            color: #1f2937 !important;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: background 0.15s ease;
+        }
+        .nav-cta-caisse:hover {
+            background: #ffd84d;
+            color: #1f2937 !important;
+        }
+
+        .user-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            font-size: 0.825rem;
+        }
+        .user-avatar {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.6rem;
+            height: 1.6rem;
+            border-radius: 50%;
+            background: #ffd84d;
+            color: #1f2937;
+            font-weight: 700;
+            font-size: 0.75rem;
+        }
+        .user-info-text {
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        .nav-link-logout {
+            color: rgba(255,255,255,0.85) !important;
+            font-size: 0.85rem;
+        }
+        .nav-link-logout:hover { color: #ffd84d !important; }
+
+        /* ============ Look general cards/tables modernise ============ */
+        .card.shadow-sm {
+            border: 1px solid #e5e7eb;
+        }
+        .card-header {
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .table thead.table-light th {
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.85rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .table tbody td { vertical-align: middle; }
+        .badge.bg-warning { color: #1f2937; }
+
+        /* ============ Accordion Stock + Transfert (style Maas) ============ */
+        .stock-accordion .accordion-button {
+            background-color: #f8f9fa;
+            color: #1f2937;
+            font-weight: 500;
+            box-shadow: none;
+            padding: 0.85rem 1.1rem;
+        }
+        .stock-accordion .accordion-button:not(.collapsed) {
+            background-color: #eef2ff;
+            color: #1e3a8a;
+            box-shadow: inset 0 -1px 0 rgba(0,0,0,0.05);
+        }
+        .stock-accordion .accordion-button:focus {
+            box-shadow: 0 0 0 0.2rem rgba(99,102,241,0.15);
+        }
+        .stock-accordion .accordion-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem !important;
+            margin-bottom: 0.5rem;
+            overflow: hidden;
+        }
+        .stock-accordion .accordion-body {
+            padding: 1rem 1.1rem 1.2rem;
+        }
+        /* Look general cards Stock inventaire */
+        #stock-inventaire-section .card.shadow-sm {
+            border: 1px solid #e5e7eb;
+        }
+        #stock-inventaire-section table thead.table-light th {
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.85rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        #stock-inventaire-section table tbody td {
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body class="auth-pending">
@@ -369,6 +543,11 @@
                         <li class="nav-item module-pending" id="cash-payment-item">
                             <a class="nav-link" href="#" id="cash-payment-tab">Cash Paiement</a>
                         </li>
+                        <li class="nav-item" id="finance-item" style="display:none">
+                            <a class="nav-link" href="#" id="finance-tab">
+                                <i class="bi bi-cash-stack"></i> Finance
+                            </a>
+                        </li>
                         <li class="nav-item module-pending" id="suivi-achat-boeuf-item">
                             <a class="nav-link" href="#" id="suivi-achat-boeuf-tab">Suivi achat boeuf</a>
                         </li>
@@ -403,11 +582,26 @@
                             </a>
                         </li>
                     </ul>
-                    <div class="navbar-nav text-end">
-                        <span id="client-name-display" class="nav-link fw-bold text-warning"></span>
-                        <a class="nav-link fw-semibold" href="/pos.html" title="Point de vente"><i class="bi bi-cash-register me-1"></i>Caisse</a>
-                        <span class="nav-item nav-link" id="user-info"></span>
-                        <a class="nav-link" href="#" id="logout-btn">Déconnexion</a>
+                    <div class="navbar-nav text-end align-items-lg-center flex-lg-row gap-lg-2">
+                        <!-- Tenant badge: nom de l'enseigne -->
+                        <span class="tenant-badge" title="Point de vente">
+                            <i class="bi bi-shop"></i>
+                            <span id="client-name-display"></span>
+                        </span>
+
+                        <!-- Caisse: CTA distinct (action frequente) -->
+                        <a class="nav-link nav-cta-caisse" href="/pos.html" title="Point de vente">
+                            <i class="bi bi-cash-register me-1"></i>Caisse
+                        </a>
+
+                        <!-- User chip: utilise user-info (rempli par script.js) + bouton Deconnexion -->
+                        <span class="user-chip" id="user-chip">
+                            <span class="user-avatar" id="user-avatar" aria-hidden="true">·</span>
+                            <span class="user-info-text" id="user-info"></span>
+                        </span>
+                        <a class="nav-link nav-link-logout" href="#" id="logout-btn" title="Deconnexion">
+                            <i class="bi bi-box-arrow-right me-1"></i>Déconnexion
+                        </a>
                     </div>
                 </div>
             </div>
@@ -809,13 +1003,16 @@
 
             <!-- Section de visualisation -->
             <div id="visualisation-section" class="content-section" style="display: none;">
-                <div class="row mb-4">
+                <!-- Filtres -->
+                <div class="row mb-3">
                     <div class="col-12">
-                        <div class="card">
+                        <div class="card shadow-sm border-0">
                             <div class="card-body">
-                                <div class="row">
+                                <div class="row g-3">
                                     <div class="col-md-3">
-                                        <label for="periode-select" class="form-label">Période</label>
+                                        <label for="periode-select" class="form-label small fw-semibold text-muted">
+                                            <i class="bi bi-calendar3 me-1"></i>Période
+                                        </label>
                                         <select class="form-select" id="periode-select">
                                             <option value="jour">Aujourd'hui</option>
                                             <option value="semaine">Cette semaine</option>
@@ -824,15 +1021,17 @@
                                         </select>
                                     </div>
                                     <div class="col-md-3">
-                                        <label for="date-debut" class="form-label">Date de début</label>
-                                        <input type="text" class="form-control" id="date-debut">
+                                        <label for="date-debut" class="form-label small fw-semibold text-muted">Date de début</label>
+                                        <input type="text" class="form-control" id="date-debut" placeholder="JJ/MM/AAAA">
                                     </div>
                                     <div class="col-md-3">
-                                        <label for="date-fin" class="form-label">Date de fin</label>
-                                        <input type="text" class="form-control" id="date-fin">
+                                        <label for="date-fin" class="form-label small fw-semibold text-muted">Date de fin</label>
+                                        <input type="text" class="form-control" id="date-fin" placeholder="JJ/MM/AAAA">
                                     </div>
                                     <div class="col-md-3">
-                                        <label for="point-vente-select" class="form-label">Point de vente</label>
+                                        <label for="point-vente-select" class="form-label small fw-semibold text-muted">
+                                            <i class="bi bi-shop me-1"></i>Point de vente
+                                        </label>
                                         <select class="form-select" id="point-vente-select" required>
                                             <option value="">Sélectionner un point de vente</option>
                                         </select>
@@ -842,32 +1041,47 @@
                         </div>
                     </div>
                 </div>
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <div class="card">
+
+                <!-- KPI -->
+                <div class="row g-3 mb-4 kpi-row">
+                    <div class="col-md-12">
+                        <div class="card kpi-card border-0 shadow-sm h-100">
                             <div class="card-body">
-                                <h5 class="card-title">Montant Total des Ventes</h5>
-                                <h2 class="text-primary" id="montant-total">0 FCFA</h2>
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <span class="kpi-icon kpi-icon-primary"><i class="bi bi-cash-coin"></i></span>
+                                    <h6 class="card-subtitle text-muted mb-0">Montant Total des Ventes</h6>
+                                </div>
+                                <h3 class="text-primary mb-0 fw-bold" id="montant-total">0 FCFA</h3>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="row mb-4 visualisation-charts">
+
+                <!-- Charts row 1: Ventes par Jour + Ventes par Produit (cote a cote) -->
+                <div class="row g-3 mb-4 visualisation-charts">
                     <div class="col-md-6">
-                        <div class="card">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header bg-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="bi bi-graph-up me-2 text-primary"></i>Ventes par Jour
+                                </h6>
+                            </div>
                             <div class="card-body">
-                                <h5 class="card-title">Ventes par Jour</h5>
-                                <div style="height: 400px;">
+                                <div style="height: 360px;">
                                     <canvas id="ventesParMoisChart"></canvas>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="card">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header bg-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="bi bi-bar-chart me-2 text-primary"></i>Ventes par Produit
+                                </h6>
+                            </div>
                             <div class="card-body">
-                                <h5 class="card-title">Ventes par Produit</h5>
-                                <div style="height: 400px;">
+                                <div style="height: 360px;">
                                     <canvas id="ventesParProduitChart"></canvas>
                                 </div>
                             </div>
@@ -876,10 +1090,15 @@
                 </div>
                 <div class="row mb-4 visualisation-charts">
                     <div class="col-12">
-                        <div class="card">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="bi bi-shop me-2 text-primary"></i>Ventes par Point de Vente
+                                </h6>
+                            </div>
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h5 class="card-title mb-0">Ventes par Point de Vente</h5>
+                                    <div class="text-muted small">Répartition du chiffre d'affaires par point de vente</div>
                                     <div class="d-flex align-items-center gap-3">
                                         <div class="d-flex align-items-center">
                                             <label for="filterTypePointVente" class="form-label me-2 mb-0">Filtre :</label>
@@ -929,9 +1148,13 @@
                 </div>
                 <div class="row mb-4 visualisation-charts">
                     <div class="col-12">
-                        <div class="card">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="bi bi-pie-chart me-2 text-primary"></i>Ventes par Catégorie
+                                </h6>
+                            </div>
                             <div class="card-body">
-                                <h5 class="card-title">Ventes par Catégorie</h5>
                                 <div style="height: 400px;">
                                     <canvas id="ventesParCategorieChart"></canvas>
                                 </div>
@@ -1292,97 +1515,121 @@
                     </div>
                 </div>
 
-                <!-- Tableau de stock -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Stock</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table id="stock-table" class="table table-bordered table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Point de Vente</th>
-                                        <th>Produit</th>
-                                        <th>Quantité</th>
-                                        <th>Prix Unitaire</th>
-                                        <th>Total</th>
-                                        <th>Commentaire</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                        <div class="mt-3">
-                            <button id="add-stock-row" class="btn btn-primary">
-                                <i class="fas fa-plus"></i> Ajouter une ligne
-                            </button>
-                            <button id="save-stock" class="btn btn-success ms-2">
-                                <i class="fas fa-save"></i> Sauvegarder le stock
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <!-- ============ ACCORDEONS Stock + Transfert ============ -->
+                <div class="accordion stock-accordion" id="stock-accordion">
 
-                <!-- Tableau de transfert -->
-                <div class="card mt-4">
-                    <div class="card-header">
-                        <h5>Transfert</h5>
-                    </div>
-                    <div class="card-body">
-                        <!-- Filtres pour les transferts -->
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="filtre-point-vente-transfert" class="form-label">Filtrer par Point de Vente</label>
-                                    <select id="filtre-point-vente-transfert" class="form-select">
-                                        <option value="">Tous les points de vente</option>
-                                    </select>
+                    <!-- Accordion item: Stock (ouvert par defaut) -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="acc-stock-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#acc-stock-body" aria-expanded="true" aria-controls="acc-stock-body">
+                                <i class="bi bi-box-seam me-2"></i>
+                                <span class="fw-semibold">Stock</span>
+                            </button>
+                        </h2>
+                        <div id="acc-stock-body" class="accordion-collapse collapse show"
+                             aria-labelledby="acc-stock-header" data-bs-parent="#stock-accordion">
+                            <div class="accordion-body">
+                                <div class="table-responsive">
+                                    <table id="stock-table" class="table table-hover align-middle">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Point de Vente</th>
+                                                <th>Produit</th>
+                                                <th>Quantité</th>
+                                                <th>Prix Unitaire</th>
+                                                <th>Total</th>
+                                                <th>Commentaire</th>
+                                                <th class="text-center" style="width:80px">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="filtre-produit-transfert" class="form-label">Filtrer par Produit</label>
-                                    <select id="filtre-produit-transfert" class="form-select">
-                                        <option value="">Tous les produits</option>
-                                        <option value="Boeuf">Boeuf</option>
-                                        <option value="Veau">Veau</option>
-                                        <option value="Poulet">Poulet</option>
-                                        <option value="Tete De Mouton">Tête de Mouton</option>
-                                        <option value="Tablette">Tablette</option>
-                                        <option value="Foie">Foie</option>
-                                        <option value="Yell">Yell</option>
-                                        <option value="Agneau">Agneau</option>
-                                        <option value="Abats">Abats</option>
-                                    </select>
+                                <div class="mt-3 d-flex gap-2 flex-wrap">
+                                    <button id="add-stock-row" class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-plus-lg"></i> Ajouter une ligne
+                                    </button>
+                                    <button id="save-stock" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-save"></i> Sauvegarder le stock
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                        <table class="table" id="transfertTable">
-                            <thead>
-                                <tr>
-                                    <th>Point de Vente</th>
-                                    <th>Produit</th>
-                                    <th>Impact (+/-)</th>
-                                    <th>Quantité</th>
-                                    <th>Prix Unitaire</th>
-                                    <th>Total</th>
-                                    <th>Commentaire</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            </tbody>
-                            <tfoot>
-                                <!-- Le bouton d'ajout de ligne sera ajouté ici dynamiquement -->
-                            </tfoot>
-                        </table>
-                        <div class="mt-3">
-                            <button class="btn btn-primary" id="ajouterLigne">Ajouter une ligne</button>
-                            <button class="btn btn-success" id="sauvegarderTransfert">Sauvegarder le transfert</button>
+                    </div>
+
+                    <!-- Accordion item: Transfert (replie par defaut) -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="acc-transfert-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#acc-transfert-body" aria-expanded="false" aria-controls="acc-transfert-body">
+                                <i class="bi bi-arrow-left-right me-2"></i>
+                                <span class="fw-semibold">Transfert</span>
+                            </button>
+                        </h2>
+                        <div id="acc-transfert-body" class="accordion-collapse collapse"
+                             aria-labelledby="acc-transfert-header" data-bs-parent="#stock-accordion">
+                            <div class="accordion-body">
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label for="filtre-point-vente-transfert" class="form-label small fw-semibold text-muted">
+                                            <i class="bi bi-shop me-1"></i>Point de Vente
+                                        </label>
+                                        <select id="filtre-point-vente-transfert" class="form-select">
+                                            <option value="">Tous les points de vente</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="filtre-produit-transfert" class="form-label small fw-semibold text-muted">
+                                            <i class="bi bi-box me-1"></i>Produit
+                                        </label>
+                                        <select id="filtre-produit-transfert" class="form-select">
+                                            <option value="">Tous les produits</option>
+                                            <option value="Boeuf">Boeuf</option>
+                                            <option value="Veau">Veau</option>
+                                            <option value="Poulet">Poulet</option>
+                                            <option value="Tete De Mouton">Tête de Mouton</option>
+                                            <option value="Tablette">Tablette</option>
+                                            <option value="Foie">Foie</option>
+                                            <option value="Yell">Yell</option>
+                                            <option value="Agneau">Agneau</option>
+                                            <option value="Abats">Abats</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle" id="transfertTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Point de Vente</th>
+                                                <th>Produit</th>
+                                                <th>Impact (+/-)</th>
+                                                <th>Quantité</th>
+                                                <th>Prix Unitaire</th>
+                                                <th>Total</th>
+                                                <th>Commentaire</th>
+                                                <th class="text-center" style="width:80px">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        </tbody>
+                                        <tfoot>
+                                            <!-- Le bouton d'ajout de ligne sera ajouté ici dynamiquement -->
+                                        </tfoot>
+                                    </table>
+                                </div>
+                                <div class="mt-3 d-flex gap-2 flex-wrap">
+                                    <button class="btn btn-outline-primary btn-sm" id="ajouterLigne">
+                                        <i class="bi bi-plus-lg"></i> Ajouter une ligne
+                                    </button>
+                                    <button class="btn btn-primary btn-sm" id="sauvegarderTransfert">
+                                        <i class="bi bi-save"></i> Sauvegarder le transfert
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
                 </div>
             </div>
             
@@ -1859,6 +2106,318 @@
                                 <i class="bi bi-save"></i> Sauvegarder
                             </button>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- Section Finance — Creance Fournisseur                        -->
+            <!-- Adaptation FRANCHISE multi-PV: filtre PV + cumul par defaut. -->
+            <!-- ============================================================ -->
+            <div id="finance-section" class="container-fluid mt-4 content-section" style="display: none;">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" id="finance-subnav">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="#" data-fin-tab="creances">
+                                    <i class="bi bi-receipt"></i> Créances fournisseur
+                                </a>
+                            </li>
+                            <li class="nav-item fin-advanced-tab" style="display:none">
+                                <a class="nav-link" href="#" data-fin-tab="prix">
+                                    <i class="bi bi-tag"></i> Prix fournisseur
+                                </a>
+                            </li>
+                            <li class="nav-item fin-advanced-tab" style="display:none">
+                                <a class="nav-link" href="#" data-fin-tab="alias">
+                                    <i class="bi bi-link-45deg"></i> Aliases produits
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <!-- Pane: Creances -->
+                        <div data-fin-pane="creances">
+                            <!-- Bandeau filtres: dates + point de vente -->
+                            <div class="row g-2 mb-3 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold text-muted">
+                                        <i class="bi bi-calendar3 me-1"></i>Date début
+                                    </label>
+                                    <input type="date" id="fin-creances-date-debut" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold text-muted">
+                                        <i class="bi bi-calendar3 me-1"></i>Date fin
+                                    </label>
+                                    <input type="date" id="fin-creances-date-fin" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold text-muted">
+                                        <i class="bi bi-shop me-1"></i>Point de vente
+                                    </label>
+                                    <select id="fin-creances-pv" class="form-select form-select-sm">
+                                        <option value="tous">Tous (cumul)</option>
+                                        <option value="Keur Bali">Keur Bali</option>
+                                        <option value="Almadie 2">Almadie 2</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-sm btn-primary" id="fin-creances-refresh">
+                                        <i class="bi bi-arrow-clockwise"></i> Calculer
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Accordeon: 3 sections -->
+                            <div class="accordion" id="fin-creances-accordion">
+
+                                <!-- A. Creance Partenaire (MataBanq) -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                                                data-bs-target="#fin-cre-acc-cdb" aria-expanded="true">
+                                            <i class="bi bi-bank me-2"></i>
+                                            <strong>Créance Partenaire (MataBanq)</strong>
+                                            <span class="badge bg-secondary ms-2" id="fin-cdb-status">Chargement…</span>
+                                            <span class="badge bg-warning text-dark ms-2" id="fin-cre-acc-cdb-total"></span>
+                                        </button>
+                                    </h2>
+                                    <div id="fin-cre-acc-cdb" class="accordion-collapse collapse show">
+                                        <div class="accordion-body">
+                                            <div id="fin-cdb-block">
+                                                <div class="alert alert-light border small mb-3" id="fin-cdb-info">
+                                                    Source de vérité du solde dû au fournisseur viande.
+                                                    Lecture depuis l'API <code>mata-depenses-management</code>.
+                                                </div>
+                                                <!-- KPI cards agreges (Solde, Avances, Remb, Delta) -->
+                                                <div id="fin-cdb-summary" class="row g-2 mb-3"></div>
+                                                <!-- Detail par label (rempli dynamiquement) -->
+                                                <div id="fin-cdb-by-label"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- B. Calcul Maas (commission 3%) -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                                data-bs-target="#fin-cre-acc-maas" aria-expanded="false">
+                                            <i class="bi bi-calculator me-2"></i>
+                                            <strong>Calcul Maas</strong>
+                                            <span class="text-muted ms-2 small">(commission 3% sur ventes locales)</span>
+                                            <span class="badge bg-warning text-dark ms-2" id="fin-cre-acc-maas-total"></span>
+                                        </button>
+                                    </h2>
+                                    <div id="fin-cre-acc-maas" class="accordion-collapse collapse">
+                                        <div class="accordion-body">
+                                            <!-- Edition commission_pct (admin/super* uniquement, visibilite JS) -->
+                                            <div class="alert alert-light border d-flex align-items-center flex-wrap gap-2 mb-3" id="fin-config-edit" style="display:none">
+                                                <div class="me-auto small">
+                                                    <i class="bi bi-percent me-1"></i>
+                                                    <strong>Taux de commission :</strong>
+                                                    <span class="text-muted ms-1">applique a toutes les ventes eligibles, point-in-time</span>
+                                                </div>
+                                                <div class="input-group input-group-sm" style="max-width:200px">
+                                                    <input type="number" id="fin-config-commission-pct" class="form-control" min="0" max="100" step="0.1" required>
+                                                    <span class="input-group-text">%</span>
+                                                </div>
+                                                <button class="btn btn-sm btn-primary" id="fin-config-save">
+                                                    <i class="bi bi-check-lg"></i> Enregistrer
+                                                </button>
+                                            </div>
+                                            <div class="row g-2 mb-3" id="fin-creances-cards"></div>
+                                            <h6 class="mt-2 d-flex justify-content-between align-items-center">
+                                                <span><i class="bi bi-list-ul me-1"></i>Détail par produit</span>
+                                                <button class="btn btn-sm btn-outline-primary" id="fin-creances-detail-all" title="Voir toutes les ventes individuelles qui composent la commission">
+                                                    <i class="bi bi-zoom-in"></i> Voir tout le détail
+                                                </button>
+                                            </h6>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-striped mb-0" id="fin-creances-detail">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Produit</th>
+                                                            <th class="text-end">Quantité</th>
+                                                            <th class="text-end">Je dois (3%)</th>
+                                                            <th class="text-center" style="width:80px"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody></tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- C. Paiements faits au fournisseur -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                                data-bs-target="#fin-cre-acc-paiements" aria-expanded="false">
+                                            <i class="bi bi-wallet2 me-2"></i>
+                                            <strong>Paiements faits au fournisseur</strong>
+                                            <span class="text-muted ms-2 small">(notes locales)</span>
+                                            <span class="badge bg-info ms-2" id="fin-cre-acc-paiements-total"></span>
+                                        </button>
+                                    </h2>
+                                    <div id="fin-cre-acc-paiements" class="accordion-collapse collapse">
+                                        <div class="accordion-body">
+                                            <div class="table-responsive mb-3">
+                                                <table class="table table-sm mb-0" id="fin-paiements-list">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Date</th>
+                                                            <th class="text-end">Montant</th>
+                                                            <th>Mode</th>
+                                                            <th>Référence</th>
+                                                            <th>Point de vente</th>
+                                                            <th>Commentaire</th>
+                                                            <th></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody></tbody>
+                                                </table>
+                                            </div>
+                                            <h6 class="mt-3"><i class="bi bi-plus-circle me-1"></i>Enregistrer un paiement</h6>
+                                            <form id="fin-paiement-form" class="row g-2 align-items-end">
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">Date</label>
+                                                    <input type="date" name="date" class="form-control form-control-sm" required>
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">Montant (FCFA)</label>
+                                                    <input type="number" name="montant" min="0" step="1" class="form-control form-control-sm" required>
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">Mode</label>
+                                                    <select name="mode" class="form-select form-select-sm">
+                                                        <option value="">—</option>
+                                                        <option value="cash">Cash</option>
+                                                        <option value="virement">Virement</option>
+                                                        <option value="mobile_money">Mobile Money</option>
+                                                        <option value="autre">Autre</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">Point de vente</label>
+                                                    <select name="pointVente" class="form-select form-select-sm">
+                                                        <option value="">— (non rattaché)</option>
+                                                        <option value="Keur Bali">Keur Bali</option>
+                                                        <option value="Almadie 2">Almadie 2</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label class="form-label small">Référence</label>
+                                                    <input type="text" name="reference" class="form-control form-control-sm" maxlength="100">
+                                                </div>
+                                                <div class="col-md-1">
+                                                    <label class="form-label small">Commentaire</label>
+                                                    <input type="text" name="commentaire" class="form-control form-control-sm" maxlength="200">
+                                                </div>
+                                                <div class="col-md-1">
+                                                    <button class="btn btn-sm btn-success w-100" type="submit">
+                                                        <i class="bi bi-plus-lg"></i>
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- Pane: Prix fournisseur (catalogue editable) -->
+                        <div data-fin-pane="prix" style="display:none">
+                            <div class="alert alert-light border small mb-3">
+                                <i class="bi bi-info-circle"></i>
+                                Le calcul de la commission 3% utilise le <strong>prix_vente du catalogue</strong> à la date de la vente (point-in-time).
+                                Toute modification est historisée dans <code>prix_vente_history</code> / <code>prix_achat_history</code>.
+                                Réservé aux rôles <code>admin</code>, <code>superutilisateur</code>, <code>superviseur</code>.
+                            </div>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm table-striped mb-0" id="fin-prix-list">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Produit</th>
+                                            <th class="text-end">Prix vente</th>
+                                            <th class="text-end">Prix achat</th>
+                                            <th>Mis à jour</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <h6 class="mt-3"><i class="bi bi-plus-circle me-1"></i>Ajouter / mettre à jour un produit</h6>
+                            <form id="fin-prix-form" class="row g-2 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label small">Produit *</label>
+                                    <input type="text" name="produit" class="form-control form-control-sm" maxlength="100" required placeholder="Ex: Boeuf">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small">Prix vente *</label>
+                                    <input type="number" name="prix_vente" class="form-control form-control-sm" min="0" step="1" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small">Prix achat <small class="text-muted">(optionnel)</small></label>
+                                    <input type="number" name="prix_achat" class="form-control form-control-sm" min="0" step="1">
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-sm btn-success w-100" type="submit">
+                                        <i class="bi bi-check-lg"></i> Enregistrer
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Pane: Aliases produits (mapping vente -> catalogue) -->
+                        <div data-fin-pane="alias" style="display:none">
+                            <div class="alert alert-light border small mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div>
+                                    <i class="bi bi-info-circle"></i>
+                                    Un alias mappe un libellé de vente (ex: <code>Boeuf en gros</code>) vers une entrée du catalogue
+                                    (ex: <code>Boeuf</code>). Utilisé quand le libellé de vente diffère du nom catalogue.
+                                </div>
+                                <button id="fin-alias-bulk-scan" class="btn btn-sm btn-outline-primary" title="Scanne les 90 derniers jours de ventes et crée un alias pour chaque libellé résolu en fallback prefix">
+                                    <i class="bi bi-search"></i> Scanner les ventes (90j)
+                                </button>
+                            </div>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm table-striped mb-0" id="fin-alias-list">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Alias (libellé vente)</th>
+                                            <th>→ Produit catalogue</th>
+                                            <th>Mis à jour</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <h6 class="mt-3"><i class="bi bi-plus-circle me-1"></i>Ajouter / mettre à jour un alias</h6>
+                            <form id="fin-alias-form" class="row g-2 align-items-end">
+                                <div class="col-md-5">
+                                    <label class="form-label small">Alias (libellé tel qu'il apparaît en vente) *</label>
+                                    <input type="text" name="alias_produit" class="form-control form-control-sm" maxlength="150" required placeholder="Ex: Boeuf en gros">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label small">Produit catalogue *</label>
+                                    <select name="produit_catalog" class="form-select form-select-sm" required>
+                                        <option value="">— sélectionner —</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-sm btn-success w-100" type="submit">
+                                        <i class="bi bi-check-lg"></i> Enregistrer
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -3383,6 +3942,61 @@
     
     <!-- Script pour la gestion des compositions de packs -->
     <script src="js/modules/pack-composition.js"></script>
-      
+
+    <!-- Modale: drill-down detail commission Maas 3% -->
+    <div class="modal fade" id="fin-commission-detail-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-calculator me-2"></i>
+                        Détail du calcul commission
+                        <span class="badge bg-warning text-dark ms-2" id="fin-commission-detail-title-badge"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-light border small mb-3">
+                        <i class="bi bi-info-circle"></i>
+                        Chaque ligne est une vente individuelle qui contribue à la commission 3% affichée.
+                        Le <code>prix vente catalogue</code> est la valeur effective à la date de la vente
+                        (point-in-time depuis <code>prix_vente_history</code>).
+                        Commission = <code>3% × prix × quantité</code>.
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0" id="fin-commission-detail-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Point de vente</th>
+                                    <th>Libellé vente</th>
+                                    <th>Catalogue</th>
+                                    <th class="text-end">Quantité</th>
+                                    <th class="text-end">Prix vente</th>
+                                    <th class="text-end">Commission 3%</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td colspan="4" class="text-end">Total</td>
+                                    <td class="text-end" id="fin-commission-detail-foot-qte"></td>
+                                    <td></td>
+                                    <td class="text-end" id="fin-commission-detail-foot-comm"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Finance (Creances Fournisseur, MataBanq, Paiements) -->
+    <script src="js/finance.js"></script>
+
 </body>
 </html>

@@ -817,7 +817,7 @@ function telechargerResultatsTexte() {
     // Pied de page
     txtContent += '═══════════════════════════════════════════════════════════════\n';
     txtContent += `Rapport généré le ${date} à ${time}\n`;
-    txtContent += 'Keur BALLI - Point de Vente - Caisse - Matix\n';
+    txtContent += 'Keur BALLY - Point de Vente - Caisse - Matix\n';
     txtContent += '═══════════════════════════════════════════════════════════════\n';
     
     // Créer le fichier et le télécharger

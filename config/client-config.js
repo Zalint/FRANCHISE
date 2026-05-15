@@ -11,7 +11,7 @@ const CONFIG_FILE_PATH = path.join(__dirname, 'client-config.json');
 
 // Configuration par défaut
 const DEFAULT_CONFIG = {
-    clientName: 'KEUR BALI',
+    clientName: 'Keur BALLY',
     clientLogo: null, // Chemin vers le logo personnalisé (optionnel)
     clientColor: '#0d6efd', // Couleur principale (optionnel)
     contactEmail: null,

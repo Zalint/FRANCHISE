@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tableau de Bord Temps Réel - Keur BALLI</title>
+    <title>Tableau de Bord Temps Réel - Keur BALLY</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -433,7 +433,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h1>📊 Tableau de Bord Temps Réel</h1>
-                    <div class="subtitle">Keur BALLI - Vue d'ensemble des ventes et stocks</div>
+                    <div class="subtitle">Keur BALLY - Vue d'ensemble des ventes et stocks</div>
                 </div>
                 <div class="d-flex align-items-center gap-3">
                     <div style="display: flex; align-items: center; gap: 10px;">
@@ -1018,7 +1018,7 @@
             const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
             
             if (currentDate === todayStr) {
-                subtitle.textContent = 'Keur BALLI - Vue d\'ensemble des ventes et stocks';
+                subtitle.textContent = 'Keur BALLY - Vue d\'ensemble des ventes et stocks';
             } else {
                 const dateObj = new Date(currentDate + 'T00:00:00');
                 const formattedDate = dateObj.toLocaleDateString('fr-FR', { 
@@ -1027,7 +1027,7 @@
                     month: 'long', 
                     day: 'numeric' 
                 });
-                subtitle.textContent = `Keur BALLI - Données du ${formattedDate}`;
+                subtitle.textContent = `Keur BALLY - Données du ${formattedDate}`;
             }
         }
 
