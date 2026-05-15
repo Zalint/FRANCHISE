@@ -2106,18 +2106,10 @@
                                                     Source de vérité du solde dû au fournisseur viande.
                                                     Lecture depuis l'API <code>mata-depenses-management</code>.
                                                 </div>
-                                                <div class="table-responsive">
-                                                    <table class="table table-sm table-striped mb-0" id="fin-cdb-detail">
-                                                        <thead class="table-light">
-                                                            <tr>
-                                                                <th>Label</th>
-                                                                <th class="text-end">Solde</th>
-                                                                <th>État</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody></tbody>
-                                                    </table>
-                                                </div>
+                                                <!-- KPI cards agreges (Solde, Avances, Remb, Delta) -->
+                                                <div id="fin-cdb-summary" class="row g-2 mb-3"></div>
+                                                <!-- Detail par label (rempli dynamiquement) -->
+                                                <div id="fin-cdb-by-label"></div>
                                             </div>
                                         </div>
                                     </div>

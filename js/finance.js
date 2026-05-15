@@ -50,9 +50,24 @@
     }
 
     // Affiche les onglets avances (Prix, Aliases) si l'user a les droits.
-    function showAdvancedSubTabsIfAllowed() {
-        const u = window.currentUser;
-        const allowed = u && ['admin', 'superutilisateur', 'superviseur'].includes(u.role);
+    // Fetch /api/check-session pour etre robuste contre une race condition
+    // window.currentUser pas encore set.
+    async function showAdvancedSubTabsIfAllowed() {
+        let role = null;
+        // Priorite a window.currentUser (synchrone, sans round-trip)
+        if (window.currentUser && window.currentUser.role) {
+            role = window.currentUser.role;
+        } else {
+            try {
+                const res = await fetch('/api/check-session', { credentials: 'include' });
+                const j = await res.json();
+                if (j.success && j.user) {
+                    role = j.user.role;
+                    window.currentUser = j.user; // hydrate pour les autres modules
+                }
+            } catch (_) { /* no-op */ }
+        }
+        const allowed = role && ['admin', 'superutilisateur', 'superviseur'].includes(role);
         document.querySelectorAll('.fin-advanced-tab').forEach(el => {
             el.style.display = allowed ? '' : 'none';
         });
@@ -68,7 +83,7 @@
         _initialized = true;
 
         // Sub-tabs (creances / prix / alias)
-        showAdvancedSubTabsIfAllowed();
+        await showAdvancedSubTabsIfAllowed();
         document.querySelectorAll('#finance-subnav a[data-fin-tab]').forEach(a => {
             a.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -164,73 +179,189 @@
     }
 
     // ================= RENDER A: MataBanq =================
+    // Affiche pour chaque label MataBanq:
+    //   - 4 KPI cards (Solde, Avances, Remb, delta vs veille)
+    //   - une table des operations (avance / remboursement)
+    // Plus un cumul global tout en haut si plusieurs labels.
     function renderCdb(data) {
         const status = $('fin-cdb-status');
         const totalBadge = $('fin-cre-acc-cdb-total');
-        const tbody = document.querySelector('#fin-cdb-detail tbody');
-        if (!tbody) return;
-        tbody.innerHTML = '';
+        const summary = $('fin-cdb-summary');
+        const byLabel = $('fin-cdb-by-label');
+        if (!summary || !byLabel) return;
+
+        summary.innerHTML = '';
+        byLabel.innerHTML = '';
 
         const cdb = data.cdb;
         const perLabel = data.cdb_per_label || {};
+        const labels = Object.keys(perLabel);
 
-        // Cas 1: feature desactivee (env vars manquantes ou pas de label)
+        // Cas 1: feature desactivee (env vars manquantes)
         if (cdb && cdb._disabled) {
             status.textContent = 'Désactivé';
             status.className = 'badge bg-secondary ms-2';
             totalBadge.textContent = '';
-            tbody.innerHTML = `<tr><td colspan="3" class="text-muted small">${esc(cdb._reason || 'Configuration MataBanq manquante')}</td></tr>`;
+            byLabel.innerHTML = `<div class="alert alert-secondary small mb-0">${esc(cdb._reason || 'Configuration MataBanq manquante')}</div>`;
             return;
         }
 
-        // Cas 2: aucune donnee mais pas explicitement disabled
-        if (!cdb || (cdb.solde == null && Object.keys(perLabel).length === 0)) {
+        // Cas 2: aucun label fetché (PV inconnu)
+        if (labels.length === 0) {
+            status.textContent = 'Aucun label';
+            status.className = 'badge bg-secondary ms-2';
+            totalBadge.textContent = '';
+            byLabel.innerHTML = `<div class="alert alert-secondary small mb-0">Le point de vente sélectionné n'a pas de label MataBanq mappé.</div>`;
+            return;
+        }
+
+        // Extraire les blocs status / operations / summary par label
+        const perLabelExtracted = labels.map((label) => {
+            const payload = perLabel[label];
+            if (!payload || payload._disabled || payload._error) {
+                return { label, payload, error: payload && (payload._reason || payload._error) };
+            }
+            const detail = (payload.details && payload.details[0]) || null;
+            const clientStatus = (detail && detail.status && detail.status[0]) || null;
+            const operations = (detail && detail.operations) || [];
+            const sum = payload.summary || null;
+            const director = (detail && detail.assigned_director) || '—';
+            return {
+                label, payload, detail, clientStatus, operations,
+                summary: sum, director,
+                solde: clientStatus ? parseFloat(clientStatus.solde_final) || 0
+                       : (sum ? parseFloat(sum.totals.current_balance) || 0 : 0),
+                avances: clientStatus ? parseFloat(clientStatus.total_avances) || 0 : 0,
+                remboursements: clientStatus ? parseFloat(clientStatus.total_remboursements) || 0 : 0,
+                diff: sum ? parseFloat(sum.totals.total_difference) || 0 : 0,
+                dateSelected: sum ? sum.date_selected : ''
+            };
+        });
+
+        // Cas 3: aucun label a renvoye de donnee exploitable
+        const validLabels = perLabelExtracted.filter(e => !e.error);
+        if (validLabels.length === 0) {
             status.textContent = 'Indisponible';
             status.className = 'badge bg-warning text-dark ms-2';
             totalBadge.textContent = '';
-            tbody.innerHTML = `<tr><td colspan="3" class="text-muted small">Aucune donnée MataBanq disponible (API down ou pas de réponse).</td></tr>`;
+            const errMsgs = perLabelExtracted.map(e => `<li><code>${esc(e.label)}</code>: ${esc(e.error || 'no data')}</li>`).join('');
+            byLabel.innerHTML = `<div class="alert alert-warning small mb-0">Aucune donnée MataBanq exploitable.<ul class="mb-0 mt-2">${errMsgs}</ul></div>`;
             return;
         }
 
-        // Cas 3: au moins un label avec donnees
         status.textContent = 'OK';
         status.className = 'badge bg-success ms-2';
-        totalBadge.textContent = 'Total: ' + fmt(cdb.solde);
 
-        Object.entries(perLabel).forEach(([label, payload]) => {
-            const tr = document.createElement('tr');
-            let solde = '—';
-            let etat = '<span class="badge bg-secondary">N/A</span>';
-            if (payload && payload._disabled) {
-                etat = `<span class="badge bg-secondary" title="${esc(payload._reason || '')}">Désactivé</span>`;
-            } else if (payload && payload._error) {
-                etat = `<span class="badge bg-danger" title="${esc(payload._error)}">Erreur</span>`;
-            } else if (payload) {
-                // Meme cascade que backend extractSolde
-                const candidates = [
-                    payload.details && payload.details[0] && payload.details[0].status
-                        && payload.details[0].status[0] && payload.details[0].status[0].solde_final,
-                    payload.details && payload.details[0] && payload.details[0].status
-                        && payload.details[0].status[0] && payload.details[0].status[0].solde,
-                    payload.summary && payload.summary.totals && payload.summary.totals.current_balance,
-                    payload.summary && payload.summary.portfolios && payload.summary.portfolios[0]
-                        && payload.summary.portfolios[0].current_balance,
-                    payload.solde, payload.solde_creance, payload.total, payload.balance,
-                    payload.details && payload.details[0] && payload.details[0].solde
-                ];
-                for (const c of candidates) {
-                    const n = parseFloat(c);
-                    if (Number.isFinite(n)) { solde = fmt(n); break; }
-                }
-                etat = '<span class="badge bg-success">OK</span>';
-            }
-            tr.innerHTML = `
-                <td><code>${esc(label)}</code></td>
-                <td class="text-end">${solde}</td>
-                <td>${etat}</td>
+        // Cumul global (somme des labels valides)
+        const sumSolde = validLabels.reduce((s, e) => s + e.solde, 0);
+        const sumAvances = validLabels.reduce((s, e) => s + e.avances, 0);
+        const sumRemb = validLabels.reduce((s, e) => s + e.remboursements, 0);
+        const sumDiff = validLabels.reduce((s, e) => s + e.diff, 0);
+        totalBadge.textContent = 'Solde ' + fmt(sumSolde);
+
+        // KPI cards agreges
+        const diffSign = sumDiff > 0 ? '+' : '';
+        const trendCls = sumDiff > 0 ? 'text-danger' : sumDiff < 0 ? 'text-success' : 'text-muted';
+        const trendIcon = sumDiff > 0 ? 'arrow-up-right' : sumDiff < 0 ? 'arrow-down-right' : 'dash';
+        const trendLabel = sumDiff === 0 ? 'Inchangé vs veille' : `${diffSign}${fmt(sumDiff)} vs veille`;
+
+        const kpiCard = (tone, icon, label, value, sub = '') => `
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-${icon} text-${tone}"></i>
+                            <div class="flex-grow-1">
+                                <div class="small text-muted">${esc(label)}</div>
+                                <div class="fw-bold text-${tone}">${value}</div>
+                                ${sub ? `<div class="small mt-1">${sub}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+        summary.innerHTML = [
+            kpiCard('warning', 'cash-stack',        'Solde dû au fournisseur', fmt(sumSolde),
+                `<span class="${trendCls}"><i class="bi bi-${trendIcon} me-1"></i>${esc(trendLabel)}</span>`),
+            kpiCard('danger',  'arrow-down-circle', 'Total avances',           fmt(sumAvances)),
+            kpiCard('success', 'arrow-up-circle',   'Total remboursements',    fmt(sumRemb)),
+            kpiCard('info',    'graph-up',          'Δ vs veille',             diffSign + fmt(Math.abs(sumDiff)))
+        ].join('');
+
+        // Detail par label
+        validLabels.forEach((e) => {
+            // Operations triees desc (timestamp ou date_operation)
+            const opsSorted = e.operations.slice().sort((a, b) => {
+                const ta = a.timestamp || a.date_operation || '';
+                const tb = b.timestamp || b.date_operation || '';
+                return tb.localeCompare(ta);
+            });
+
+            const operationsHtml = opsSorted.length === 0
+                ? `<tr><td colspan="5" class="text-muted text-center small">Aucune opération sur la période</td></tr>`
+                : opsSorted.map((op) => {
+                    const isAvance = String(op.type).toLowerCase() === 'avance';
+                    const badge = isAvance
+                        ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-arrow-down-right me-1"></i>Avance</span>'
+                        : '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-arrow-up-right me-1"></i>Remboursement</span>';
+                    return `
+                        <tr>
+                            <td class="small">${esc(op.date_operation || '')}</td>
+                            <td>${badge}</td>
+                            <td class="text-end fw-semibold">${esc(fmt(op.montant))}</td>
+                            <td class="small">${esc(op.description || '')}</td>
+                            <td class="small text-muted">${esc(op.created_by || '')}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            // Card par label
+            const section = document.createElement('div');
+            section.className = 'card border-0 shadow-sm mb-3';
+            section.innerHTML = `
+                <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <i class="bi bi-bank me-1"></i>
+                        <strong>${esc(e.label)}</strong>
+                        <span class="small text-muted ms-2">${esc(e.dateSelected)} · Resp: ${esc(e.director)}</span>
+                    </div>
+                    <span class="badge bg-warning text-dark">Solde ${esc(fmt(e.solde))}</span>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <div class="row g-2 mb-2 small">
+                        <div class="col-md-3"><span class="text-muted">Avances:</span> <strong class="text-danger">${esc(fmt(e.avances))}</strong></div>
+                        <div class="col-md-3"><span class="text-muted">Remboursements:</span> <strong class="text-success">${esc(fmt(e.remboursements))}</strong></div>
+                        <div class="col-md-3"><span class="text-muted">Solde final:</span> <strong>${esc(fmt(e.solde))}</strong></div>
+                        <div class="col-md-3"><span class="text-muted">Δ vs veille:</span> <strong class="${e.diff > 0 ? 'text-danger' : e.diff < 0 ? 'text-success' : ''}">${e.diff > 0 ? '+' : ''}${esc(fmt(e.diff))}</strong></div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th class="text-end">Montant</th>
+                                    <th>Description</th>
+                                    <th>Saisie par</th>
+                                </tr>
+                            </thead>
+                            <tbody>${operationsHtml}</tbody>
+                        </table>
+                    </div>
+                </div>
             `;
-            tbody.appendChild(tr);
+            byLabel.appendChild(section);
         });
+
+        // Labels en erreur (affiche en bas si presents)
+        const errored = perLabelExtracted.filter(e => e.error);
+        if (errored.length > 0) {
+            const errSection = document.createElement('div');
+            errSection.className = 'alert alert-warning small mb-0';
+            errSection.innerHTML = `Labels en erreur:<ul class="mb-0 mt-1">${errored.map(e => `<li><code>${esc(e.label)}</code>: ${esc(e.error)}</li>`).join('')}</ul>`;
+            byLabel.appendChild(errSection);
+        }
     }
 
     // ================= RENDER B: Calcul Maas =================
