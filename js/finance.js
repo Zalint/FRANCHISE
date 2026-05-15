@@ -206,11 +206,17 @@
             } else if (payload && payload._error) {
                 etat = `<span class="badge bg-danger" title="${esc(payload._error)}">Erreur</span>`;
             } else if (payload) {
+                // Meme cascade que backend extractSolde
                 const candidates = [
-                    payload.solde, payload.solde_creance, payload.total, payload.balance,
-                    payload.details && payload.details[0] && payload.details[0].solde,
                     payload.details && payload.details[0] && payload.details[0].status
-                        && payload.details[0].status[0] && payload.details[0].status[0].solde
+                        && payload.details[0].status[0] && payload.details[0].status[0].solde_final,
+                    payload.details && payload.details[0] && payload.details[0].status
+                        && payload.details[0].status[0] && payload.details[0].status[0].solde,
+                    payload.summary && payload.summary.totals && payload.summary.totals.current_balance,
+                    payload.summary && payload.summary.portfolios && payload.summary.portfolios[0]
+                        && payload.summary.portfolios[0].current_balance,
+                    payload.solde, payload.solde_creance, payload.total, payload.balance,
+                    payload.details && payload.details[0] && payload.details[0].solde
                 ];
                 for (const c of candidates) {
                     const n = parseFloat(c);

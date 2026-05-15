@@ -315,17 +315,31 @@ router.get('/creances', requireAuth, async (req, res) => {
             cdbPerLabel[label] = r.status === 'fulfilled' ? r.value : { _error: r.reason && r.reason.message };
         });
 
+        // Format MataBanq verifie au 2026-05-15 (api_version 1.2):
+        //   summary.totals.current_balance       -> total agrege tous portfolios
+        //   summary.portfolios[].current_balance -> par portfolio
+        //   details[].status[].solde_final       -> par client
+        // On essaie dans l'ordre de specificite (specifique -> agrege).
         function extractSolde(payload) {
             if (!payload || typeof payload !== 'object') return null;
             if (payload._disabled || payload._error) return null;
             const candidates = [
+                // Par client (cas le plus specifique pour un label donne)
+                payload.details && payload.details[0] && payload.details[0].status
+                    && payload.details[0].status[0] && payload.details[0].status[0].solde_final,
+                payload.details && payload.details[0] && payload.details[0].status
+                    && payload.details[0].status[0] && payload.details[0].status[0].solde,
+                // Agrege total
+                payload.summary && payload.summary.totals && payload.summary.totals.current_balance,
+                // Premier portfolio
+                payload.summary && payload.summary.portfolios && payload.summary.portfolios[0]
+                    && payload.summary.portfolios[0].current_balance,
+                // Cles plates (anciennes versions API)
                 payload.solde,
                 payload.solde_creance,
                 payload.total,
                 payload.balance,
-                payload.details && payload.details[0] && payload.details[0].solde,
-                payload.details && payload.details[0] && payload.details[0].status
-                    && payload.details[0].status[0] && payload.details[0].status[0].solde
+                payload.details && payload.details[0] && payload.details[0].solde
             ];
             for (const c of candidates) {
                 const n = parseFloat(c);
