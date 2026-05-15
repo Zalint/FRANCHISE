@@ -287,13 +287,17 @@ async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
         // (FRANCHISE a un mix DD-MM-YYYY et YYYY-MM-DD en heritage).
         const venteDateISO = normalizeVenteDate(v.date) || v.date;
         const prixVenteEff = lookupPrixVenteAtDate(v.produit, venteDateISO);
-        if (prixVenteEff == null || prixVenteEff <= 0) {
-            // Catalog n'a pas (encore) de prix_vente: skip silencieux,
+        // Garde explicite contre NaN (parseFloat sur valeur history corrompue):
+        // sans Number.isFinite, NaN <= 0 retourne false et le calcul propage
+        // NaN dans totalDette + chaque agg.dette.
+        if (prixVenteEff == null || !Number.isFinite(prixVenteEff) || prixVenteEff <= 0) {
+            // Catalog n'a pas (encore) de prix_vente valide: skip silencieux,
             // cote Maas c'est le meme comportement.
             continue;
         }
 
         const detteLigne = (commissionPct / 100) * prixVenteEff * qte;
+        if (!Number.isFinite(detteLigne)) continue; // ceinture + bretelles
         totalDette += detteLigne;
 
         // Agreger par produit resolu (= entree catalogue)
@@ -570,31 +574,38 @@ router.put('/prix', requireAdvanced, async (req, res) => {
             }
         }
         const changedBy = (req.session.user && req.session.user.username) || null;
+        const now = new Date();
 
-        // Upsert catalog
-        const existing = await FournisseurPrix.findByPk(produit);
-        if (existing) {
-            const updates = { prix_vente: pv, updated_at: new Date() };
-            if (pa != null) updates.prix_achat = pa;
-            await existing.update(updates);
-        } else {
-            await FournisseurPrix.create({
-                produit,
-                prix_vente: pv,
-                prix_achat: pa,
-                updated_at: new Date()
-            });
-        }
+        // Atomicite: upsert catalog + insert history doivent reussir ou
+        // echouer ensemble. Sans transaction, si PrixVenteHistory.create
+        // echoue apres l'update catalog, le point-in-time est trahi pour
+        // cette date (catalog modifie sans trace dans l'historique).
+        await sequelize.transaction(async (t) => {
+            // Upsert catalog
+            const existing = await FournisseurPrix.findByPk(produit, { transaction: t });
+            if (existing) {
+                const updates = { prix_vente: pv, updated_at: now };
+                if (pa != null) updates.prix_achat = pa;
+                await existing.update(updates, { transaction: t });
+            } else {
+                await FournisseurPrix.create({
+                    produit,
+                    prix_vente: pv,
+                    prix_achat: pa,
+                    updated_at: now
+                }, { transaction: t });
+            }
 
-        // Historiser
-        await PrixVenteHistory.create({
-            produit, prix_vente: pv, changed_by: changedBy, created_at: new Date()
+            // Historiser (point-in-time pricing)
+            await PrixVenteHistory.create({
+                produit, prix_vente: pv, changed_by: changedBy, created_at: now
+            }, { transaction: t });
+            if (pa != null) {
+                await PrixAchatHistory.create({
+                    produit, prix_achat: pa, changed_by: changedBy, created_at: now
+                }, { transaction: t });
+            }
         });
-        if (pa != null) {
-            await PrixAchatHistory.create({
-                produit, prix_achat: pa, changed_by: changedBy, created_at: new Date()
-            });
-        }
 
         financeCache.invalidate();
         res.json({ success: true });

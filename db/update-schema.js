@@ -118,6 +118,30 @@ async function updateSchema() {
             await ProduitAlias.sync();
             console.log('Table produit_alias creee');
         }
+        // Defense en profondeur: Sequelize.sync() ne genere PAS la FK
+        // produit_alias.produit_catalog -> fournisseur_prix.produit. Sans elle,
+        // supprimer une entree catalogue laisse des aliases orphelins (resolver
+        // retourne 'alias' puis echoue le 2e lookup catalogue -> ventes
+        // silencieusement exclues). Ajout idempotent via pg_constraint check.
+        await sequelize.query(`
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'produit_alias_produit_catalog_fk'
+                      AND conrelid = 'produit_alias'::regclass
+                ) THEN
+                    -- Nettoyer d'eventuels aliases deja orphelins avant d'ajouter la FK
+                    -- (sinon ALTER TABLE rejette).
+                    DELETE FROM produit_alias
+                    WHERE produit_catalog NOT IN (SELECT produit FROM fournisseur_prix);
+                    ALTER TABLE produit_alias
+                    ADD CONSTRAINT produit_alias_produit_catalog_fk
+                    FOREIGN KEY (produit_catalog) REFERENCES fournisseur_prix(produit)
+                    ON DELETE CASCADE;
+                END IF;
+            END $$;
+        `);
+        console.log('Table produit_alias: FK CASCADE produit_catalog -> fournisseur_prix verifiee');
         // Seed des aliases reels FRANCHISE (libelles observes en BDD).
         // ON CONFLICT DO NOTHING => idempotent, ne touche pas aux mappings
         // deja saisis manuellement cote prod.
