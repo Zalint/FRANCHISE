@@ -6,6 +6,7 @@ const FournisseurPrix = require('./models/FournisseurPrix');
 const ProduitAlias = require('./models/ProduitAlias');
 const PrixVenteHistory = require('./models/PrixVenteHistory');
 const PrixAchatHistory = require('./models/PrixAchatHistory');
+const FinanceConfig = require('./models/FinanceConfig');
 
 /**
  * Met à jour le schéma de la base de données sans perdre les données existantes
@@ -177,6 +178,22 @@ async function updateSchema() {
             ON CONFLICT (alias_produit) DO NOTHING
         `);
         console.log('Table produit_alias: seed aliases FRANCHISE applique (idempotent)');
+
+        // Finance: table cle/valeur des parametres (commission_pct, categories_eligibles, ...).
+        const financeConfigExists = await checkTableExists('finance_config');
+        if (!financeConfigExists) {
+            console.log('Table finance_config manquante, creation...');
+            await FinanceConfig.sync();
+            console.log('Table finance_config creee');
+        }
+        // Seed des cles par defaut. ON CONFLICT DO NOTHING => idempotent.
+        await sequelize.query(`
+            INSERT INTO finance_config (key, value, updated_at) VALUES
+              ('commission_pct',       '3.0',                                   NOW()),
+              ('categories_eligibles', 'Bovin,Ovin,Caprin,Volaille,Poisson',    NOW())
+            ON CONFLICT (key) DO NOTHING
+        `);
+        console.log('Table finance_config: seed commission_pct=3.0 + categories_eligibles applique (idempotent)');
 
         // Finance: historique point-in-time du prix_vente catalogue (commission 3%).
         const prixVenteHistoryExists = await checkTableExists('prix_vente_history');

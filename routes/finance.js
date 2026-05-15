@@ -40,6 +40,7 @@ const {
     ProduitAlias,
     PrixVenteHistory,
     PrixAchatHistory,
+    FinanceConfig,
     sequelize
 } = require('../db/models');
 const {
@@ -188,11 +189,33 @@ function buildTemporalResolver(historyRows, prixField) {
 }
 
 // ============================================================
-// Configuration commission (env-overridable)
+// Configuration commission (lue depuis finance_config table, avec
+// fallback env vars puis defaults Maas).
 // ============================================================
-const COMMISSION_PCT = parseFloat(process.env.FINANCE_COMMISSION_PCT) || 3.0;
-const CATEGORIES_ELIGIBLES = (process.env.FINANCE_CATEGORIES_ELIGIBLES
-    || 'Bovin,Ovin,Caprin,Volaille,Poisson').split(',').map(s => s.trim()).filter(Boolean);
+const DEFAULT_COMMISSION_PCT = parseFloat(process.env.FINANCE_COMMISSION_PCT) || 3.0;
+const DEFAULT_CATEGORIES_ELIGIBLES_RAW = process.env.FINANCE_CATEGORIES_ELIGIBLES
+    || 'Bovin,Ovin,Caprin,Volaille,Poisson';
+
+async function loadFinanceConfig() {
+    try {
+        const rows = await FinanceConfig.findAll();
+        const cfg = {};
+        for (const r of rows) cfg[r.key] = r.value;
+        const commissionPct = cfg.commission_pct != null
+            ? (parseFloat(cfg.commission_pct) || DEFAULT_COMMISSION_PCT)
+            : DEFAULT_COMMISSION_PCT;
+        const categoriesEligibles = (cfg.categories_eligibles || DEFAULT_CATEGORIES_ELIGIBLES_RAW)
+            .split(',').map(s => s.trim()).filter(Boolean);
+        return { commissionPct, categoriesEligibles, raw: cfg };
+    } catch (e) {
+        // BDD pas encore prete (sync au boot): fallback aux defaults.
+        return {
+            commissionPct: DEFAULT_COMMISSION_PCT,
+            categoriesEligibles: DEFAULT_CATEGORIES_ELIGIBLES_RAW.split(',').map(s => s.trim()).filter(Boolean),
+            raw: {}
+        };
+    }
+}
 
 // ============================================================
 // Calcul local: commission 3% via resolver + temporal pricing
@@ -201,6 +224,9 @@ async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
     const dDeb = toISO(dateDebut) || defaultPeriode().dateDebut;
     const dFin = toISO(dateFin) || defaultPeriode().dateFin;
     const dateList = generateDateRange(dDeb, dFin);
+
+    // 0. Config dynamique (commission_pct, categories_eligibles)
+    const { commissionPct, categoriesEligibles } = await loadFinanceConfig();
 
     // 1. Catalogue + aliases (cache 60s)
     const { catalog: prixRows, aliases: aliasRows } = await financeCache.getCatalogAndAliases();
@@ -227,7 +253,7 @@ async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
     // 3. Ventes de la periode (filtre PV si specifie)
     const venteWhere = {
         date: { [Op.in]: dateList },
-        categorie: { [Op.in]: CATEGORIES_ELIGIBLES }
+        categorie: { [Op.in]: categoriesEligibles }
     };
     if (pointVente && pointVente !== 'tous') {
         venteWhere.pointVente = pointVente;
@@ -267,7 +293,7 @@ async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
             continue;
         }
 
-        const detteLigne = (COMMISSION_PCT / 100) * prixVenteEff * qte;
+        const detteLigne = (commissionPct / 100) * prixVenteEff * qte;
         totalDette += detteLigne;
 
         // Agreger par produit resolu (= entree catalogue)
@@ -309,8 +335,8 @@ async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
 
     return {
         periode: { dateDebut: dDeb, dateFin: dFin },
-        commission_pct: COMMISSION_PCT,
-        categories_eligibles: CATEGORIES_ELIGIBLES,
+        commission_pct: commissionPct,
+        categories_eligibles: categoriesEligibles,
         point_vente: pointVente || 'tous',
         ce_que_je_dois: round2(totalDette),
         paiements_effectues: round2(totalPaiements),
@@ -694,17 +720,67 @@ router.post('/alias/bulk-from-prefix', requireAdvanced, async (req, res) => {
 });
 
 // ============================================================
-// GET /api/finance/config — expose mapping PV<->label pour le front
+// GET /api/finance/config — lit finance_config table + mapping PV<->label
 // ============================================================
-router.get('/config', requireAuth, (req, res) => {
-    res.json({
-        success: true,
-        data: {
-            pv_to_label: PV_TO_MATABANQ_LABEL,
-            commission_pct: COMMISSION_PCT,
-            categories_eligibles: CATEGORIES_ELIGIBLES
+router.get('/config', requireAuth, async (req, res) => {
+    try {
+        const { commissionPct, categoriesEligibles, raw } = await loadFinanceConfig();
+        res.json({
+            success: true,
+            data: {
+                pv_to_label: PV_TO_MATABANQ_LABEL,
+                commission_pct: commissionPct,
+                categories_eligibles: categoriesEligibles,
+                // Expose les raw values (string) pour permettre l'edition fidele.
+                raw_config: raw
+            }
+        });
+    } catch (e) {
+        console.error('GET /api/finance/config:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// PUT /api/finance/config
+// Body: { commission_pct?: number, categories_eligibles?: string }
+// commission_pct entre 0 et 100. Reserve aux admin/super*.
+router.put('/config', requireAdvanced, async (req, res) => {
+    try {
+        const allowedKeys = ['commission_pct', 'categories_eligibles'];
+        const now = new Date();
+        for (const key of allowedKeys) {
+            if (req.body[key] === undefined) continue;
+            const value = String(req.body[key]);
+            // commission_pct: doit etre dans [0, 100]
+            if (key === 'commission_pct') {
+                const n = parseFloat(value);
+                if (!Number.isFinite(n) || n < 0 || n > 100) {
+                    return res.status(400).json({ success: false, error: 'commission_pct doit etre entre 0 et 100' });
+                }
+            }
+            // categories_eligibles: doit etre un CSV non vide
+            if (key === 'categories_eligibles') {
+                const parts = value.split(',').map(s => s.trim()).filter(Boolean);
+                if (parts.length === 0) {
+                    return res.status(400).json({ success: false, error: 'categories_eligibles ne peut pas etre vide' });
+                }
+            }
+            await FinanceConfig.upsert({ key, value, updated_at: now });
         }
-    });
+        const { commissionPct, categoriesEligibles, raw } = await loadFinanceConfig();
+        res.json({
+            success: true,
+            data: {
+                pv_to_label: PV_TO_MATABANQ_LABEL,
+                commission_pct: commissionPct,
+                categories_eligibles: categoriesEligibles,
+                raw_config: raw
+            }
+        });
+    } catch (e) {
+        console.error('PUT /api/finance/config:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 module.exports = router;

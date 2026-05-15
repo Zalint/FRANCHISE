@@ -141,6 +141,11 @@
         const btnDetailAll = $('fin-creances-detail-all');
         if (btnDetailAll) btnDetailAll.addEventListener('click', () => openCommissionDetail(null));
 
+        // Edition commission_pct (visible aux admin/super* uniquement)
+        showCommissionEditIfAllowed();
+        const btnSaveCfg = $('fin-config-save');
+        if (btnSaveCfg) btnSaveCfg.addEventListener('click', onSaveCommissionPct);
+
         // Charger config + donnees
         try {
             const resCfg = await fetch('/api/finance/config', { credentials: 'include' });
@@ -149,6 +154,9 @@
                 if (j.success) _config = j.data;
             }
         } catch (_) { /* config est optionnelle, on continue */ }
+
+        // Refresh la zone edition commission_pct maintenant que _config est chargee
+        showCommissionEditIfAllowed();
 
         await loadAll();
     }
@@ -832,6 +840,55 @@
             await loadAll();
         } catch (e) {
             alert('Erreur: ' + e.message);
+        }
+    }
+
+    // ================= EDIT COMMISSION_PCT =================
+    function showCommissionEditIfAllowed() {
+        const u = window.currentUser;
+        const allowed = u && ['admin', 'superutilisateur', 'superviseur'].includes(u.role);
+        const box = $('fin-config-edit');
+        if (box) box.style.display = allowed ? '' : 'none';
+        // Pre-fill from _config (loaded by init)
+        const input = $('fin-config-commission-pct');
+        if (input && _config && _config.commission_pct != null) {
+            input.value = _config.commission_pct;
+        }
+    }
+
+    async function onSaveCommissionPct() {
+        const input = $('fin-config-commission-pct');
+        const btn = $('fin-config-save');
+        if (!input) return;
+        const val = parseFloat(input.value);
+        if (!Number.isFinite(val) || val < 0 || val > 100) {
+            alert('Le taux doit etre un nombre entre 0 et 100.');
+            return;
+        }
+        const oldHtml = btn ? btn.innerHTML : null;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>...';
+        }
+        try {
+            const res = await fetch('/api/finance/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ commission_pct: val })
+            });
+            const j = await res.json();
+            if (!j.success) throw new Error(j.error || 'Enregistrement refuse');
+            _config = j.data;
+            // Refresh tout le calcul Creances pour appliquer le nouveau taux
+            await loadAll();
+        } catch (e) {
+            alert('Erreur: ' + e.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                if (oldHtml) btn.innerHTML = oldHtml;
+            }
         }
     }
 
