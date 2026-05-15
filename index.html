@@ -327,6 +327,45 @@
             text-align: center;
             font-weight: bold;
         }
+
+        /* ============ Accordion Stock + Transfert (style Maas) ============ */
+        .stock-accordion .accordion-button {
+            background-color: #f8f9fa;
+            color: #1f2937;
+            font-weight: 500;
+            box-shadow: none;
+            padding: 0.85rem 1.1rem;
+        }
+        .stock-accordion .accordion-button:not(.collapsed) {
+            background-color: #eef2ff;
+            color: #1e3a8a;
+            box-shadow: inset 0 -1px 0 rgba(0,0,0,0.05);
+        }
+        .stock-accordion .accordion-button:focus {
+            box-shadow: 0 0 0 0.2rem rgba(99,102,241,0.15);
+        }
+        .stock-accordion .accordion-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem !important;
+            margin-bottom: 0.5rem;
+            overflow: hidden;
+        }
+        .stock-accordion .accordion-body {
+            padding: 1rem 1.1rem 1.2rem;
+        }
+        /* Look general cards Stock inventaire */
+        #stock-inventaire-section .card.shadow-sm {
+            border: 1px solid #e5e7eb;
+        }
+        #stock-inventaire-section table thead.table-light th {
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.85rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        #stock-inventaire-section table tbody td {
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body class="auth-pending">
@@ -1297,97 +1336,121 @@
                     </div>
                 </div>
 
-                <!-- Tableau de stock -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Stock</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table id="stock-table" class="table table-bordered table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Point de Vente</th>
-                                        <th>Produit</th>
-                                        <th>Quantité</th>
-                                        <th>Prix Unitaire</th>
-                                        <th>Total</th>
-                                        <th>Commentaire</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                        <div class="mt-3">
-                            <button id="add-stock-row" class="btn btn-primary">
-                                <i class="fas fa-plus"></i> Ajouter une ligne
-                            </button>
-                            <button id="save-stock" class="btn btn-success ms-2">
-                                <i class="fas fa-save"></i> Sauvegarder le stock
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <!-- ============ ACCORDEONS Stock + Transfert ============ -->
+                <div class="accordion stock-accordion" id="stock-accordion">
 
-                <!-- Tableau de transfert -->
-                <div class="card mt-4">
-                    <div class="card-header">
-                        <h5>Transfert</h5>
-                    </div>
-                    <div class="card-body">
-                        <!-- Filtres pour les transferts -->
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="filtre-point-vente-transfert" class="form-label">Filtrer par Point de Vente</label>
-                                    <select id="filtre-point-vente-transfert" class="form-select">
-                                        <option value="">Tous les points de vente</option>
-                                    </select>
+                    <!-- Accordion item: Stock (ouvert par defaut) -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="acc-stock-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#acc-stock-body" aria-expanded="true" aria-controls="acc-stock-body">
+                                <i class="bi bi-box-seam me-2"></i>
+                                <span class="fw-semibold">Stock</span>
+                            </button>
+                        </h2>
+                        <div id="acc-stock-body" class="accordion-collapse collapse show"
+                             aria-labelledby="acc-stock-header" data-bs-parent="#stock-accordion">
+                            <div class="accordion-body">
+                                <div class="table-responsive">
+                                    <table id="stock-table" class="table table-hover align-middle">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Point de Vente</th>
+                                                <th>Produit</th>
+                                                <th>Quantité</th>
+                                                <th>Prix Unitaire</th>
+                                                <th>Total</th>
+                                                <th>Commentaire</th>
+                                                <th class="text-center" style="width:80px">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="filtre-produit-transfert" class="form-label">Filtrer par Produit</label>
-                                    <select id="filtre-produit-transfert" class="form-select">
-                                        <option value="">Tous les produits</option>
-                                        <option value="Boeuf">Boeuf</option>
-                                        <option value="Veau">Veau</option>
-                                        <option value="Poulet">Poulet</option>
-                                        <option value="Tete De Mouton">Tête de Mouton</option>
-                                        <option value="Tablette">Tablette</option>
-                                        <option value="Foie">Foie</option>
-                                        <option value="Yell">Yell</option>
-                                        <option value="Agneau">Agneau</option>
-                                        <option value="Abats">Abats</option>
-                                    </select>
+                                <div class="mt-3 d-flex gap-2 flex-wrap">
+                                    <button id="add-stock-row" class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-plus-lg"></i> Ajouter une ligne
+                                    </button>
+                                    <button id="save-stock" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-save"></i> Sauvegarder le stock
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                        <table class="table" id="transfertTable">
-                            <thead>
-                                <tr>
-                                    <th>Point de Vente</th>
-                                    <th>Produit</th>
-                                    <th>Impact (+/-)</th>
-                                    <th>Quantité</th>
-                                    <th>Prix Unitaire</th>
-                                    <th>Total</th>
-                                    <th>Commentaire</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            </tbody>
-                            <tfoot>
-                                <!-- Le bouton d'ajout de ligne sera ajouté ici dynamiquement -->
-                            </tfoot>
-                        </table>
-                        <div class="mt-3">
-                            <button class="btn btn-primary" id="ajouterLigne">Ajouter une ligne</button>
-                            <button class="btn btn-success" id="sauvegarderTransfert">Sauvegarder le transfert</button>
+                    </div>
+
+                    <!-- Accordion item: Transfert (replie par defaut) -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="acc-transfert-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#acc-transfert-body" aria-expanded="false" aria-controls="acc-transfert-body">
+                                <i class="bi bi-arrow-left-right me-2"></i>
+                                <span class="fw-semibold">Transfert</span>
+                            </button>
+                        </h2>
+                        <div id="acc-transfert-body" class="accordion-collapse collapse"
+                             aria-labelledby="acc-transfert-header" data-bs-parent="#stock-accordion">
+                            <div class="accordion-body">
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label for="filtre-point-vente-transfert" class="form-label small fw-semibold text-muted">
+                                            <i class="bi bi-shop me-1"></i>Point de Vente
+                                        </label>
+                                        <select id="filtre-point-vente-transfert" class="form-select">
+                                            <option value="">Tous les points de vente</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="filtre-produit-transfert" class="form-label small fw-semibold text-muted">
+                                            <i class="bi bi-box me-1"></i>Produit
+                                        </label>
+                                        <select id="filtre-produit-transfert" class="form-select">
+                                            <option value="">Tous les produits</option>
+                                            <option value="Boeuf">Boeuf</option>
+                                            <option value="Veau">Veau</option>
+                                            <option value="Poulet">Poulet</option>
+                                            <option value="Tete De Mouton">Tête de Mouton</option>
+                                            <option value="Tablette">Tablette</option>
+                                            <option value="Foie">Foie</option>
+                                            <option value="Yell">Yell</option>
+                                            <option value="Agneau">Agneau</option>
+                                            <option value="Abats">Abats</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle" id="transfertTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Point de Vente</th>
+                                                <th>Produit</th>
+                                                <th>Impact (+/-)</th>
+                                                <th>Quantité</th>
+                                                <th>Prix Unitaire</th>
+                                                <th>Total</th>
+                                                <th>Commentaire</th>
+                                                <th class="text-center" style="width:80px">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        </tbody>
+                                        <tfoot>
+                                            <!-- Le bouton d'ajout de ligne sera ajouté ici dynamiquement -->
+                                        </tfoot>
+                                    </table>
+                                </div>
+                                <div class="mt-3 d-flex gap-2 flex-wrap">
+                                    <button class="btn btn-outline-primary btn-sm" id="ajouterLigne">
+                                        <i class="bi bi-plus-lg"></i> Ajouter une ligne
+                                    </button>
+                                    <button class="btn btn-primary btn-sm" id="sauvegarderTransfert">
+                                        <i class="bi bi-save"></i> Sauvegarder le transfert
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
                 </div>
             </div>
             
