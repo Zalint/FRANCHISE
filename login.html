@@ -149,7 +149,6 @@
             <div class="brand-block">
                 <img src="image/LogoMatixVect.png" alt="" class="brand-logo" onerror="this.style.display='none'">
                 <h1 class="brand-title" id="client-name-display">Connexion</h1>
-                <div class="brand-sub" id="tenant-sub"></div>
             </div>
 
             <div id="login-error" class="error-alert" role="alert" aria-live="polite">
@@ -308,11 +307,7 @@
                 if (data.success && data.config.clientName) {
                     const name = data.config.clientName;
                     const titleEl = document.getElementById('client-name-display');
-                    const subEl = document.getElementById('tenant-sub');
                     if (titleEl) titleEl.textContent = name;
-                    if (subEl && !subEl.textContent) {
-                        subEl.textContent = 'Espace de gestion';
-                    }
                     document.title = name + ' — Connexion';
                 }
             } catch (err) {
