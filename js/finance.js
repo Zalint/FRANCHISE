@@ -33,6 +33,31 @@
             .replace(/"/g, '&quot;');
     }
 
+    // ================= SUB-TABS =================
+    // Bascule entre les sous-onglets (creances / prix / alias).
+    function activateSubTab(tabName) {
+        // Onglets nav-link
+        document.querySelectorAll('#finance-subnav a[data-fin-tab]').forEach(a => {
+            a.classList.toggle('active', a.getAttribute('data-fin-tab') === tabName);
+        });
+        // Panes
+        document.querySelectorAll('[data-fin-pane]').forEach(p => {
+            p.style.display = p.getAttribute('data-fin-pane') === tabName ? '' : 'none';
+        });
+        // Lazy-load: charger les donnees du pane affiche
+        if (tabName === 'prix') loadPrix();
+        else if (tabName === 'alias') loadAlias();
+    }
+
+    // Affiche les onglets avances (Prix, Aliases) si l'user a les droits.
+    function showAdvancedSubTabsIfAllowed() {
+        const u = window.currentUser;
+        const allowed = u && ['admin', 'superutilisateur', 'superviseur'].includes(u.role);
+        document.querySelectorAll('.fin-advanced-tab').forEach(el => {
+            el.style.display = allowed ? '' : 'none';
+        });
+    }
+
     // ================= INIT =================
     async function init() {
         if (_initialized) {
@@ -41,6 +66,21 @@
             return;
         }
         _initialized = true;
+
+        // Sub-tabs (creances / prix / alias)
+        showAdvancedSubTabsIfAllowed();
+        document.querySelectorAll('#finance-subnav a[data-fin-tab]').forEach(a => {
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                activateSubTab(a.getAttribute('data-fin-tab'));
+            });
+        });
+        // Formulaire Prix
+        const formPrix = $('fin-prix-form');
+        if (formPrix) formPrix.addEventListener('submit', onSubmitPrix);
+        // Formulaire Alias
+        const formAlias = $('fin-alias-form');
+        if (formAlias) formAlias.addEventListener('submit', onSubmitAlias);
 
         // Defaut periode: 1er du mois -> aujourd'hui
         const today = new Date();
@@ -364,6 +404,210 @@
             form.querySelector('input[name="montant"]').value = '';
             form.querySelector('input[name="reference"]').value = '';
             form.querySelector('input[name="commentaire"]').value = '';
+            await loadAll();
+        } catch (e) {
+            alert('Erreur: ' + e.message);
+        }
+    }
+
+    // ================= PRIX FOURNISSEUR (catalogue) =================
+    async function loadPrix() {
+        const tbody = document.querySelector('#fin-prix-list tbody');
+        if (!tbody) return;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-muted small">Chargement…</td></tr>`;
+        try {
+            const res = await fetch('/api/finance/prix', { credentials: 'include' });
+            const j = await res.json();
+            if (!j.success) throw new Error(j.error || 'Erreur catalogue');
+            renderPrix(j.data);
+            // Refill le datalist du select alias (produit_catalog)
+            const selAlias = document.querySelector('#fin-alias-form select[name="produit_catalog"]');
+            if (selAlias) {
+                const current = selAlias.value;
+                selAlias.innerHTML = '<option value="">— sélectionner —</option>' +
+                    j.data.map(r => `<option value="${esc(r.produit)}">${esc(r.produit)}</option>`).join('');
+                if (current) selAlias.value = current;
+            }
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-danger small">${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    function renderPrix(rows) {
+        const tbody = document.querySelector('#fin-prix-list tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!rows || rows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-muted small">Catalogue vide. Ajoute un premier produit ci-dessous.</td></tr>`;
+            return;
+        }
+        for (const r of rows) {
+            const tr = document.createElement('tr');
+            const updated = r.updated_at ? new Date(r.updated_at).toLocaleString('fr-FR') : '—';
+            tr.innerHTML = `
+                <td><strong>${esc(r.produit)}</strong></td>
+                <td class="text-end">${fmt(r.prix_vente)}</td>
+                <td class="text-end">${r.prix_achat == null ? '—' : fmt(r.prix_achat)}</td>
+                <td class="small text-muted">${esc(updated)}</td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-secondary me-1" data-prix-edit="${esc(r.produit)}" title="Editer">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" data-prix-del="${esc(r.produit)}" title="Supprimer">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+        // Listeners edit (re-fill form)
+        tbody.querySelectorAll('button[data-prix-edit]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const produit = btn.getAttribute('data-prix-edit');
+                const r = rows.find(x => x.produit === produit);
+                if (!r) return;
+                const f = $('fin-prix-form');
+                f.querySelector('input[name="produit"]').value = r.produit;
+                f.querySelector('input[name="prix_vente"]').value = r.prix_vente;
+                f.querySelector('input[name="prix_achat"]').value = r.prix_achat == null ? '' : r.prix_achat;
+            });
+        });
+        // Listeners delete
+        tbody.querySelectorAll('button[data-prix-del]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const produit = btn.getAttribute('data-prix-del');
+                if (!confirm(`Supprimer "${produit}" du catalogue ?\n\nLes ventes existantes pour ce produit ne seront plus comptees dans la commission.`)) return;
+                try {
+                    const res = await fetch('/api/finance/prix/' + encodeURIComponent(produit), {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    const j = await res.json();
+                    if (!j.success) throw new Error(j.error || 'Suppression refusee');
+                    await loadPrix();
+                    // Re-calcul si la pane Creances est visible
+                    await loadAll();
+                } catch (e) {
+                    alert('Erreur: ' + e.message);
+                }
+            });
+        });
+    }
+
+    async function onSubmitPrix(e) {
+        e.preventDefault();
+        const form = e.target;
+        const fd = new FormData(form);
+        const payload = {
+            produit: (fd.get('produit') || '').trim(),
+            prix_vente: parseFloat(fd.get('prix_vente')),
+            prix_achat: fd.get('prix_achat') ? parseFloat(fd.get('prix_achat')) : null
+        };
+        if (!payload.produit || !Number.isFinite(payload.prix_vente) || payload.prix_vente < 0) {
+            alert('Produit et prix_vente >= 0 sont requis.');
+            return;
+        }
+        try {
+            const res = await fetch('/api/finance/prix', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload)
+            });
+            const j = await res.json();
+            if (!j.success) throw new Error(j.error || 'Enregistrement refuse');
+            form.reset();
+            await loadPrix();
+            // Recalcul possible si Creances visible
+            await loadAll();
+        } catch (e) {
+            alert('Erreur: ' + e.message);
+        }
+    }
+
+    // ================= ALIASES PRODUITS =================
+    async function loadAlias() {
+        const tbody = document.querySelector('#fin-alias-list tbody');
+        if (!tbody) return;
+        tbody.innerHTML = `<tr><td colspan="4" class="text-muted small">Chargement…</td></tr>`;
+        try {
+            // S'assurer que le select produit_catalog est rempli
+            await loadPrix();
+            const res = await fetch('/api/finance/alias', { credentials: 'include' });
+            const j = await res.json();
+            if (!j.success) throw new Error(j.error || 'Erreur aliases');
+            renderAlias(j.data);
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-danger small">${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    function renderAlias(rows) {
+        const tbody = document.querySelector('#fin-alias-list tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!rows || rows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-muted small">Aucun alias defini.</td></tr>`;
+            return;
+        }
+        for (const r of rows) {
+            const tr = document.createElement('tr');
+            const updated = r.updated_at ? new Date(r.updated_at).toLocaleString('fr-FR') : '—';
+            tr.innerHTML = `
+                <td><code>${esc(r.alias_produit)}</code></td>
+                <td><strong>${esc(r.produit_catalog)}</strong></td>
+                <td class="small text-muted">${esc(updated)}</td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-danger" data-alias-del="${esc(r.alias_produit)}" title="Supprimer">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+        tbody.querySelectorAll('button[data-alias-del]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const alias = btn.getAttribute('data-alias-del');
+                if (!confirm(`Supprimer l'alias "${alias}" ?`)) return;
+                try {
+                    const res = await fetch('/api/finance/alias/' + encodeURIComponent(alias), {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    const j = await res.json();
+                    if (!j.success) throw new Error(j.error || 'Suppression refusee');
+                    await loadAlias();
+                    await loadAll();
+                } catch (e) {
+                    alert('Erreur: ' + e.message);
+                }
+            });
+        });
+    }
+
+    async function onSubmitAlias(e) {
+        e.preventDefault();
+        const form = e.target;
+        const fd = new FormData(form);
+        const payload = {
+            alias_produit: (fd.get('alias_produit') || '').trim(),
+            produit_catalog: (fd.get('produit_catalog') || '').trim()
+        };
+        if (!payload.alias_produit || !payload.produit_catalog) {
+            alert('Alias et produit catalogue sont requis.');
+            return;
+        }
+        try {
+            const res = await fetch('/api/finance/alias', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload)
+            });
+            const j = await res.json();
+            if (!j.success) throw new Error(j.error || 'Enregistrement refuse');
+            form.reset();
+            await loadAlias();
             await loadAll();
         } catch (e) {
             alert('Erreur: ' + e.message);
