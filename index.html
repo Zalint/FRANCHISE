@@ -2289,10 +2289,15 @@
 
                         <!-- Pane: Aliases produits (mapping vente -> catalogue) -->
                         <div data-fin-pane="alias" style="display:none">
-                            <div class="alert alert-light border small mb-3">
-                                <i class="bi bi-info-circle"></i>
-                                Un alias mappe un libellé de vente (ex: <code>Boeuf en gros</code>) vers une entrée du catalogue
-                                (ex: <code>Boeuf</code>). Utilisé quand le libellé de vente diffère du nom catalogue.
+                            <div class="alert alert-light border small mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div>
+                                    <i class="bi bi-info-circle"></i>
+                                    Un alias mappe un libellé de vente (ex: <code>Boeuf en gros</code>) vers une entrée du catalogue
+                                    (ex: <code>Boeuf</code>). Utilisé quand le libellé de vente diffère du nom catalogue.
+                                </div>
+                                <button id="fin-alias-bulk-scan" class="btn btn-sm btn-outline-primary" title="Scanne les 90 derniers jours de ventes et crée un alias pour chaque libellé résolu en fallback prefix">
+                                    <i class="bi bi-search"></i> Scanner les ventes (90j)
+                                </button>
                             </div>
                             <div class="table-responsive mb-3">
                                 <table class="table table-sm table-striped mb-0" id="fin-alias-list">

@@ -97,9 +97,16 @@ async function updateSchema() {
               ('Boeuf',  4350, 3835, NOW()),
               ('Veau',   4600, 4035, NOW()),
               ('Agneau', 5300, 4500, NOW()),
-              ('Poulet', 3500, NULL, NOW()),
+              ('Poulet', 3500, 2600, NOW()),
               ('Laxass',  300,  200, NOW())
             ON CONFLICT (produit) DO NOTHING
+        `);
+        // Backfill Poulet.prix_achat si NULL (ex: deploiement anterieur qui
+        // avait seede Poulet avec NULL). N'ecrase pas une valeur deja saisie.
+        await sequelize.query(`
+            UPDATE fournisseur_prix
+            SET prix_achat = 2600, updated_at = NOW()
+            WHERE produit = 'Poulet' AND prix_achat IS NULL
         `);
         console.log('Table fournisseur_prix: seed 5 produits applique (idempotent)');
 
@@ -110,6 +117,33 @@ async function updateSchema() {
             await ProduitAlias.sync();
             console.log('Table produit_alias creee');
         }
+        // Seed des aliases standards (libelles couramment vus en POS).
+        // ON CONFLICT DO NOTHING => idempotent, ne touche pas aux mappings
+        // deja saisis manuellement cote prod.
+        // Couvre les variantes "en gros / en detail" et leurs typos casse.
+        await sequelize.query(`
+            INSERT INTO produit_alias (alias_produit, produit_catalog, updated_at) VALUES
+              ('Boeuf en gros',     'Boeuf',  NOW()),
+              ('Boeuf en détail',   'Boeuf',  NOW()),
+              ('Boeuf en detail',   'Boeuf',  NOW()),
+              ('Boeuf En Gros',     'Boeuf',  NOW()),
+              ('Boeuf En Détail',   'Boeuf',  NOW()),
+              ('Veau en gros',      'Veau',   NOW()),
+              ('Veau en détail',    'Veau',   NOW()),
+              ('Veau en detail',    'Veau',   NOW()),
+              ('Veau En Gros',      'Veau',   NOW()),
+              ('Agneau en gros',    'Agneau', NOW()),
+              ('Agneau en détail',  'Agneau', NOW()),
+              ('Agneau en detail',  'Agneau', NOW()),
+              ('Mouton',            'Agneau', NOW()),
+              ('Mouton en gros',    'Agneau', NOW()),
+              ('Mouton en détail',  'Agneau', NOW()),
+              ('Poulet en gros',    'Poulet', NOW()),
+              ('Poulet en détail',  'Poulet', NOW()),
+              ('Poulet en detail',  'Poulet', NOW())
+            ON CONFLICT (alias_produit) DO NOTHING
+        `);
+        console.log('Table produit_alias: seed aliases standards applique (idempotent)');
 
         // Finance: historique point-in-time du prix_vente catalogue (commission 3%).
         const prixVenteHistoryExists = await checkTableExists('prix_vente_history');

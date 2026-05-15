@@ -96,6 +96,9 @@
         // Formulaire Alias
         const formAlias = $('fin-alias-form');
         if (formAlias) formAlias.addEventListener('submit', onSubmitAlias);
+        // Bouton bulk-from-prefix
+        const btnBulkScan = $('fin-alias-bulk-scan');
+        if (btnBulkScan) btnBulkScan.addEventListener('click', onBulkScanAlias);
 
         // Defaut periode: 1er du mois -> aujourd'hui
         const today = new Date();
@@ -748,6 +751,35 @@
             await loadAll();
         } catch (e) {
             alert('Erreur: ' + e.message);
+        }
+    }
+
+    // ================= BULK SCAN ALIASES =================
+    async function onBulkScanAlias() {
+        const btn = $('fin-alias-bulk-scan');
+        if (!confirm('Scanner les ventes des 90 derniers jours et créer un alias pour chaque libellé résolu en fallback prefix ?\n\nIdempotent : les aliases existants ne sont pas écrasés.')) return;
+        const oldHtml = btn ? btn.innerHTML : null;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scan...';
+        }
+        try {
+            const res = await fetch('/api/finance/alias/bulk-from-prefix', {
+                method: 'POST',
+                credentials: 'include'
+            });
+            const j = await res.json();
+            if (!j.success) throw new Error(j.error || 'Scan refusé');
+            alert(`Scan terminé : ${j.count} alias créé(s) / mis à jour.\n\n${j.created.length === 0 ? 'Aucun libellé en fallback prefix trouvé.' : j.created.slice(0, 10).map(a => `• ${a.alias_produit} → ${a.produit_catalog}`).join('\n') + (j.created.length > 10 ? `\n... et ${j.created.length - 10} de plus` : '')}`);
+            await loadAlias();
+            await loadAll();
+        } catch (e) {
+            alert('Erreur: ' + e.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                if (oldHtml) btn.innerHTML = oldHtml;
+            }
         }
     }
 

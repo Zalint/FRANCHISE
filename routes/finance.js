@@ -39,7 +39,8 @@ const {
     FournisseurPrix,
     ProduitAlias,
     PrixVenteHistory,
-    PrixAchatHistory
+    PrixAchatHistory,
+    sequelize
 } = require('../db/models');
 const {
     fetchCreanceCdb,
@@ -583,6 +584,53 @@ router.delete('/alias/:alias', requireAdvanced, async (req, res) => {
         res.json({ success: true });
     } catch (e) {
         console.error('DELETE /api/finance/alias/:alias:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// POST /api/finance/alias/bulk-from-prefix
+// Scanne les ventes des 90 derniers jours, identifie les libelles qui
+// ne resolvent qu'en "prefix" (fallback legacy), et cree un alias
+// explicite pour chacun. Port verbatim de Maas. Idempotent: upsert.
+router.post('/alias/bulk-from-prefix', requireAdvanced, async (req, res) => {
+    try {
+        const since = new Date();
+        since.setUTCDate(since.getUTCDate() - 90);
+        const sinceISO = since.toISOString().slice(0, 10);
+
+        const [catalog, aliases, distinctRows] = await Promise.all([
+            FournisseurPrix.findAll(),
+            ProduitAlias.findAll(),
+            sequelize.query(
+                `SELECT DISTINCT produit FROM ventes WHERE date >= :since`,
+                { type: sequelize.QueryTypes.SELECT, replacements: { since: sinceISO } }
+            )
+        ]);
+
+        const resolverMaps = buildResolverMaps(catalog, aliases);
+        const now = new Date();
+        const toUpsert = [];
+        const created = [];
+        for (const r of distinctRows) {
+            const resolved = resolveProduit(r.produit, resolverMaps);
+            if (resolved.statut !== 'prefix') continue;
+            toUpsert.push({
+                alias_produit: r.produit,
+                produit_catalog: resolved.resolved,
+                updated_at: now
+            });
+            created.push({ alias_produit: r.produit, produit_catalog: resolved.resolved });
+        }
+
+        if (toUpsert.length > 0) {
+            await ProduitAlias.bulkCreate(toUpsert, {
+                updateOnDuplicate: ['produit_catalog', 'updated_at']
+            });
+            financeCache.invalidate();
+        }
+        res.json({ success: true, created, count: created.length });
+    } catch (e) {
+        console.error('POST /api/finance/alias/bulk-from-prefix:', e);
         res.status(500).json({ success: false, error: e.message });
     }
 });
