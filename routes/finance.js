@@ -102,20 +102,51 @@ function defaultPeriode() {
     return { dateDebut: `${yyyy}-${mm}-01`, dateFin: `${yyyy}-${mm}-${dd}` };
 }
 function generateDateRange(startISO, endISO) {
+    // IMPORTANT: ventes.date est stocke comme texte libre, et FRANCHISE
+    // a deux formats coexistants en BDD (heritage migration):
+    //   - DD-MM-YYYY  (majorite, format historique)
+    //   - YYYY-MM-DD  (ventes recentes, post-migration)
+    // On genere les DEUX pour chaque jour de la periode afin que le
+    // filtre [Op.in] matche les deux formats. Sans ca, on perd jusqu'a
+    // 99% des ventes pour les periodes "anciennes".
     const parse = (s) => new Date(`${s}T00:00:00Z`);
-    const fmt = (d) => {
+    const fmtISO = (d) => {
         const y = d.getUTCFullYear();
         const m = String(d.getUTCMonth() + 1).padStart(2, '0');
         const dd = String(d.getUTCDate()).padStart(2, '0');
         return `${y}-${m}-${dd}`;
     };
+    const fmtDDMMYYYY = (d) => {
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        return `${dd}-${m}-${y}`;
+    };
     const list = [];
     for (let t = parse(startISO).getTime(); t <= parse(endISO).getTime(); t += 86400000) {
-        list.push(fmt(new Date(t)));
+        const d = new Date(t);
+        list.push(fmtISO(d));
+        list.push(fmtDDMMYYYY(d));
     }
     return list;
 }
 function round2(n) { return Math.round(n * 100) / 100; }
+
+// ============================================================
+// Normalise une date stockee en BDD vers YYYY-MM-DD pour le lookup
+// point-in-time. Supporte DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD.
+// ============================================================
+function normalizeVenteDate(dateStr) {
+    if (!dateStr) return null;
+    const s = String(dateStr).trim();
+    // Deja YYYY-MM-DD
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return s;
+    // DD-MM-YYYY ou DD/MM/YYYY
+    m = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+    return null;
+}
 
 // ============================================================
 // Resolver temporel des prix (port verbatim de Maas)
@@ -226,7 +257,10 @@ async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
             continue;
         }
 
-        const prixVenteEff = lookupPrixVenteAtDate(v.produit, v.date);
+        // Normaliser la date BDD vers YYYY-MM-DD pour le lookup history
+        // (FRANCHISE a un mix DD-MM-YYYY et YYYY-MM-DD en heritage).
+        const venteDateISO = normalizeVenteDate(v.date) || v.date;
+        const prixVenteEff = lookupPrixVenteAtDate(v.produit, venteDateISO);
         if (prixVenteEff == null || prixVenteEff <= 0) {
             // Catalog n'a pas (encore) de prix_vente: skip silencieux,
             // cote Maas c'est le meme comportement.
