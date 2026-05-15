@@ -89,6 +89,19 @@ async function updateSchema() {
             await FournisseurPrix.sync();
             console.log('Table fournisseur_prix creee');
         }
+        // Seed des prix par defaut (port Maas: 5 produits boucherie).
+        // ON CONFLICT DO NOTHING => idempotent, ne touche pas aux prix
+        // deja saisis cote prod.
+        await sequelize.query(`
+            INSERT INTO fournisseur_prix (produit, prix_vente, prix_achat, updated_at) VALUES
+              ('Boeuf',  4350, 3835, NOW()),
+              ('Veau',   4600, 4035, NOW()),
+              ('Agneau', 5300, 4500, NOW()),
+              ('Poulet', 3500, NULL, NOW()),
+              ('Laxass',  300,  200, NOW())
+            ON CONFLICT (produit) DO NOTHING
+        `);
+        console.log('Table fournisseur_prix: seed 5 produits applique (idempotent)');
 
         // Finance: aliases produits (libelle vente -> entree catalogue).
         const produitAliasExists = await checkTableExists('produit_alias');
@@ -105,6 +118,18 @@ async function updateSchema() {
             await PrixVenteHistory.sync();
             console.log('Table prix_vente_history creee');
         }
+        // Genesis seed: 1 ligne created_at = epoch 1970 par produit catalogue.
+        // Garantit que toute vente, meme anterieure, resoud un prix_vente
+        // point-in-time non nul. Idempotent (skip si une entree existe deja).
+        await sequelize.query(`
+            INSERT INTO prix_vente_history (produit, prix_vente, changed_by, created_at)
+            SELECT fp.produit, fp.prix_vente, '_seed_', '1970-01-01 00:00:00+00'::timestamptz
+            FROM fournisseur_prix fp
+            WHERE NOT EXISTS (
+                SELECT 1 FROM prix_vente_history h WHERE h.produit = fp.produit
+            )
+        `);
+        console.log('prix_vente_history: genesis seedee (1970-01-01)');
 
         // Finance: historique point-in-time du prix_achat catalogue.
         const prixAchatHistoryExists = await checkTableExists('prix_achat_history');
@@ -113,6 +138,17 @@ async function updateSchema() {
             await PrixAchatHistory.sync();
             console.log('Table prix_achat_history creee');
         }
+        // Genesis seed (skip si prix_achat IS NULL, ex: Poulet).
+        await sequelize.query(`
+            INSERT INTO prix_achat_history (produit, prix_achat, changed_by, created_at)
+            SELECT fp.produit, fp.prix_achat, '_seed_', '1970-01-01 00:00:00+00'::timestamptz
+            FROM fournisseur_prix fp
+            WHERE fp.prix_achat IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM prix_achat_history h WHERE h.produit = fp.produit
+              )
+        `);
+        console.log('prix_achat_history: genesis seedee (1970-01-01)');
 
         console.log('Mise à jour du schéma terminée avec succès');
         return true;
