@@ -1,6 +1,6 @@
 -- =====================================================
 -- SQL Script pour créer la base de données PRODUCTION
--- Application: Gestion des Ventes - KEUR BALI
+-- Application: Gestion des Ventes - KEUR BALLY
 -- Base de données: ventes_kb_prod
 -- Date: Généré automatiquement
 -- =====================================================

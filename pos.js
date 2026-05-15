@@ -259,7 +259,7 @@ function showModernConfirm(options) {
 // Load brand configuration
 async function loadBrandConfig() {
     // Charger d'abord nomDuClient.json pour avoir le nom par défaut
-    let nomClient = { nom: "Keur BALLI", site_web: "" };
+    let nomClient = { nom: "Keur BALLY", site_web: "" };
     try {
         const nomResponse = await fetch('nomDuClient.json');
         if (nomResponse.ok) {
@@ -279,7 +279,7 @@ async function loadBrandConfig() {
         const existingKeurBalli = brandConfig["KEUR_BALLI"] || {};
         brandConfig["KEUR_BALLI"] = {
             ...existingKeurBalli,
-            "nom_complet": nomClient.nom || existingKeurBalli.nom_complet || "Keur BALLI",
+            "nom_complet": nomClient.nom || existingKeurBalli.nom_complet || "Keur BALLY",
             "site_web": nomClient.site_web || existingKeurBalli.site_web || "",
         };
         console.log('✅ Brand configuration loaded:', Object.keys(brandConfig));
@@ -288,7 +288,7 @@ async function loadBrandConfig() {
         // Fallback sur nomDuClient.json
         brandConfig = {
             "KEUR_BALLI": {
-                "nom_complet": nomClient.nom || "Keur BALLI",
+                "nom_complet": nomClient.nom || "Keur BALLY",
                 "slogan": "",
                 "site_web": nomClient.site_web || "",
                 "telephones": [],
