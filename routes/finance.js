@@ -278,11 +278,21 @@ async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
             quantite: 0,
             prix_vente_courant: resolved.value ? resolved.value.prix_vente : null,
             dette: 0,
-            statut: resolved.statut
+            statut: resolved.statut,
+            ventes: [] // drill-down: liste des ventes individuelles
         };
         agg.produit_vente_originaux.add(v.produit);
         agg.quantite += qte;
         agg.dette += detteLigne;
+        agg.ventes.push({
+            date: v.date,
+            point_vente: v.pointVente,
+            produit_vente: v.produit,
+            nombre: qte,
+            prix_vente_eff: prixVenteEff,
+            commission: detteLigne,
+            statut: resolved.statut
+        });
         detail.set(key, agg);
     }
 
@@ -316,7 +326,21 @@ async function computeCreancesLocal({ dateDebut, dateFin, pointVente }) {
                 quantite: round2(d.quantite),
                 prix_vente_courant: d.prix_vente_courant == null ? null : round2(d.prix_vente_courant),
                 dette: round2(d.dette),
-                statut: d.statut
+                statut: d.statut,
+                // Drill-down: liste des ventes individuelles qui composent
+                // cette ligne. Triees par date desc (plus recente d'abord).
+                ventes: d.ventes
+                    .slice()
+                    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+                    .map(v => ({
+                        date: v.date,
+                        point_vente: v.point_vente,
+                        produit_vente: v.produit_vente,
+                        nombre: round2(v.nombre),
+                        prix_vente_eff: round2(v.prix_vente_eff),
+                        commission: round2(v.commission),
+                        statut: v.statut
+                    }))
             }))
             .sort((a, b) => b.dette - a.dette)
     };

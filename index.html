@@ -2148,7 +2148,12 @@
                                     <div id="fin-cre-acc-maas" class="accordion-collapse collapse">
                                         <div class="accordion-body">
                                             <div class="row g-2 mb-3" id="fin-creances-cards"></div>
-                                            <h6 class="mt-2"><i class="bi bi-list-ul me-1"></i>Détail par produit</h6>
+                                            <h6 class="mt-2 d-flex justify-content-between align-items-center">
+                                                <span><i class="bi bi-list-ul me-1"></i>Détail par produit</span>
+                                                <button class="btn btn-sm btn-outline-primary" id="fin-creances-detail-all" title="Voir toutes les ventes individuelles qui composent la commission">
+                                                    <i class="bi bi-zoom-in"></i> Voir tout le détail
+                                                </button>
+                                            </h6>
                                             <div class="table-responsive">
                                                 <table class="table table-sm table-striped mb-0" id="fin-creances-detail">
                                                     <thead class="table-light">
@@ -2156,6 +2161,7 @@
                                                             <th>Produit</th>
                                                             <th class="text-end">Quantité</th>
                                                             <th class="text-end">Je dois (3%)</th>
+                                                            <th class="text-center" style="width:80px"></th>
                                                         </tr>
                                                     </thead>
                                                     <tbody></tbody>
@@ -3856,6 +3862,58 @@
     
     <!-- Script pour la gestion des compositions de packs -->
     <script src="js/modules/pack-composition.js"></script>
+
+    <!-- Modale: drill-down detail commission Maas 3% -->
+    <div class="modal fade" id="fin-commission-detail-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-calculator me-2"></i>
+                        Détail du calcul commission
+                        <span class="badge bg-warning text-dark ms-2" id="fin-commission-detail-title-badge"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-light border small mb-3">
+                        <i class="bi bi-info-circle"></i>
+                        Chaque ligne est une vente individuelle qui contribue à la commission 3% affichée.
+                        Le <code>prix vente catalogue</code> est la valeur effective à la date de la vente
+                        (point-in-time depuis <code>prix_vente_history</code>).
+                        Commission = <code>3% × prix × quantité</code>.
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0" id="fin-commission-detail-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Point de vente</th>
+                                    <th>Libellé vente</th>
+                                    <th>Catalogue</th>
+                                    <th class="text-end">Quantité</th>
+                                    <th class="text-end">Prix vente</th>
+                                    <th class="text-end">Commission 3%</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td colspan="4" class="text-end">Total</td>
+                                    <td class="text-end" id="fin-commission-detail-foot-qte"></td>
+                                    <td></td>
+                                    <td class="text-end" id="fin-commission-detail-foot-comm"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Script Finance (Creances Fournisseur, MataBanq, Paiements) -->
     <script src="js/finance.js"></script>

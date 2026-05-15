@@ -137,6 +137,10 @@
         const formPaiement = $('fin-paiement-form');
         if (formPaiement) formPaiement.addEventListener('submit', onSubmitPaiement);
 
+        // Bouton "Voir tout le detail" (drill-down toutes ventes confondues)
+        const btnDetailAll = $('fin-creances-detail-all');
+        if (btnDetailAll) btnDetailAll.addEventListener('click', () => openCommissionDetail(null));
+
         // Charger config + donnees
         try {
             const resCfg = await fetch('/api/finance/config', { credentials: 'include' });
@@ -367,8 +371,75 @@
         }
     }
 
+    // Reference au dernier `local` recu (utilise par le drill-down "Voir tout")
+    let _lastLocal = null;
+
+    // Ouvre la modale de drill-down commission. Si `produitFilter` est
+    // fourni, on filtre sur cette ligne; sinon on affiche tout.
+    function openCommissionDetail(produitFilter) {
+        if (!_lastLocal) return;
+        const modal = document.getElementById('fin-commission-detail-modal');
+        if (!modal) return;
+        const tbody = document.querySelector('#fin-commission-detail-table tbody');
+        const titleBadge = document.getElementById('fin-commission-detail-title-badge');
+        const footQte = document.getElementById('fin-commission-detail-foot-qte');
+        const footComm = document.getElementById('fin-commission-detail-foot-comm');
+
+        let ventes = [];
+        const details = _lastLocal.detail || [];
+        if (produitFilter) {
+            const row = details.find(d => d.produit === produitFilter);
+            ventes = row ? (row.ventes || []).map(v => ({ ...v, catalog: produitFilter })) : [];
+            titleBadge.textContent = produitFilter + ' — ' + fmt(row ? row.dette : 0);
+        } else {
+            // Cumul: toutes les ventes de tous les produits catalogue
+            for (const d of details) {
+                for (const v of (d.ventes || [])) {
+                    ventes.push({ ...v, catalog: d.produit });
+                }
+            }
+            // Tri global desc par date
+            ventes.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+            titleBadge.textContent = 'Total — ' + fmt(_lastLocal.ce_que_je_dois);
+        }
+
+        tbody.innerHTML = '';
+        if (ventes.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-muted small text-center">Aucune vente individuelle.</td></tr>`;
+        } else {
+            let totalQte = 0, totalComm = 0;
+            for (const v of ventes) {
+                totalQte += v.nombre || 0;
+                totalComm += v.commission || 0;
+                let statutBadge = '';
+                if (v.statut === 'alias') statutBadge = ' <span class="badge bg-info-subtle text-info small">alias</span>';
+                else if (v.statut === 'prefix') statutBadge = ' <span class="badge bg-warning-subtle text-warning small">prefix</span>';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="small">${esc(v.date)}</td>
+                    <td class="small">${esc(v.point_vente || '—')}</td>
+                    <td class="small"><code>${esc(v.produit_vente)}</code>${statutBadge}</td>
+                    <td class="small"><strong>${esc(v.catalog)}</strong></td>
+                    <td class="text-end small">${new Intl.NumberFormat('fr-FR').format(v.nombre)}</td>
+                    <td class="text-end small">${fmt(v.prix_vente_eff)}</td>
+                    <td class="text-end fw-semibold">${fmt(v.commission)}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+            footQte.textContent = new Intl.NumberFormat('fr-FR').format(Math.round(totalQte * 100) / 100);
+            footComm.textContent = fmt(totalComm);
+        }
+
+        // Bootstrap 5: bs.Modal API
+        if (window.bootstrap && window.bootstrap.Modal) {
+            const bsModal = window.bootstrap.Modal.getOrCreateInstance(modal);
+            bsModal.show();
+        }
+    }
+
     // ================= RENDER B: Calcul Maas =================
     function renderLocal(local) {
+        _lastLocal = local;
         const cardsContainer = $('fin-creances-cards');
         const tbody = document.querySelector('#fin-creances-detail tbody');
         const totalBadge = $('fin-cre-acc-maas-total');
@@ -430,7 +501,7 @@
         // Detail produits (agreges par entree catalogue resolue)
         const detail = local.detail || [];
         if (detail.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" class="text-muted small">Aucune vente éligible avec un produit catalogue résolu sur la période.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" class="text-muted small">Aucune vente éligible avec un produit catalogue résolu sur la période.</td></tr>`;
             return;
         }
         for (const d of detail) {
@@ -447,6 +518,7 @@
                 ? `<div class="small text-muted">${originaux.map(esc).join(', ')}</div>`
                 : '';
 
+            const nbVentes = Array.isArray(d.ventes) ? d.ventes.length : 0;
             tr.innerHTML = `
                 <td>
                     <strong>${esc(d.produit)}</strong>${statutBadge}
@@ -454,9 +526,18 @@
                 </td>
                 <td class="text-end">${new Intl.NumberFormat('fr-FR').format(d.quantite)}</td>
                 <td class="text-end">${fmt(d.dette)}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-secondary" data-commission-detail="${esc(d.produit)}" title="Voir les ${nbVentes} vente(s) qui composent ${fmt(d.dette)}">
+                        <i class="bi bi-zoom-in"></i>
+                    </button>
+                </td>
             `;
             tbody.appendChild(tr);
         }
+        // Listeners drill-down par ligne
+        tbody.querySelectorAll('button[data-commission-detail]').forEach(btn => {
+            btn.addEventListener('click', () => openCommissionDetail(btn.getAttribute('data-commission-detail')));
+        });
     }
 
     // ================= RENDER C: Paiements =================
