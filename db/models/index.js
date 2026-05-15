@@ -29,6 +29,9 @@ const CommandeInfo = require('./CommandeInfo');
 // Modèle pour les commandes web (weborders)
 const WebOrder = require('./WebOrder');
 
+// Modèle Finance: paiements faits au fournisseur viande
+const FournisseurPaiement = require('./FournisseurPaiement');
+
 const { sequelize } = require('../index');
 
 // =====================================================
@@ -196,7 +199,10 @@ module.exports = {
   
   // Modèle commandes web
   WebOrder,
-  
+
+  // Finance — paiements fournisseur
+  FournisseurPaiement,
+
   // Fonctions utilitaires
   syncDatabase,
   syncNewModels,

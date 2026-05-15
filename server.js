@@ -502,6 +502,7 @@ const clientConfig = require('./config/client-config');
 const paymentsGeneratedRouter = require('./routes/payments-generated');
 const modulesRouter = require('./routes/modules');
 const configAdminRouter = require('./routes/config-admin');
+const financeRouter = require('./routes/finance');
 // SUPPRIMÉ - Stock unifié dans les fichiers JSON
 // const stockAutoRouter = require('./routes/stock-auto');
 
@@ -510,6 +511,9 @@ app.use('/api/payments/generated', paymentsGeneratedRouter);
 
 // Routes d'administration de la configuration (produits, catégories, prix)
 app.use('/api/admin/config', configAdminRouter);
+
+// Routes Finance (creances fournisseur, paiements)
+app.use('/api/finance', financeRouter);
 
 // Routes pour la gestion du stock automatique
 // SUPPRIMÉ - Stock unifié dans les fichiers JSON

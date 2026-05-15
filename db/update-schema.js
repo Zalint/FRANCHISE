@@ -1,6 +1,7 @@
 const { sequelize } = require('./index');
 const Reconciliation = require('./models/Reconciliation');
 const CashPayment = require('./models/CashPayment');
+const FournisseurPaiement = require('./models/FournisseurPaiement');
 
 /**
  * Met à jour le schéma de la base de données sans perdre les données existantes
@@ -61,6 +62,21 @@ async function updateSchema() {
             ADD COLUMN IF NOT EXISTS default_screen VARCHAR(100) DEFAULT NULL
         `);
         console.log('Colonne default_screen vérifiée/ajoutée dans la table users');
+
+        // Finance: table fournisseur_paiements (CRUD onglet Creances Fournisseur).
+        const fournisseurPaiementsExists = await checkTableExists('fournisseur_paiements');
+        if (!fournisseurPaiementsExists) {
+            console.log('Table fournisseur_paiements manquante, creation...');
+            await FournisseurPaiement.sync();
+            console.log('Table fournisseur_paiements creee');
+        } else {
+            // Defense en profondeur: si la table existe mais sans la colonne
+            // point_vente (ancienne version), on l'ajoute.
+            await sequelize.query(`
+                ALTER TABLE fournisseur_paiements
+                ADD COLUMN IF NOT EXISTS point_vente VARCHAR(100) DEFAULT NULL
+            `);
+        }
 
         console.log('Mise à jour du schéma terminée avec succès');
         return true;
