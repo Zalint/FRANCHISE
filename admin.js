@@ -1142,6 +1142,46 @@ let currentProduitsConfig = {};
 let currentInventaireConfig = {};
 let currentAbonnementConfig = {};
 
+// ============================================================
+// Helpers shared (port Maas)
+// ============================================================
+
+// Echappement HTML attribut (couvre " et ' en plus de & < >). A utiliser
+// partout ou on injecte du contenu dynamique (noms de categorie/produit)
+// dans des attributs ou du texte HTML. Evite les XSS-via-admin si jamais
+// un nom contient des caracteres speciaux. — Finding 5 du code review.
+function escAttr(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+// Mapping: label produit (Bovin, Ovin, Conserve, ...) -> bucket logique de
+// l'inventaire ("Viandes", "Superette", ...). Les buckets restent grossiers
+// pour l'affichage de l'onglet Inventaire (groupes de viandes / epicerie /
+// dechets) alors que les labels alignes Produits Generaux sont plus fins.
+// Pass-through pour les buckets legacy ('Viandes', 'Déchets', ...) et pour
+// les categories personnalisees (qui ont leur propre bucket cree a la volee).
+// — Finding 2 du code review.
+const _CAT_AFFICHAGE_TO_BUCKET = {
+    'Bovin': 'Viandes',
+    'Ovin': 'Viandes',
+    'Volaille': 'Viandes',
+    'Caprin': 'Viandes',
+    'Poisson': 'Viandes',
+    'Pack': 'Viandes',
+    'Conserve': 'Superette',
+    'Riz & Féculents': 'Superette'
+    // 'Superette' passe-through (deja un bucket)
+};
+function mapCategorieAffichageVersBucket(cat) {
+    if (!cat) return null;
+    return _CAT_AFFICHAGE_TO_BUCKET[cat] || cat;
+}
+
 // Charger la configuration des produits généraux
 async function chargerConfigProduits() {
     try {
@@ -1392,7 +1432,16 @@ function reorganiserInventaireParCategories() {
         }
         
         if (typeof config === 'object' && config.prixDefault !== undefined) {
-            // Catégoriser les produits selon leur nom
+            // 1. Priorite: respecter categorie_affichage si saisi explicitement
+            //    en admin (port Maas, Finding 2 du code review). On mappe via
+            //    bucket pour aligner labels produits-generaux (Bovin/Ovin/...)
+            //    avec les buckets inventaire (Viandes, ...).
+            const bucketCible = mapCategorieAffichageVersBucket(config.categorie_affichage);
+            if (config.categorie_affichage && bucketCible && inventaireParCategories[bucketCible]) {
+                inventaireParCategories[bucketCible][produit] = config;
+                return;
+            }
+            // 2. Fallback heuristique par nom (legacy, produits sans categorie_affichage)
             if (produit.includes('Boeuf') || produit.includes('Veau') || produit.includes('Poulet') || produit.includes('Agneau')) {
                 inventaireParCategories["Viandes"][produit] = config;
             } else if (produit.includes('Tablette') || produit.includes('Oeuf')) {
