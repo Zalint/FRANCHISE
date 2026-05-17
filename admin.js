@@ -1182,6 +1182,36 @@ function mapCategorieAffichageVersBucket(cat) {
     return _CAT_AFFICHAGE_TO_BUCKET[cat] || cat;
 }
 
+// State partage pour le toggle "Afficher les archives" dans les onglets
+// Produits Generaux + Inventaire (Feature E du code review).
+// La pane Recherche a son propre toggle (state local).
+let _showArchivedInTabs = false;
+
+function syncShowArchivedTabs(value) {
+    _showArchivedInTabs = !!value;
+    document.querySelectorAll('[data-show-archived-tabs]').forEach((cb) => {
+        if (cb.checked !== _showArchivedInTabs) cb.checked = _showArchivedInTabs;
+    });
+    if (typeof afficherProduitsConfig === 'function') afficherProduitsConfig();
+    if (typeof afficherInventaireConfig === 'function') afficherInventaireConfig();
+}
+
+function initShowArchivedTabsToggles() {
+    document.querySelectorAll('[data-show-archived-tabs]').forEach((cb) => {
+        if (cb.dataset.bound === 'true') return;
+        cb.dataset.bound = 'true';
+        cb.checked = _showArchivedInTabs;
+        cb.addEventListener('change', (e) => syncShowArchivedTabs(e.target.checked));
+    });
+}
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initShowArchivedTabsToggles);
+    } else {
+        initShowArchivedTabsToggles();
+    }
+}
+
 // Charger la configuration des produits généraux
 async function chargerConfigProduits() {
     try {
@@ -1334,21 +1364,26 @@ function afficherProduitsConfig() {
 function genererLignesProduits(categorie) {
     let html = '';
     const produits = currentProduitsConfig[categorie];
-    
+
     Object.keys(produits).forEach(produit => {
         const config = produits[produit];
         if (typeof config === 'object' && config.default !== undefined) {
+            // Skip les archives si le toggle "Afficher archives" est off
+            if (config.archived && !_showArchivedInTabs) return;
+            const isArchived = !!config.archived;
             const alternatives = config.alternatives ? config.alternatives.join(', ') : '';
+            // Filtre 'archived' du calcul prix_speciaux pour eviter "archived: true"
             const prixSpeciaux = Object.keys(config)
-                .filter(key => !['default', 'alternatives'].includes(key))
+                .filter(key => !['default', 'alternatives', 'archived'].includes(key))
                 .map(key => `${key}: ${config[key]}`)
                 .join(', ');
-            
+
             html += `
-                <tr>
+                <tr${isArchived ? ' class="row-archived"' : ''}>
                     <td>
-                        <input type="text" class="form-control form-control-sm" value="${produit}" 
+                        <input type="text" class="form-control form-control-sm" value="${produit}"
                                onchange="modifierNomProduit('${categorie}', '${produit}', this.value)">
+                        ${isArchived ? '<span class="badge bg-warning text-dark ms-1" title="Produit archivé"><i class="bi bi-archive"></i> Archivé</span>' : ''}
                     </td>
                     <td>
                         <input type="number" class="form-control form-control-sm" value="${config.default}" 
@@ -1551,20 +1586,27 @@ function genererLignesProduitsInventaire(produits, categorie) {
     
     Object.keys(produits).forEach(produit => {
         const config = produits[produit];
+        // Skip les archives si le toggle "Afficher archives" est off
+        if (config.archived && !_showArchivedInTabs) return;
+        const isArchived = !!config.archived;
         const alternatives = config.alternatives ? config.alternatives.join(', ') : '';
+        // Filtre 'archived' + 'categorie_affichage' + 'ventes' + 'ventilation_poids'
+        // du calcul prix_speciaux (ces cles ne sont PAS des prix par PV)
         const prixSpeciaux = Object.keys(config)
-            .filter(key => !['prixDefault', 'alternatives', 'mode_stock', 'unite_stock'].includes(key))
+            .filter(key => !['prixDefault', 'alternatives', 'mode_stock', 'unite_stock',
+                             'archived', 'categorie_affichage', 'ventes', 'ventilation_poids'].includes(key))
             .map(key => `${key}: ${config[key]}`)
             .join(', ');
-        
+
         const modeStock = config.mode_stock || 'manuel';
         const uniteStock = config.unite_stock || 'unite';
-        
+
         html += `
-            <tr>
+            <tr${isArchived ? ' class="row-archived"' : ''}>
                 <td>
-                    <input type="text" class="form-control form-control-sm" value="${produit}" 
+                    <input type="text" class="form-control form-control-sm" value="${produit}"
                            onchange="modifierNomProduitInventaire('${produit}', this.value, ${catParam})">
+                    ${isArchived ? '<span class="badge bg-warning text-dark ms-1" title="Produit archivé"><i class="bi bi-archive"></i> Archivé</span>' : ''}
                 </td>
                 <td>
                     <input type="number" class="form-control form-control-sm" value="${config.prixDefault}" 

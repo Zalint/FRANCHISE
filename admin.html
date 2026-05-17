@@ -28,6 +28,16 @@
             border-radius: 5px;
             margin-bottom: 20px;
         }
+
+        /* ============ Archivés: rows opaques + rayures legeres (Feature E) ============ */
+        tr.row-archived {
+            opacity: 0.6;
+            background: repeating-linear-gradient(45deg, #fafafa, #fafafa 6px, #f5f5f5 6px, #f5f5f5 12px);
+        }
+        tr.row-archived:hover { opacity: 0.85; }
+        tr.row-archived input.form-control {
+            background-color: rgba(255, 255, 255, 0.6);
+        }
     </style>
 </head>
 <body>
@@ -288,6 +298,15 @@
                                 </div>
                             </div>
                             <div class="card-body">
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                    <label class="form-check ms-auto d-flex align-items-center mb-0" for="produits-show-archived">
+                                        <input type="checkbox" class="form-check-input me-2" id="produits-show-archived" data-show-archived-tabs>
+                                        <span class="form-check-label small">
+                                            <i class="bi bi-archive" aria-hidden="true"></i>
+                                            Afficher les archivés
+                                        </span>
+                                    </label>
+                                </div>
                                 <div id="produits-categories" class="accordion">
                                     <!-- Les catégories seront générées dynamiquement -->
                                 </div>
@@ -313,6 +332,15 @@
                                 </div>
                             </div>
                             <div class="card-body">
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                    <label class="form-check ms-auto d-flex align-items-center mb-0" for="inventaire-show-archived">
+                                        <input type="checkbox" class="form-check-input me-2" id="inventaire-show-archived" data-show-archived-tabs>
+                                        <span class="form-check-label small">
+                                            <i class="bi bi-archive" aria-hidden="true"></i>
+                                            Afficher les archivés
+                                        </span>
+                                    </label>
+                                </div>
                                 <div id="inventaire-categories" class="accordion">
                                     <!-- Les catégories seront générées dynamiquement -->
                                 </div>

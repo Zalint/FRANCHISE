@@ -1335,13 +1335,50 @@ app.post('/api/ventes', checkAuth, checkWriteAccess, async (req, res) => {
     // Vérifier si le point de vente est actif
     for (const entry of entries) {
         if (!pointsVente[entry.pointVente]?.active) {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Le point de vente ${entry.pointVente} est désactivé` 
+            return res.status(400).json({
+                success: false,
+                message: `Le point de vente ${entry.pointVente} est désactivé`
             });
         }
     }
-    
+
+    // Guard: rejeter si un produit est archive cote admin (sinon un POS
+    // stale en cache pourrait continuer a vendre apres archivage). Pre-pass
+    // collect-all pour minimiser le round-trip DB.
+    try {
+        const { Produit: ProduitModel } = require('./db/models');
+        const { Op: SeqOp } = require('sequelize');
+        const nomsUniques = [...new Set(
+            entries.map(e => e && e.produit ? String(e.produit).trim() : null).filter(Boolean)
+        )];
+        if (nomsUniques.length > 0) {
+            const archives = await ProduitModel.findAll({
+                where: {
+                    nom: { [SeqOp.in]: nomsUniques },
+                    archived: true,
+                    type_catalogue: { [SeqOp.in]: ['vente', 'inventaire'] }
+                },
+                attributes: ['nom', 'type_catalogue']
+            });
+            if (archives.length > 0) {
+                const archivedSet = new Set(archives.map(p => p.nom));
+                const archivedList = [...archivedSet];
+                return res.status(400).json({
+                    success: false,
+                    message: archivedList.length === 1
+                        ? `Le produit «${archivedList[0]}» est archivé et ne peut plus être vendu. Désarchive-le côté admin si nécessaire.`
+                        : `${archivedList.length} produits sont archivés : ${archivedList.map(n => `«${n}»`).join(', ')}.`,
+                    archivedProducts: archivedList
+                });
+            }
+        }
+    } catch (e) {
+        console.warn('[ventes] guard archive failed (continuing):', e.message);
+        // Best effort: si la query echoue (DB blip), on laisse passer pour
+        // ne pas bloquer le POS sur un faux negatif. L'archivage reste
+        // garde par les autres mecanismes (UI POS ne voit pas les archives).
+    }
+
     try {
         const { Produit, Category } = require('./db/models');
         
