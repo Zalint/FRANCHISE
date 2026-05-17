@@ -62,6 +62,13 @@ const Produit = sequelize.define('Produit', {
     allowNull: true,
     field: 'categorie_affichage',
     comment: 'Catégorie personnalisée pour l\'affichage dans l\'admin inventaire (ex: Conserve, Boissons)'
+  },
+  archived: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'archived',
+    comment: 'Soft-delete pour la transition de taxonomie. TRUE = cache dans POS, stock inventaire et UI admin par defaut.'
   }
 }, {
   tableName: 'produits',
@@ -78,6 +85,10 @@ const Produit = sequelize.define('Produit', {
     },
     {
       fields: ['type_catalogue']
+    },
+    {
+      fields: ['archived'],
+      name: 'produits_archived_idx'
     }
   ]
 });

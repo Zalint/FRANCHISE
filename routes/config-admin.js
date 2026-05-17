@@ -431,9 +431,10 @@ router.get('/produits', requireAdmin, async (req, res) => {
       
       const config = {
         default: parseFloat(produit.prix_defaut) || 0,
-        alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : []
+        alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : [],
+        archived: !!produit.archived
       };
-      
+
       // Ajouter les prix par point de vente
       if (produit.prixParPointVente) {
         for (const prix of produit.prixParPointVente) {
@@ -442,10 +443,10 @@ router.get('/produits', requireAdmin, async (req, res) => {
           }
         }
       }
-      
+
       produitsResult[categorieName][produit.nom] = config;
     }
-    
+
     console.log('📋 GET /api/admin/config/produits - Catégories:', Object.keys(produitsResult));
     res.json({ success: true, produits: produitsResult });
   } catch (error) {
@@ -479,9 +480,10 @@ router.get('/produits-inventaire', requireAuthenticated, async (req, res) => {
         prixDefault: parseFloat(produit.prix_defaut) || 0,
         alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : [],
         mode_stock: produit.mode_stock || 'manuel',
-        unite_stock: produit.unite_stock || 'unite'
+        unite_stock: produit.unite_stock || 'unite',
+        archived: !!produit.archived
       };
-      
+
       if (produit.prixParPointVente) {
         for (const prix of produit.prixParPointVente) {
           if (prix.pointVente) {
