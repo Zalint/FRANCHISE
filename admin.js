@@ -340,7 +340,10 @@ async function togglePointVente(nom) {
 // Charger les produits
 async function chargerProduits() {
     try {
-        const response = await fetch('/api/admin/produits', {
+        // Route reelle FRANCHISE: /api/admin/config/produits (PAS /api/admin/produits).
+        // L'ancien path retournait HTML 404 -> JSON.parse plantait -> Recherche
+        // restait bloquee sur 'Chargement des produits...'.
+        const response = await fetch('/api/admin/config/produits', {
             credentials: 'include'
         });
         const data = await response.json();
@@ -1219,7 +1222,7 @@ async function chargerConfigProduits() {
             credentials: 'include'
         });
         const data = await response.json();
-        
+
         if (data.success && data.produits) {
             currentProduitsConfig = data.produits;
             console.log('✅ Produits chargés:', Object.keys(currentProduitsConfig));
@@ -1232,6 +1235,9 @@ async function chargerConfigProduits() {
         console.error('Erreur lors du chargement de la configuration des produits:', error);
         currentProduitsConfig = {};
     }
+    // Rafraichir la pane Recherche cross-catalogue (port Maas).
+    // No-op safe si la pane n'est pas encore initialisee.
+    refreshRechercheApresConfigLoad();
 }
 
 // Charger la configuration des produits d'inventaire
@@ -1241,16 +1247,16 @@ async function chargerConfigInventaire() {
             credentials: 'include'
         });
         const data = await response.json();
-        
+
         if (data.success) {
             currentInventaireConfig = data.produitsInventaire;
-            
+
             // Mettre à jour les catégories personnalisées depuis le serveur
             if (data.categoriesPersonnalisees && data.categoriesPersonnalisees.length > 0) {
                 localStorage.setItem('inventaireCategoriesPersonnalisees', JSON.stringify(data.categoriesPersonnalisees));
                 console.log('📁 Catégories personnalisées chargées:', data.categoriesPersonnalisees);
             }
-            
+
             afficherInventaireConfig();
         } else {
             console.error('Erreur lors du chargement de la configuration d\'inventaire:', data.message);
@@ -1259,6 +1265,26 @@ async function chargerConfigInventaire() {
     } catch (error) {
         console.error('Erreur lors du chargement de la configuration d\'inventaire:', error);
         alert('Erreur lors du chargement de la configuration d\'inventaire');
+    }
+    // Idem: rafraichir la pane Recherche apres load.
+    refreshRechercheApresConfigLoad();
+}
+
+// Helper: re-render la pane Recherche apres un load des configs. Port Maas.
+// No-op silencieux si la pane n'est pas initialisee (avant DOMContentLoaded
+// ou sur une page sans le markup #recherche-grid). Defensif vs ordre d'init
+// + erreurs internes (try/catch).
+function refreshRechercheApresConfigLoad() {
+    if (typeof reconstruireFlatRecherche !== 'function') return;
+    const grid = document.getElementById('recherche-grid');
+    if (!grid) return; // pane Recherche pas dans le DOM
+    try {
+        reconstruireFlatRecherche();
+        if (typeof updateRechercheCompteurs === 'function') updateRechercheCompteurs();
+        if (typeof renderRechercheCategoriesFilter === 'function') renderRechercheCategoriesFilter();
+        if (typeof renderRechercheGrid === 'function') renderRechercheGrid();
+    } catch (_) {
+        // pane pas encore prete; le premier rendu se fera a son init.
     }
 }
 
