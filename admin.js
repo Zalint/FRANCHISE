@@ -3250,3 +3250,1111 @@ function afficherNotification(message, type = 'info') {
         notification.remove();
     }, 5000);
 } 
+
+// =====================================================================
+// RECHERCHE SPOTLIGHT + MODAL UNIFIE M1 — port Maas verbatim avec 5 findings
+// du code review deja appliques (a11y buttons + bucket mapper + lookup
+// recursif + pumSave merge + escAttr XSS).
+// =====================================================================
+
+// Source de verite: les categories standard des 2 catalogues.
+const CATEGORIES_PRODUITS_GENERAUX = {
+    'Boucherie': ['Bovin', 'Ovin', 'Volaille', 'Caprin', 'Poisson', 'Pack'],
+    'Épicerie':  ['Superette', 'Conserve', 'Riz & Féculents']
+};
+const DEFAULT_CATEGORIE_PRODUITS_GENERAUX = 'Superette';
+const CATEGORIES_INVENTAIRE = CATEGORIES_PRODUITS_GENERAUX;
+const DEFAULT_CATEGORIE_INVENTAIRE = 'Superette';
+
+const inventaireFamilleDefauts = {
+    'Viandes': 'Boucherie',
+    'Abats et Sous-produits': 'Boucherie',
+    'Produits sur Pieds': 'Boucherie',
+    'Œufs et Produits Laitiers': 'Epicerie',
+    'Superette': 'Epicerie',
+    'Déchets': 'Autres',
+    'Autres': 'Autres'
+};
+
+function familleDeCategorieInventaire(nomCategorie) {
+    return inventaireFamilleDefauts[nomCategorie] || 'Autres';
+}
+
+function normFamille(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function familleDeCatPG(categorie) {
+    for (const [fam, cats] of Object.entries(CATEGORIES_PRODUITS_GENERAUX)) {
+        if (cats.includes(categorie)) return normFamille(fam);
+    }
+    return 'autres';
+}
+function familleDeCatInventaire(categorie) {
+    return normFamille(familleDeCategorieInventaire(categorie));
+}
+
+const _CATS_BOUCHERIE_MANUEL = new Set([
+    'Bovin', 'Ovin', 'Volaille', 'Caprin', 'Poisson', 'Pack',
+    'Viandes', 'Abats et Sous-produits', 'Produits sur Pieds'
+]);
+function pumDefaultModeStock(catInv) {
+    return _CATS_BOUCHERIE_MANUEL.has(catInv) ? 'manuel' : 'automatique';
+}
+
+// Fallback showToast si pas defini ailleurs
+if (typeof showToast === 'undefined') {
+    window.showToast = function (msg, type) {
+        console.log('[toast:' + (type || 'info') + ']', msg);
+    };
+}
+
+// State courant Recherche
+const _rechercheState = {
+    query: '', src: 'all', famille: 'all', cat: 'all', sort: 'name',
+    showArchived: false, flat: [], selection: new Set()
+};
+function _rechercheSelKey(src, nom) { return src + '::' + nom; }
+
+function reconstruireFlatRecherche() {
+    const flat = [];
+    if (typeof currentProduitsConfig === 'object' && currentProduitsConfig) {
+        for (const [catName, produits] of Object.entries(currentProduitsConfig)) {
+            if (typeof produits !== 'object' || produits === null) continue;
+            for (const [produitName, config] of Object.entries(produits)) {
+                if (typeof config !== 'object' || config === null) continue;
+                if (typeof config.default !== 'number') continue;
+                flat.push({ src: 'pg', name: produitName, cat: catName,
+                    famille: familleDeCatPG(catName), prix: config.default,
+                    archived: !!config.archived });
+            }
+        }
+    }
+    if (typeof reorganiserInventaireParCategories === 'function') {
+        const parCat = reorganiserInventaireParCategories();
+        for (const [catName, produits] of Object.entries(parCat)) {
+            if (typeof produits !== 'object' || produits === null) continue;
+            for (const [produitName, config] of Object.entries(produits)) {
+                if (typeof config !== 'object' || config === null) continue;
+                if (typeof config.prixDefault !== 'number') continue;
+                flat.push({ src: 'inv', name: produitName, cat: catName,
+                    famille: familleDeCatInventaire(catName), prix: config.prixDefault,
+                    archived: !!config.archived });
+            }
+        }
+    }
+    _rechercheState.flat = flat;
+    return flat;
+}
+
+function appliquerFiltresRecherche() {
+    const { query, src, famille, cat, sort, showArchived, flat } = _rechercheState;
+    const q = query.toLowerCase().trim();
+    let matches = flat;
+    if (!showArchived) matches = matches.filter(p => !p.archived);
+    if (src !== 'all') matches = matches.filter(p => p.src === src);
+    if (famille !== 'all') matches = matches.filter(p => p.famille === famille);
+    if (cat !== 'all') matches = matches.filter(p => p.cat === cat);
+    if (q) matches = matches.filter(p => p.name.toLowerCase().includes(q));
+    if (sort === 'name') matches.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort === 'price-asc') matches.sort((a, b) => a.prix - b.prix);
+    else if (sort === 'price-desc') matches.sort((a, b) => b.prix - a.prix);
+    return matches;
+}
+
+function updateRechercheCompteurs() {
+    const { flat, showArchived } = _rechercheState;
+    const scope = showArchived ? flat : flat.filter(p => !p.archived);
+    const setCount = (sel, n) => {
+        const el = document.querySelector('[data-count="' + sel + '"]');
+        if (el) el.textContent = String(n);
+    };
+    setCount('all', scope.length);
+    setCount('pg', scope.filter(p => p.src === 'pg').length);
+    setCount('inv', scope.filter(p => p.src === 'inv').length);
+}
+
+function renderRechercheCategoriesFilter() {
+    const list = document.getElementById('recherche-cat-list');
+    if (!list) return;
+    const { src, famille, cat, showArchived, flat } = _rechercheState;
+    let scope = flat;
+    if (!showArchived) scope = scope.filter(p => !p.archived);
+    if (src !== 'all') scope = scope.filter(p => p.src === src);
+    if (famille !== 'all') scope = scope.filter(p => p.famille === famille);
+    const countByCat = new Map();
+    for (const p of scope) countByCat.set(p.cat, (countByCat.get(p.cat) || 0) + 1);
+    const cats = Array.from(countByCat.keys()).sort((a, b) => a.localeCompare(b));
+    if (cat !== 'all' && !countByCat.has(cat)) _rechercheState.cat = 'all';
+    const currentCat = _rechercheState.cat;
+    const allActive = currentCat === 'all';
+    let html = '<button type="button" class="recherche-filter-item' + (allActive ? ' active' : '') + '" data-recherche-cat="all" aria-pressed="' + allActive + '">'
+        + '<i class="bi bi-grid" aria-hidden="true"></i> Toutes'
+        + '<span class="recherche-count">' + scope.length + '</span></button>';
+    for (const c of cats) {
+        const escC = escAttr(c);
+        const isActive = c === currentCat;
+        html += '<button type="button" class="recherche-filter-item' + (isActive ? ' active' : '') + '" data-recherche-cat="' + escC + '" title="' + escC + '" aria-pressed="' + isActive + '">'
+            + '<span class="recherche-cat-label">' + escC + '</span>'
+            + '<span class="recherche-count">' + countByCat.get(c) + '</span></button>';
+    }
+    list.innerHTML = html;
+    list.querySelectorAll('[data-recherche-cat]').forEach((el) => {
+        el.addEventListener('click', () => {
+            _rechercheState.cat = el.dataset.rechercheCat;
+            list.querySelectorAll('[data-recherche-cat]').forEach((x) => {
+                const isActive = x === el;
+                x.classList.toggle('active', isActive);
+                x.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+            renderRechercheGrid();
+        });
+    });
+}
+
+function renderRechercheGrid() {
+    const grid = document.getElementById('recherche-grid');
+    const countEl = document.getElementById('recherche-result-count');
+    if (!grid || !countEl) return;
+    const matches = appliquerFiltresRecherche();
+    countEl.textContent = matches.length + ' résultat' + (matches.length > 1 ? 's' : '');
+    if (matches.length === 0) {
+        grid.innerHTML = '<div class="recherche-empty"><i class="bi bi-search"></i> Aucun produit ne correspond aux filtres.</div>';
+        renderRechercheSelectionBar();
+        return;
+    }
+    const selection = _rechercheState.selection;
+    grid.innerHTML = matches.map((p) => {
+        const icon = p.src === 'pg' ? 'bi-shop' : 'bi-box-seam';
+        const srcLabel = p.src === 'pg' ? 'Généraux' : 'Inventaire';
+        const famIcon = p.famille === 'boucherie' ? '🥩' : (p.famille === 'epicerie' ? '🛒' : '📦');
+        const escName = escAttr(p.name);
+        const escCat = escAttr(p.cat);
+        const escSrc = escAttr(p.src);
+        const archivedClass = p.archived ? ' is-archived' : '';
+        const archivedBadge = p.archived ? '<span class="archived-badge" title="Produit archivé"><i class="bi bi-archive" aria-hidden="true"></i> Archivé</span>' : '';
+        const selKey = _rechercheSelKey(p.src, p.name);
+        const isSelected = selection.has(selKey);
+        const selectedClass = isSelected ? ' is-selected' : '';
+        const archiveQuickIcon = p.archived ? 'bi-archive-fill' : 'bi-archive';
+        const archiveQuickTitle = p.archived ? 'Désarchiver ce produit' : 'Archiver ce produit';
+        const archiveQuickLabel = p.archived ? 'Désarchiver' : 'Archiver';
+        return '<div class="result-card' + archivedClass + selectedClass + '" data-src="' + escSrc + '" data-name="' + escName + '" data-cat="' + escCat + '" data-archived="' + (p.archived ? 'true' : 'false') + '">'
+            + '<label class="result-card-checkbox" title="Sélectionner" aria-label="Sélectionner ' + escName + '">'
+            + '<input type="checkbox" class="result-card-checkbox-input" data-recherche-select="' + escSrc + '::' + escName + '"' + (isSelected ? ' checked' : '') + '>'
+            + '</label>'
+            + '<button type="button" class="result-card-archive-btn" data-recherche-archive="' + escSrc + '::' + escName + '" title="' + archiveQuickTitle + '" aria-label="' + archiveQuickLabel + ' ' + escName + '">'
+            + '<i class="bi ' + archiveQuickIcon + '" aria-hidden="true"></i>'
+            + '</button>'
+            + '<div class="result-card-header">'
+            + '<div class="result-card-icon icon-' + escSrc + '"><i class="bi ' + icon + '" aria-hidden="true"></i></div>'
+            + '<span class="src-badge ' + escSrc + '">' + srcLabel + '</span>'
+            + archivedBadge
+            + '</div>'
+            + '<div class="result-name" title="' + escName + '">' + escName + '</div>'
+            + '<div class="result-cat"><span aria-hidden="true">' + famIcon + '</span> ' + escCat + '</div>'
+            + '<div class="result-price">' + p.prix.toLocaleString('fr-FR') + ' <small>FCFA</small></div>'
+            + '</div>';
+    }).join('');
+    renderRechercheSelectionBar();
+}
+
+function renderRechercheSelectionBar() {
+    const bar = document.getElementById('recherche-selection-bar');
+    if (!bar) return;
+    const selection = _rechercheState.selection;
+    const count = selection.size;
+    if (count === 0) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    const flat = _rechercheState.flat;
+    let allArchived = true, anyArchived = false;
+    for (const p of flat) {
+        const key = _rechercheSelKey(p.src, p.name);
+        if (selection.has(key)) {
+            if (p.archived) anyArchived = true;
+            else allArchived = false;
+        }
+    }
+    bar.style.display = '';
+    bar.innerHTML = '<div class="d-flex align-items-center gap-2 flex-wrap">'
+        + '<span class="fw-semibold"><i class="bi bi-check-square me-1"></i>' + count + ' produit' + (count > 1 ? 's' : '') + ' sélectionné' + (count > 1 ? 's' : '') + '</span>'
+        + '<div class="ms-auto d-flex gap-2 flex-wrap">'
+        + '<button type="button" class="btn btn-sm btn-warning" id="recherche-batch-archive"' + (allArchived ? ' disabled' : '') + '><i class="bi bi-archive"></i> Archiver</button>'
+        + '<button type="button" class="btn btn-sm btn-outline-success" id="recherche-batch-unarchive"' + (!anyArchived ? ' disabled' : '') + '><i class="bi bi-arrow-counterclockwise"></i> Désarchiver</button>'
+        + '<button type="button" class="btn btn-sm btn-outline-secondary" id="recherche-batch-clear"><i class="bi bi-x-lg"></i> Désélectionner</button>'
+        + '</div></div>';
+}
+
+
+// =====================================================================
+// Batch archive (selection multiple) + archive rapide single card
+// =====================================================================
+let _rechercheBatchInFlight = false;
+
+async function rechercheBatchArchive(targetArchived) {
+    if (_rechercheBatchInFlight) return;
+    const selection = _rechercheState.selection;
+    if (selection.size === 0) return;
+    const flat = _rechercheState.flat;
+    const selectedItems = flat.filter(p => selection.has(_rechercheSelKey(p.src, p.name)));
+    if (selectedItems.length === 0) return;
+    const toUpdate = selectedItems.filter(p => !!p.archived !== targetArchived);
+    if (toUpdate.length === 0) {
+        showToast('Aucun changement à appliquer.', 'info');
+        return;
+    }
+    const action = targetArchived ? 'archiver' : 'désarchiver';
+    const actionPast = targetArchived ? 'archivés' : 'désarchivés';
+    const ok = confirm(action[0].toUpperCase() + action.slice(1) + ' ' + toUpdate.length + ' produit(s) ?');
+    if (!ok) return;
+    _rechercheBatchInFlight = true;
+    const snapPG = JSON.parse(JSON.stringify(currentProduitsConfig || {}));
+    const snapInv = JSON.parse(JSON.stringify(currentInventaireConfig || {}));
+    let hasPgChanges = false, hasInvChanges = false;
+    for (const p of toUpdate) {
+        if (p.src === 'pg') {
+            const pgHit = pumLookupPG(p.name, { exact: true });
+            if (pgHit && currentProduitsConfig[pgHit.categorie] && currentProduitsConfig[pgHit.categorie][pgHit.nom]) {
+                currentProduitsConfig[pgHit.categorie][pgHit.nom].archived = targetArchived;
+                hasPgChanges = true;
+            }
+        } else if (p.src === 'inv') {
+            const invHit = pumLookupInv(p.name, { exact: true });
+            if (invHit && invHit.parent && invHit.parent[invHit.nom]) {
+                invHit.parent[invHit.nom].archived = targetArchived;
+                hasInvChanges = true;
+            }
+        }
+    }
+    const bar = document.getElementById('recherche-selection-bar');
+    if (bar) bar.querySelectorAll('button').forEach(b => b.disabled = true);
+    let serverOk = true, serverError = null;
+    try {
+        if (hasPgChanges) {
+            const resp = await fetch('/api/admin/config/produits', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ produits: currentProduitsConfig })
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) { serverOk = false; serverError = data.error || ('HTTP ' + resp.status); }
+        }
+        if (serverOk && hasInvChanges) {
+            const resp = await fetch('/api/admin/config/produits-inventaire', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ produitsInventaire: currentInventaireConfig })
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) { serverOk = false; serverError = data.error || ('HTTP ' + resp.status); }
+        }
+    } catch (err) {
+        serverOk = false; serverError = err && err.message ? err.message : String(err);
+    } finally {
+        if (bar) bar.querySelectorAll('button').forEach(b => b.disabled = false);
+        _rechercheBatchInFlight = false;
+    }
+    if (!serverOk) {
+        currentProduitsConfig = snapPG;
+        currentInventaireConfig = snapInv;
+        try {
+            if (typeof chargerConfigProduits === 'function') await chargerConfigProduits();
+            if (typeof chargerConfigInventaire === 'function') await chargerConfigInventaire();
+        } catch (_) {}
+        showToast('Erreur batch: ' + serverError, 'danger');
+        return;
+    }
+    _rechercheState.selection.clear();
+    if (typeof afficherProduitsConfig === 'function') afficherProduitsConfig();
+    if (typeof afficherInventaireConfig === 'function') afficherInventaireConfig();
+    reconstruireFlatRecherche();
+    updateRechercheCompteurs();
+    renderRechercheCategoriesFilter();
+    renderRechercheGrid();
+    showToast(toUpdate.length + ' produit(s) ' + actionPast + '.', 'success');
+}
+
+const _rechercheArchiveSingleInFlight = new Set();
+async function rechercheArchiveSingle(src, nom) {
+    const key = _rechercheSelKey(src, nom);
+    if (_rechercheArchiveSingleInFlight.has(key)) return;
+    const flat = _rechercheState.flat;
+    const target = flat.find(p => p.src === src && p.name === nom);
+    if (!target) return;
+    _rechercheArchiveSingleInFlight.add(key);
+    const cssKey = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(key) : key;
+    const btn = document.querySelector('[data-recherche-archive="' + cssKey + '"]');
+    if (btn) btn.disabled = true;
+    const previousSelection = new Set(_rechercheState.selection);
+    _rechercheState.selection = new Set([key]);
+    try {
+        await rechercheBatchArchive(!target.archived);
+    } finally {
+        if (previousSelection.size === 0) _rechercheState.selection.clear();
+        else _rechercheState.selection = previousSelection;
+        _rechercheArchiveSingleInFlight.delete(key);
+        renderRechercheGrid();
+    }
+}
+
+// =====================================================================
+// Init Recherche Spotlight (bind events)
+// =====================================================================
+function initRechercheSpotlight() {
+    const grid = document.getElementById('recherche-grid');
+    if (!grid || grid.dataset.bound === 'true') return;
+    grid.dataset.bound = 'true';
+
+    const input = document.getElementById('recherche-input');
+    if (input) {
+        input.addEventListener('input', (e) => {
+            _rechercheState.query = e.target.value || '';
+            renderRechercheGrid();
+        });
+    }
+
+    const activateFilter = (selector, active) => {
+        document.querySelectorAll(selector).forEach((x) => {
+            const isActive = x === active;
+            x.classList.toggle('active', isActive);
+            x.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+    };
+
+    document.querySelectorAll('[data-recherche-src]').forEach((el) => {
+        el.addEventListener('click', () => {
+            activateFilter('[data-recherche-src]', el);
+            _rechercheState.src = el.dataset.rechercheSrc;
+            renderRechercheCategoriesFilter();
+            renderRechercheGrid();
+        });
+    });
+
+    document.querySelectorAll('[data-recherche-fam]').forEach((el) => {
+        el.addEventListener('click', () => {
+            activateFilter('[data-recherche-fam]', el);
+            _rechercheState.famille = el.dataset.rechercheFam;
+            renderRechercheCategoriesFilter();
+            renderRechercheGrid();
+        });
+    });
+
+    const sortSel = document.getElementById('recherche-sort');
+    if (sortSel) {
+        sortSel.addEventListener('change', (e) => {
+            _rechercheState.sort = e.target.value;
+            renderRechercheGrid();
+        });
+    }
+
+    const archivedToggle = document.getElementById('recherche-show-archived');
+    if (archivedToggle) {
+        archivedToggle.checked = _rechercheState.showArchived;
+        archivedToggle.addEventListener('change', (e) => {
+            _rechercheState.showArchived = !!e.target.checked;
+            updateRechercheCompteurs();
+            renderRechercheCategoriesFilter();
+            renderRechercheGrid();
+        });
+    }
+
+    const refreshBtn = document.getElementById('recherche-refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+            refreshBtn.disabled = true;
+            try {
+                if (typeof chargerConfigProduits === 'function') await chargerConfigProduits();
+                if (typeof chargerConfigInventaire === 'function') await chargerConfigInventaire();
+                reconstruireFlatRecherche();
+                updateRechercheCompteurs();
+                renderRechercheCategoriesFilter();
+                renderRechercheGrid();
+            } finally {
+                refreshBtn.disabled = false;
+            }
+        });
+    }
+
+    // Selection via change event (plus robuste clavier + label)
+    grid.addEventListener('change', (e) => {
+        const cbInput = e.target.closest('.result-card-checkbox-input');
+        if (!cbInput) return;
+        const key = cbInput.dataset.rechercheSelect;
+        if (cbInput.checked) _rechercheState.selection.add(key);
+        else _rechercheState.selection.delete(key);
+        const card = cbInput.closest('.result-card');
+        if (card) card.classList.toggle('is-selected', cbInput.checked);
+        renderRechercheSelectionBar();
+    });
+
+    grid.addEventListener('click', (e) => {
+        if (e.target.closest('.result-card-checkbox')) { e.stopPropagation(); return; }
+        const archBtn = e.target.closest('[data-recherche-archive]');
+        if (archBtn) {
+            e.stopPropagation();
+            const [src, ...nameParts] = archBtn.dataset.rechercheArchive.split('::');
+            const nom = nameParts.join('::');
+            rechercheArchiveSingle(src, nom);
+            return;
+        }
+        const card = e.target.closest('.result-card');
+        if (!card) return;
+        if (typeof ouvrirModalProduitUnifie === 'function') {
+            ouvrirModalProduitUnifie('edit', {
+                src: card.dataset.src, nom: card.dataset.name, cat: card.dataset.cat
+            });
+        }
+    });
+
+    const selectionBar = document.getElementById('recherche-selection-bar');
+    if (selectionBar) {
+        selectionBar.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            if (btn.id === 'recherche-batch-archive') rechercheBatchArchive(true);
+            else if (btn.id === 'recherche-batch-unarchive') rechercheBatchArchive(false);
+            else if (btn.id === 'recherche-batch-clear') {
+                _rechercheState.selection.clear();
+                renderRechercheGrid();
+            }
+        });
+    }
+
+    const rechercheTab = document.getElementById('recherche-tab');
+    if (rechercheTab) {
+        rechercheTab.addEventListener('shown.bs.tab', () => {
+            reconstruireFlatRecherche();
+            updateRechercheCompteurs();
+            renderRechercheCategoriesFilter();
+            renderRechercheGrid();
+        });
+    }
+
+    reconstruireFlatRecherche();
+    updateRechercheCompteurs();
+    renderRechercheCategoriesFilter();
+    renderRechercheGrid();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initRechercheSpotlight);
+} else {
+    initRechercheSpotlight();
+}
+
+
+// =====================================================================
+// MODAL UNIFIE M1 — pumLookup/Save/Delete/Archive avec findings appliques
+// =====================================================================
+
+function pumPopulerSelect(selectEl, categoriesParFamille, selected) {
+    if (!selectEl) return;
+    const standardCats = new Set();
+    for (const cats of Object.values(categoriesParFamille)) cats.forEach((c) => standardCats.add(c));
+    let html = '';
+    if (selected && !standardCats.has(selected)) {
+        const escLeg = escAttr(selected);
+        html += '<optgroup label="🗂️ Ancienne catégorie">';
+        html += '<option value="' + escLeg + '" selected>' + escLeg + ' (legacy)</option>';
+        html += '</optgroup>';
+    }
+    for (const [famille, cats] of Object.entries(categoriesParFamille)) {
+        const famIcon = famille === 'Boucherie' ? '🥩' : (famille === 'Épicerie' ? '🛒' : '📦');
+        html += '<optgroup label="' + famIcon + ' ' + escAttr(famille) + '">';
+        cats.forEach((cat) => {
+            const escCat = escAttr(cat);
+            const sel = (cat === selected) ? ' selected' : '';
+            html += '<option value="' + escCat + '"' + sel + '>' + escCat + '</option>';
+        });
+        html += '</optgroup>';
+    }
+    selectEl.innerHTML = html;
+}
+
+function pumSyncModeStockEnabled() {
+    const modeStockSel = document.getElementById('pum-mode-stock');
+    const targetInv = document.getElementById('pum-target-inv');
+    const helpEl = document.getElementById('pum-mode-stock-help');
+    if (!modeStockSel || !targetInv) return;
+    const enabled = !!targetInv.checked;
+    modeStockSel.disabled = !enabled;
+    if (helpEl) helpEl.style.opacity = enabled ? '' : '0.5';
+}
+
+// Lookup PG avec option {exact}. Finding 1 du review (exact dans chemins destructifs).
+function pumLookupPG(nom, opts) {
+    if (!currentProduitsConfig || !nom) return null;
+    const exact = !!(opts && opts.exact);
+    if (exact) {
+        for (const [cat, produits] of Object.entries(currentProduitsConfig)) {
+            if (typeof produits !== 'object' || produits === null) continue;
+            if (!Object.prototype.hasOwnProperty.call(produits, nom)) continue;
+            const config = produits[nom];
+            if (typeof config === 'object' && config !== null && typeof config.default === 'number') {
+                return { categorie: cat, nom: nom, config };
+            }
+        }
+        return null;
+    }
+    const targetLow = String(nom).toLowerCase();
+    for (const [cat, produits] of Object.entries(currentProduitsConfig)) {
+        if (typeof produits !== 'object' || produits === null) continue;
+        for (const [name, config] of Object.entries(produits)) {
+            if (typeof config !== 'object' || typeof config.default !== 'number') continue;
+            if (name.toLowerCase() === targetLow) return { categorie: cat, nom: name, config };
+        }
+    }
+    return null;
+}
+
+// Lookup Inv recursif (Finding 3) + option exact (Finding F1).
+function pumLookupInv(nom, opts) {
+    if (!currentInventaireConfig || !nom) return null;
+    const exact = !!(opts && opts.exact);
+    const target = exact ? String(nom) : String(nom).toLowerCase();
+    const visit = (container) => {
+        for (const [name, config] of Object.entries(container)) {
+            if (!Object.prototype.hasOwnProperty.call(container, name)) continue;
+            if (typeof config !== 'object' || config === null) continue;
+            if (typeof config.prixDefault === 'number') {
+                const isMatch = exact ? (name === target) : (name.toLowerCase() === target);
+                if (isMatch) return { nom: name, config, parent: container };
+            }
+            if (config.prixDefault === undefined) {
+                const hit = visit(config);
+                if (hit) return hit;
+            }
+        }
+        return null;
+    };
+    return visit(currentInventaireConfig);
+}
+
+function pumDetectPGConflict(originalNom, nomPG, mode) {
+    if (mode === 'edit' && originalNom === nomPG) return null;
+    const hit = pumLookupPG(nomPG);
+    if (!hit) return null;
+    if (mode === 'edit' && hit.nom === originalNom) return null;
+    return hit;
+}
+function pumDetectInvConflict(originalNom, nomInv, mode) {
+    if (mode === 'edit' && originalNom === nomInv) return null;
+    const hit = pumLookupInv(nomInv);
+    if (!hit) return null;
+    if (mode === 'edit' && hit.nom === originalNom) return null;
+    return hit;
+}
+
+function pumUpdateStatus(nom) {
+    const status = document.getElementById('pum-status');
+    if (!status) return;
+    const pg = pumLookupPG(nom, { exact: true });
+    const inv = pumLookupInv(nom, { exact: true });
+    const pgFuzzy = pg ? null : pumLookupPG(nom);
+    const invFuzzy = inv ? null : pumLookupInv(nom);
+    const fmtExactPG = (h) => '<strong>Produits Généraux</strong> (' + escAttr(h.categorie) + ', ' + h.config.default.toLocaleString('fr-FR') + ' FCFA)';
+    const fmtExactInv = (h) => '<strong>Inventaire</strong> (' + h.config.prixDefault.toLocaleString('fr-FR') + ' FCFA)';
+    const fmtFuzzyPG = (h) => '<strong>Produits Généraux</strong> sous le nom <em>«' + escAttr(h.nom) + '»</em>';
+    const fmtFuzzyInv = (h) => '<strong>Inventaire</strong> sous le nom <em>«' + escAttr(h.nom) + '»</em>';
+    let html = '';
+    if (pg && inv) {
+        html = '<i class="bi bi-check-circle-fill text-success me-1"></i> Existe dans ' + fmtExactPG(pg) + ' ET ' + fmtExactInv(inv);
+    } else if (pg) {
+        html = '<i class="bi bi-check-circle-fill text-success me-1"></i> Existe dans ' + fmtExactPG(pg);
+        if (invFuzzy) html += '<br><i class="bi bi-exclamation-triangle text-warning me-1"></i> <small>Produit similaire dans ' + fmtFuzzyInv(invFuzzy) + ' — variante de casse</small>';
+    } else if (inv) {
+        html = '<i class="bi bi-check-circle-fill text-success me-1"></i> Existe dans ' + fmtExactInv(inv);
+        if (pgFuzzy) html += '<br><i class="bi bi-exclamation-triangle text-warning me-1"></i> <small>Produit similaire dans ' + fmtFuzzyPG(pgFuzzy) + ' — variante de casse</small>';
+    } else if (pgFuzzy || invFuzzy) {
+        const lignes = [];
+        if (pgFuzzy) lignes.push(fmtFuzzyPG(pgFuzzy));
+        if (invFuzzy) lignes.push(fmtFuzzyInv(invFuzzy));
+        html = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Nouveau produit, mais un similaire existe : ' + lignes.join(' / ');
+    } else {
+        html = '<i class="bi bi-info-circle text-primary me-1"></i> Nouveau produit — sera créé dans les catalogues cochés.';
+    }
+    status.innerHTML = html;
+}
+
+function ouvrirModalProduitUnifie(mode, data) {
+    data = data || {};
+    const modalEl = document.getElementById('productUnifiedModal');
+    if (!modalEl) return;
+    document.getElementById('pum-mode').value = mode;
+    const titleText = document.getElementById('pum-title-text');
+    const saveLabel = document.getElementById('pum-save-label');
+    const deleteBtn = document.getElementById('pum-delete-btn');
+
+    let selPG = DEFAULT_CATEGORIE_PRODUITS_GENERAUX;
+    let selInv = DEFAULT_CATEGORIE_INVENTAIRE;
+    let pgHit = null, invHit = null;
+    if (mode === 'edit' && data.nom) {
+        pgHit = pumLookupPG(data.nom, { exact: true });
+        invHit = pumLookupInv(data.nom, { exact: true });
+        if (pgHit) selPG = pgHit.categorie;
+        if (invHit && invHit.config.categorie_affichage) selInv = invHit.config.categorie_affichage;
+    }
+    pumPopulerSelect(document.getElementById('pum-cat-pg'), CATEGORIES_PRODUITS_GENERAUX, selPG);
+    pumPopulerSelect(document.getElementById('pum-cat-inv'), CATEGORIES_INVENTAIRE, selInv);
+
+    const pgArchived = !!(pgHit && pgHit.config && pgHit.config.archived);
+    const invArchived = !!(invHit && invHit.config && invHit.config.archived);
+    const archiveBtn = document.getElementById('pum-archive-btn');
+    const archiveLabel = document.getElementById('pum-archive-label');
+    const archiveBtn2 = document.getElementById('pum-archive-btn-2');
+    const archiveLabel2 = document.getElementById('pum-archive-label-2');
+    const bothExist = !!(pgHit && invHit);
+    const archivedState = bothExist
+        ? (pgArchived && invArchived ? 'both' : (!pgArchived && !invArchived ? 'none' : 'mixed'))
+        : (pgArchived || invArchived ? 'both' : 'none');
+    const sideArchived = pgArchived ? 'Généraux' : 'Inventaire';
+    const sideActive = pgArchived ? 'Inventaire' : 'Généraux';
+
+    if (mode === 'edit' && data.nom) {
+        const titleArchived = (archivedState === 'both') ? ' (archivé)' : (archivedState === 'mixed' ? (' (archivé côté ' + sideArchived + ')') : '');
+        titleText.textContent = 'Modifier «' + data.nom + '»' + titleArchived;
+        saveLabel.textContent = 'Enregistrer';
+        deleteBtn.style.display = '';
+        if (archiveBtn) {
+            archiveBtn.dataset.archivedState = archivedState;
+            if (archivedState === 'both') {
+                archiveBtn.style.display = '';
+                archiveBtn.dataset.archiveTarget = 'false';
+                archiveLabel.textContent = 'Désarchiver';
+                archiveBtn.classList.remove('btn-outline-warning');
+                archiveBtn.classList.add('btn-outline-success');
+            } else if (archivedState === 'none') {
+                archiveBtn.style.display = '';
+                archiveBtn.dataset.archiveTarget = 'true';
+                archiveLabel.textContent = 'Archiver';
+                archiveBtn.classList.add('btn-outline-warning');
+                archiveBtn.classList.remove('btn-outline-success');
+            } else {
+                archiveBtn.style.display = '';
+                archiveBtn.dataset.archiveTarget = 'false';
+                archiveLabel.textContent = 'Désarchiver côté ' + sideArchived;
+                archiveBtn.classList.remove('btn-outline-warning');
+                archiveBtn.classList.add('btn-outline-success');
+            }
+        }
+        if (archiveBtn2) {
+            if (archivedState === 'mixed') {
+                archiveBtn2.style.display = '';
+                archiveBtn2.dataset.archiveTarget = 'true';
+                archiveLabel2.textContent = 'Archiver côté ' + sideActive;
+                archiveBtn2.classList.add('btn-outline-warning');
+                archiveBtn2.classList.remove('btn-outline-success');
+                const icon = archiveBtn2.querySelector('i');
+                if (icon) { icon.classList.remove('bi-arrow-counterclockwise'); icon.classList.add('bi-archive'); }
+            } else {
+                archiveBtn2.style.display = 'none';
+            }
+        }
+        document.getElementById('pum-original-nom').value = data.nom;
+        const nom = data.nom;
+        const prix = (data.src === 'pg' ? (pgHit && pgHit.config.default) : (invHit && invHit.config.prixDefault)) || data.prix || 0;
+        document.getElementById('pum-nom').value = nom;
+        document.getElementById('pum-prix').value = prix;
+        document.getElementById('pum-nom-pg').value = pgHit ? pgHit.nom : nom;
+        document.getElementById('pum-nom-inv').value = invHit ? invHit.nom : nom;
+        document.getElementById('pum-prix-pg').value = pgHit ? pgHit.config.default : prix;
+        document.getElementById('pum-prix-inv').value = invHit ? invHit.config.prixDefault : prix;
+        document.getElementById('pum-target-pg').checked = !!pgHit;
+        document.getElementById('pum-target-inv').checked = !!invHit;
+    } else {
+        titleText.textContent = 'Ajouter un nouveau produit';
+        saveLabel.textContent = 'Ajouter';
+        deleteBtn.style.display = 'none';
+        if (archiveBtn) archiveBtn.style.display = 'none';
+        if (archiveBtn2) archiveBtn2.style.display = 'none';
+        document.getElementById('pum-original-nom').value = '';
+        document.getElementById('pum-nom').value = '';
+        document.getElementById('pum-prix').value = '';
+        document.getElementById('pum-nom-pg').value = '';
+        document.getElementById('pum-nom-inv').value = '';
+        document.getElementById('pum-prix-pg').value = '';
+        document.getElementById('pum-prix-inv').value = '';
+        document.getElementById('pum-target-pg').checked = true;
+        document.getElementById('pum-target-inv').checked = true;
+    }
+
+    const modeStockSel = document.getElementById('pum-mode-stock');
+    if (modeStockSel) {
+        let initialMode;
+        if (mode === 'edit' && invHit && invHit.config && invHit.config.mode_stock) initialMode = invHit.config.mode_stock;
+        else initialMode = pumDefaultModeStock(selInv);
+        modeStockSel.value = (initialMode === 'automatique') ? 'automatique' : 'manuel';
+        modeStockSel.dataset.userOverride = 'false';
+        pumSyncModeStockEnabled();
+    }
+    document.getElementById('pum-override-toggle').checked = false;
+    document.getElementById('pum-override').style.display = 'none';
+    pumUpdateStatus(document.getElementById('pum-nom').value);
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+
+async function pumSave() {
+    const mode = document.getElementById('pum-mode').value;
+    const originalNom = document.getElementById('pum-original-nom').value || null;
+    const nomShared = (document.getElementById('pum-nom').value || '').trim();
+    const prixShared = parseFloat(document.getElementById('pum-prix').value) || 0;
+    const catPG = document.getElementById('pum-cat-pg').value;
+    const catInv = document.getElementById('pum-cat-inv').value;
+    const targetPG = document.getElementById('pum-target-pg').checked;
+    const targetInv = document.getElementById('pum-target-inv').checked;
+    const overrideOn = document.getElementById('pum-override-toggle').checked;
+
+    if (!nomShared) { showToast('Le nom est obligatoire', 'warning'); return; }
+    if (!targetPG && !targetInv) { showToast('Choisis au moins un catalogue', 'warning'); return; }
+
+    const nomPG = overrideOn ? (document.getElementById('pum-nom-pg').value || nomShared).trim() : nomShared;
+    const nomInv = overrideOn ? (document.getElementById('pum-nom-inv').value || nomShared).trim() : nomShared;
+    const prixPG = overrideOn ? (parseFloat(document.getElementById('pum-prix-pg').value) || prixShared) : prixShared;
+    const prixInv = overrideOn ? (parseFloat(document.getElementById('pum-prix-inv').value) || prixShared) : prixShared;
+
+    // Detection doublons (Finding A3)
+    const conflicts = [];
+    if (targetPG) {
+        const c = pumDetectPGConflict(originalNom, nomPG, mode);
+        if (c) conflicts.push({ label: 'Produits Généraux (catégorie « ' + c.categorie + ' », ' + c.config.default.toLocaleString('fr-FR') + ' FCFA)', nom: c.nom });
+    }
+    if (targetInv) {
+        const c = pumDetectInvConflict(originalNom, nomInv, mode);
+        if (c) conflicts.push({ label: 'Inventaire (' + c.config.prixDefault.toLocaleString('fr-FR') + ' FCFA)', nom: c.nom });
+    }
+    if (conflicts.length > 0) {
+        const lines = conflicts.map(c => '• « ' + c.nom + ' » dans ' + c.label).join('\n');
+        const ok = confirm('Un produit avec ce nom existe déjà :\n\n' + lines + '\n\nVeux-tu écraser cette/ces entrée(s) ?');
+        if (!ok) return;
+    }
+
+    const snapPG = JSON.parse(JSON.stringify(currentProduitsConfig || {}));
+    const snapInv = JSON.parse(JSON.stringify(currentInventaireConfig || {}));
+    let pgChanged = false, invChanged = false;
+
+    // PG side — Finding 4: merge spread, preserve les champs non touches
+    if (targetPG) {
+        let baseConfigPG = {};
+        if (mode === 'edit' && originalNom) {
+            const origHit = pumLookupPG(originalNom, { exact: true });
+            if (origHit) baseConfigPG = origHit.config;
+            for (const [cat, produits] of Object.entries(currentProduitsConfig || {})) {
+                if (typeof produits === 'object' && produits[originalNom]) {
+                    if (cat !== catPG || originalNom !== nomPG) delete produits[originalNom];
+                }
+            }
+        } else if (currentProduitsConfig[catPG] && Object.prototype.hasOwnProperty.call(currentProduitsConfig[catPG], nomPG)) {
+            const existing = currentProduitsConfig[catPG][nomPG];
+            if (typeof existing === 'object' && existing !== null) baseConfigPG = existing;
+        }
+        const altsPG = Array.isArray(baseConfigPG.alternatives) ? baseConfigPG.alternatives.slice() : [];
+        if (!altsPG.includes(prixPG)) altsPG.push(prixPG);
+        if (!currentProduitsConfig[catPG]) currentProduitsConfig[catPG] = {};
+        currentProduitsConfig[catPG][nomPG] = {
+            ...baseConfigPG,
+            default: prixPG,
+            alternatives: altsPG
+        };
+        pgChanged = true;
+    }
+
+    // Inv side — Finding 4 merge + Finding F2 recursif sur add-mode
+    if (targetInv) {
+        let baseConfigInv = {};
+        let origInvParent = null;
+        let origInvNom = null;
+        if (mode === 'edit' && originalNom) {
+            const origHit = pumLookupInv(originalNom, { exact: true });
+            if (origHit) { baseConfigInv = origHit.config; origInvParent = origHit.parent; origInvNom = origHit.nom; }
+        } else {
+            const existingHit = pumLookupInv(nomInv, { exact: true });
+            if (existingHit) { baseConfigInv = existingHit.config; origInvParent = existingHit.parent; origInvNom = existingHit.nom; }
+        }
+        if (origInvParent && origInvNom) {
+            const sameKey = origInvNom === nomInv;
+            const isNested = origInvParent !== currentInventaireConfig;
+            if (!sameKey || isNested) delete origInvParent[origInvNom];
+        }
+        const altsInv = Array.isArray(baseConfigInv.alternatives) ? baseConfigInv.alternatives.slice() : [];
+        if (!altsInv.includes(prixInv)) altsInv.push(prixInv);
+        const modeStockEl = document.getElementById('pum-mode-stock');
+        const requestedMode = modeStockEl ? modeStockEl.value : null;
+        const modeStockFinal = (requestedMode === 'automatique' || requestedMode === 'manuel')
+            ? requestedMode : (baseConfigInv.mode_stock || 'manuel');
+        currentInventaireConfig[nomInv] = {
+            ...baseConfigInv,
+            prixDefault: prixInv,
+            alternatives: altsInv,
+            mode_stock: modeStockFinal,
+            unite_stock: baseConfigInv.unite_stock || 'unite',
+            categorie_affichage: catInv
+        };
+        invChanged = true;
+    }
+
+    const saveBtn = document.getElementById('pum-save-btn');
+    const delBtn = document.getElementById('pum-delete-btn');
+    const originalSaveHtml = saveBtn ? saveBtn.innerHTML : '';
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sauvegarde…';
+    }
+    if (delBtn) delBtn.disabled = true;
+
+    let serverOk = true, serverError = null;
+    try {
+        if (pgChanged) {
+            const resp = await fetch('/api/admin/config/produits', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify({ produits: currentProduitsConfig })
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) { serverOk = false; serverError = data.error || ('HTTP ' + resp.status); }
+        }
+        if (serverOk && invChanged) {
+            const resp = await fetch('/api/admin/config/produits-inventaire', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify({ produitsInventaire: currentInventaireConfig })
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) { serverOk = false; serverError = data.error || ('HTTP ' + resp.status); }
+        }
+    } catch (err) {
+        serverOk = false; serverError = err && err.message ? err.message : String(err);
+    } finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = originalSaveHtml; }
+        if (delBtn) delBtn.disabled = false;
+    }
+
+    // Finding A2: refetch defensif au cas ou partial save
+    if (!serverOk) {
+        currentProduitsConfig = snapPG;
+        currentInventaireConfig = snapInv;
+        try {
+            if (typeof chargerConfigProduits === 'function') await chargerConfigProduits();
+            if (typeof chargerConfigInventaire === 'function') await chargerConfigInventaire();
+        } catch (_) {}
+        showToast('Erreur de sauvegarde: ' + serverError, 'danger');
+        return;
+    }
+
+    if (pgChanged && typeof afficherProduitsConfig === 'function') afficherProduitsConfig();
+    if (invChanged && typeof afficherInventaireConfig === 'function') afficherInventaireConfig();
+    reconstruireFlatRecherche();
+    updateRechercheCompteurs();
+    renderRechercheCategoriesFilter();
+    renderRechercheGrid();
+    const where = [pgChanged && 'Généraux', invChanged && 'Inventaire'].filter(Boolean).join(' + ');
+    const action = mode === 'edit' ? 'modifié' : 'ajouté';
+    showToast('Produit ' + action + ' dans ' + where + ' et sauvegardé.', 'success');
+    const modal = bootstrap.Modal.getInstance(document.getElementById('productUnifiedModal'));
+    if (modal) modal.hide();
+}
+
+async function pumDelete() {
+    const nom = document.getElementById('pum-original-nom').value;
+    if (!nom) return;
+    const ok = confirm('Supprimer définitivement «' + nom + '» des 2 catalogues ?');
+    if (!ok) return;
+    const snapPG = JSON.parse(JSON.stringify(currentProduitsConfig || {}));
+    const snapInv = JSON.parse(JSON.stringify(currentInventaireConfig || {}));
+    let pgChanged = false, invChanged = false;
+    for (const [cat, produits] of Object.entries(currentProduitsConfig || {})) {
+        if (typeof produits === 'object' && produits[nom]) { delete produits[nom]; pgChanged = true; }
+    }
+    if (currentInventaireConfig && currentInventaireConfig[nom]) {
+        delete currentInventaireConfig[nom]; invChanged = true;
+    }
+    if (!pgChanged && !invChanged) {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('productUnifiedModal'));
+        if (modal) modal.hide();
+        return;
+    }
+    const saveBtn = document.getElementById('pum-save-btn');
+    const delBtn = document.getElementById('pum-delete-btn');
+    const originalDelHtml = delBtn ? delBtn.innerHTML : '';
+    if (delBtn) { delBtn.disabled = true; delBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Suppression…'; }
+    if (saveBtn) saveBtn.disabled = true;
+    let serverOk = true, serverError = null;
+    try {
+        if (pgChanged) {
+            const resp = await fetch('/api/admin/config/produits', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify({ produits: currentProduitsConfig })
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) { serverOk = false; serverError = data.error || ('HTTP ' + resp.status); }
+        }
+        if (serverOk && invChanged) {
+            const resp = await fetch('/api/admin/config/produits-inventaire', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify({ produitsInventaire: currentInventaireConfig })
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) { serverOk = false; serverError = data.error || ('HTTP ' + resp.status); }
+        }
+    } catch (err) {
+        serverOk = false; serverError = err && err.message ? err.message : String(err);
+    } finally {
+        if (delBtn) { delBtn.disabled = false; delBtn.innerHTML = originalDelHtml; }
+        if (saveBtn) saveBtn.disabled = false;
+    }
+    if (!serverOk) {
+        currentProduitsConfig = snapPG;
+        currentInventaireConfig = snapInv;
+        try {
+            if (typeof chargerConfigProduits === 'function') await chargerConfigProduits();
+            if (typeof chargerConfigInventaire === 'function') await chargerConfigInventaire();
+        } catch (_) {}
+        showToast('Erreur de suppression: ' + serverError, 'danger');
+        return;
+    }
+    if (pgChanged && typeof afficherProduitsConfig === 'function') afficherProduitsConfig();
+    if (invChanged && typeof afficherInventaireConfig === 'function') afficherInventaireConfig();
+    reconstruireFlatRecherche();
+    updateRechercheCompteurs();
+    renderRechercheCategoriesFilter();
+    renderRechercheGrid();
+    showToast('«' + nom + '» supprimé et sauvegardé.', 'success');
+    const modal = bootstrap.Modal.getInstance(document.getElementById('productUnifiedModal'));
+    if (modal) modal.hide();
+}
+
+async function pumToggleArchive(evt) {
+    const nom = document.getElementById('pum-original-nom').value;
+    if (!nom) return;
+    const btn = (evt && evt.currentTarget && evt.currentTarget.dataset && evt.currentTarget.dataset.archiveTarget !== undefined)
+        ? evt.currentTarget : document.getElementById('pum-archive-btn');
+    if (!btn) return;
+    const targetArchived = btn.dataset.archiveTarget === 'true';
+    const action = targetArchived ? 'Archiver' : 'Désarchiver';
+    const actionPast = targetArchived ? 'archivé' : 'désarchivé';
+    const pgHit = pumLookupPG(nom, { exact: true });
+    const invHit = pumLookupInv(nom, { exact: true });
+    if (!pgHit && !invHit) return;
+    const pgWillChange = !!(pgHit && !!pgHit.config.archived !== targetArchived);
+    const invWillChange = !!(invHit && !!invHit.config.archived !== targetArchived);
+    if (!pgWillChange && !invWillChange) {
+        showToast('«' + nom + '» est déjà ' + actionPast + '.', 'info');
+        return;
+    }
+    const where = [pgWillChange && 'Généraux', invWillChange && 'Inventaire'].filter(Boolean).join(' + ');
+    const ok = confirm(action + ' «' + nom + '» dans ' + where + ' ?');
+    if (!ok) return;
+    const snapPG = JSON.parse(JSON.stringify(currentProduitsConfig || {}));
+    const snapInv = JSON.parse(JSON.stringify(currentInventaireConfig || {}));
+    if (pgWillChange) {
+        const tgt = currentProduitsConfig[pgHit.categorie] && currentProduitsConfig[pgHit.categorie][pgHit.nom];
+        if (tgt) tgt.archived = targetArchived;
+    }
+    if (invWillChange && invHit.parent) invHit.parent[invHit.nom].archived = targetArchived;
+    const saveBtn = document.getElementById('pum-save-btn');
+    const delBtn = document.getElementById('pum-delete-btn');
+    const originalLabel = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + action + '…';
+    if (saveBtn) saveBtn.disabled = true;
+    if (delBtn) delBtn.disabled = true;
+    let serverOk = true, serverError = null;
+    try {
+        if (pgWillChange) {
+            const resp = await fetch('/api/admin/config/produits', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify({ produits: currentProduitsConfig })
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) { serverOk = false; serverError = data.error || ('HTTP ' + resp.status); }
+        }
+        if (serverOk && invWillChange) {
+            const resp = await fetch('/api/admin/config/produits-inventaire', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify({ produitsInventaire: currentInventaireConfig })
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) { serverOk = false; serverError = data.error || ('HTTP ' + resp.status); }
+        }
+    } catch (err) {
+        serverOk = false; serverError = err && err.message ? err.message : String(err);
+    } finally {
+        btn.disabled = false; btn.innerHTML = originalLabel;
+        if (saveBtn) saveBtn.disabled = false;
+        if (delBtn) delBtn.disabled = false;
+    }
+    if (!serverOk) {
+        currentProduitsConfig = snapPG;
+        currentInventaireConfig = snapInv;
+        try {
+            if (typeof chargerConfigProduits === 'function') await chargerConfigProduits();
+            if (typeof chargerConfigInventaire === 'function') await chargerConfigInventaire();
+        } catch (_) {}
+        showToast('Erreur: ' + serverError, 'danger');
+        return;
+    }
+    if (typeof afficherProduitsConfig === 'function') afficherProduitsConfig();
+    if (typeof afficherInventaireConfig === 'function') afficherInventaireConfig();
+    reconstruireFlatRecherche();
+    updateRechercheCompteurs();
+    renderRechercheCategoriesFilter();
+    renderRechercheGrid();
+    showToast('«' + nom + '» ' + actionPast + ' dans ' + where + '.', 'success');
+    const modal = bootstrap.Modal.getInstance(document.getElementById('productUnifiedModal'));
+    if (modal) modal.hide();
+}
+
+function initModalProduitUnifie() {
+    const modalEl = document.getElementById('productUnifiedModal');
+    if (!modalEl || modalEl.dataset.bound === 'true') return;
+    modalEl.dataset.bound = 'true';
+    const toggle = document.getElementById('pum-override-toggle');
+    if (toggle) {
+        toggle.addEventListener('change', (e) => {
+            document.getElementById('pum-override').style.display = e.target.checked ? '' : 'none';
+        });
+    }
+    const nomShared = document.getElementById('pum-nom');
+    if (nomShared) {
+        nomShared.addEventListener('input', (e) => {
+            const v = e.target.value;
+            document.getElementById('pum-nom-pg').value = v;
+            document.getElementById('pum-nom-inv').value = v;
+            pumUpdateStatus(v);
+        });
+    }
+    const prixShared = document.getElementById('pum-prix');
+    if (prixShared) {
+        prixShared.addEventListener('input', (e) => {
+            document.getElementById('pum-prix-pg').value = e.target.value;
+            document.getElementById('pum-prix-inv').value = e.target.value;
+        });
+    }
+    const saveBtn = document.getElementById('pum-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', pumSave);
+    const deleteBtn = document.getElementById('pum-delete-btn');
+    if (deleteBtn) deleteBtn.addEventListener('click', pumDelete);
+    const archiveBtn = document.getElementById('pum-archive-btn');
+    if (archiveBtn) archiveBtn.addEventListener('click', pumToggleArchive);
+    const archiveBtn2 = document.getElementById('pum-archive-btn-2');
+    if (archiveBtn2) archiveBtn2.addEventListener('click', pumToggleArchive);
+    const targetInv = document.getElementById('pum-target-inv');
+    if (targetInv) targetInv.addEventListener('change', pumSyncModeStockEnabled);
+    const catInvSel = document.getElementById('pum-cat-inv');
+    const modeStockSel = document.getElementById('pum-mode-stock');
+    if (catInvSel && modeStockSel) {
+        catInvSel.addEventListener('change', (e) => {
+            if (modeStockSel.dataset.userOverride === 'true') return;
+            modeStockSel.value = pumDefaultModeStock(e.target.value);
+        });
+        modeStockSel.addEventListener('change', () => {
+            modeStockSel.dataset.userOverride = 'true';
+        });
+    }
+    const addBtn = document.getElementById('recherche-add-btn');
+    if (addBtn) addBtn.addEventListener('click', () => ouvrirModalProduitUnifie('add'));
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initModalProduitUnifie);
+} else {
+    initModalProduitUnifie();
+}
