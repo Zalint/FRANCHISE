@@ -68,6 +68,17 @@ async function updateSchema() {
         `);
         console.log('Colonne default_screen vérifiée/ajoutée dans la table users');
 
+        // Produits: colonne archived (soft-delete pour transition taxonomie).
+        // TRUE => produit cache dans POS, stock inventaire et UI admin par defaut.
+        await sequelize.query(`
+            ALTER TABLE produits
+            ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE
+        `);
+        await sequelize.query(`
+            CREATE INDEX IF NOT EXISTS produits_archived_idx ON produits (archived)
+        `);
+        console.log('Colonne produits.archived + index produits_archived_idx verifies');
+
         // Finance: table fournisseur_paiements (CRUD onglet Creances Fournisseur).
         const fournisseurPaiementsExists = await checkTableExists('fournisseur_paiements');
         if (!fournisseurPaiementsExists) {

@@ -299,12 +299,15 @@ async function getProduitsAsLegacy(typeCatalogue = 'vente') {
     return cache.produits[typeCatalogue];
   }
   
+  // Exclut systematiquement les produits archives car cette fonction sert
+  // UNIQUEMENT les endpoints publics (POS, stock inventaire). Les routes
+  // admin interrogent Produit.findAll directement et doivent inclure les archives.
   const produits = await Produit.findAll({
-    where: { type_catalogue: typeCatalogue },
+    where: { type_catalogue: typeCatalogue, archived: false },
     include: [
       { model: Category, as: 'categorie' },
-      { 
-        model: PrixPointVente, 
+      {
+        model: PrixPointVente,
         as: 'prixParPointVente',
         include: [{ model: PointVente, as: 'pointVente' }]
       }

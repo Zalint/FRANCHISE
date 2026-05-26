@@ -15,6 +15,16 @@ const configService = require('../db/config-service');
 const { User, PointVente, Category, Produit, PrixPointVente, PrixHistorique } = require('../db/models');
 const { Op } = require('sequelize');
 
+// Cles reservees du config object cote inventaire — NE PAS interpreter
+// comme un prix par point de vente. Hoiste au module scope (utilise par
+// le loop "prix par PV" dans POST /produits-inventaire).
+const INVENTAIRE_RESERVED_CONFIG_KEYS = [
+    'prixDefault', 'alternatives', 'mode_stock', 'unite_stock',
+    'ventes', 'ventilation_poids', 'archived', 'categorie_affichage'
+];
+// Equivalent cote produits generaux
+const PG_RESERVED_CONFIG_KEYS = ['default', 'alternatives', 'archived'];
+
 // Middleware pour vérifier que l'utilisateur est admin
 const requireAdmin = (req, res, next) => {
   // Vérifier si l'utilisateur est authentifié et est admin
@@ -431,9 +441,10 @@ router.get('/produits', requireAdmin, async (req, res) => {
       
       const config = {
         default: parseFloat(produit.prix_defaut) || 0,
-        alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : []
+        alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : [],
+        archived: !!produit.archived
       };
-      
+
       // Ajouter les prix par point de vente
       if (produit.prixParPointVente) {
         for (const prix of produit.prixParPointVente) {
@@ -442,10 +453,10 @@ router.get('/produits', requireAdmin, async (req, res) => {
           }
         }
       }
-      
+
       produitsResult[categorieName][produit.nom] = config;
     }
-    
+
     console.log('📋 GET /api/admin/config/produits - Catégories:', Object.keys(produitsResult));
     res.json({ success: true, produits: produitsResult });
   } catch (error) {
@@ -479,9 +490,10 @@ router.get('/produits-inventaire', requireAuthenticated, async (req, res) => {
         prixDefault: parseFloat(produit.prix_defaut) || 0,
         alternatives: produit.prix_alternatifs ? produit.prix_alternatifs.map(p => parseFloat(p)) : [],
         mode_stock: produit.mode_stock || 'manuel',
-        unite_stock: produit.unite_stock || 'unite'
+        unite_stock: produit.unite_stock || 'unite',
+        archived: !!produit.archived
       };
-      
+
       if (produit.prixParPointVente) {
         for (const prix of produit.prixParPointVente) {
           if (prix.pointVente) {
@@ -598,26 +610,39 @@ router.post('/produits', requireAdmin, async (req, res) => {
       // Pour chaque produit dans la catégorie
       for (const [produitName, config] of Object.entries(produitsCategorie)) {
         if (typeof config !== 'object') continue;
-        
+
         const prixDefaut = config.default || 0;
         const alternatives = config.alternatives || [];
-        
+        // archived: undefined = ne pas toucher l'existant (evite reactivation
+        // accidentelle si un consumer poste sans le champ). true|false = update.
+        const archivedRequested = (typeof config.archived === 'boolean')
+          ? config.archived
+          : undefined;
+
         // Trouver le produit existant ou en créer un nouveau
         let [produit, wasCreated] = await Produit.findOrCreate({
           where: { nom: produitName, type_catalogue: 'vente' },
           defaults: {
             categorie_id: category.id,
             prix_defaut: prixDefaut,
-            prix_alternatifs: alternatives
+            prix_alternatifs: alternatives,
+            archived: archivedRequested === true
           }
         });
-        
+
         if (wasCreated) {
           created++;
         } else {
           // Mettre à jour si les valeurs ont changé
           const oldPrix = parseFloat(produit.prix_defaut);
-          if (oldPrix !== prixDefaut || JSON.stringify(produit.prix_alternatifs) !== JSON.stringify(alternatives)) {
+          const archivedDiffers = (archivedRequested !== undefined)
+            && (!!produit.archived !== archivedRequested);
+          const needsUpdate =
+            oldPrix !== prixDefaut ||
+            JSON.stringify(produit.prix_alternatifs) !== JSON.stringify(alternatives) ||
+            archivedDiffers;
+
+          if (needsUpdate) {
             // Enregistrer l'historique si le prix change
             if (oldPrix !== prixDefaut) {
               await PrixHistorique.create({
@@ -627,27 +652,30 @@ router.post('/produits', requireAdmin, async (req, res) => {
                 modifie_par: username
               });
             }
-            
-            await produit.update({
+
+            const updatePayload = {
               categorie_id: category.id,
               prix_defaut: prixDefaut,
               prix_alternatifs: alternatives
-            });
+            };
+            if (archivedDiffers) updatePayload.archived = archivedRequested;
+
+            await produit.update(updatePayload);
             updated++;
           }
         }
-        
-        // Gérer les prix par point de vente
+
+        // Gérer les prix par point de vente (skip les cles reservees)
         for (const [key, value] of Object.entries(config)) {
-          if (key !== 'default' && key !== 'alternatives' && typeof value === 'number') {
-            const pointVente = await PointVente.findOne({ where: { nom: key } });
-            if (pointVente) {
-              await PrixPointVente.upsert({
-                produit_id: produit.id,
-                point_vente_id: pointVente.id,
-                prix: value
-              });
-            }
+          if (PG_RESERVED_CONFIG_KEYS.includes(key)) continue;
+          if (typeof value !== 'number') continue;
+          const pointVente = await PointVente.findOne({ where: { nom: key } });
+          if (pointVente) {
+            await PrixPointVente.upsert({
+              produit_id: produit.id,
+              point_vente_id: pointVente.id,
+              prix: value
+            });
           }
         }
       }
@@ -681,12 +709,16 @@ router.post('/produits-inventaire', requireAdmin, async (req, res) => {
     // Fonction helper pour traiter un produit
     async function traiterProduit(produitName, config, categorieAffichage = null) {
       if (typeof config !== 'object' || config.prixDefault === undefined) return;
-      
+
       const prixDefaut = config.prixDefault || 0;
       const alternatives = config.alternatives || [];
       const modeStock = config.mode_stock || 'manuel';
       const uniteStock = config.unite_stock || 'unite';
-      
+      // archived: undefined = ne pas toucher l'existant. true|false = update.
+      const archivedRequested = (typeof config.archived === 'boolean')
+        ? config.archived
+        : undefined;
+
       let [produit, wasCreated] = await Produit.findOrCreate({
         where: { nom: produitName, type_catalogue: 'inventaire' },
         defaults: {
@@ -694,21 +726,25 @@ router.post('/produits-inventaire', requireAdmin, async (req, res) => {
           prix_alternatifs: alternatives,
           mode_stock: modeStock,
           unite_stock: uniteStock,
-          categorie_affichage: categorieAffichage
+          categorie_affichage: categorieAffichage,
+          archived: archivedRequested === true
         }
       });
-      
+
       if (wasCreated) {
         created++;
         console.log(`  ✅ Produit créé: ${produitName}${categorieAffichage ? ` (catégorie: ${categorieAffichage})` : ''}`);
       } else {
         const oldPrix = parseFloat(produit.prix_defaut);
-        const needsUpdate = oldPrix !== prixDefaut || 
+        const archivedDiffers = (archivedRequested !== undefined)
+          && (!!produit.archived !== archivedRequested);
+        const needsUpdate = oldPrix !== prixDefaut ||
           JSON.stringify(produit.prix_alternatifs) !== JSON.stringify(alternatives) ||
           produit.mode_stock !== modeStock ||
           produit.unite_stock !== uniteStock ||
-          produit.categorie_affichage !== categorieAffichage;
-          
+          produit.categorie_affichage !== categorieAffichage ||
+          archivedDiffers;
+
         if (needsUpdate) {
           if (oldPrix !== prixDefaut) {
             await PrixHistorique.create({
@@ -718,30 +754,33 @@ router.post('/produits-inventaire', requireAdmin, async (req, res) => {
               modifie_par: username
             });
           }
-          
-          await produit.update({
+
+          const updatePayload = {
             prix_defaut: prixDefaut,
             prix_alternatifs: alternatives,
             mode_stock: modeStock,
             unite_stock: uniteStock,
             categorie_affichage: categorieAffichage
-          });
+          };
+          if (archivedDiffers) updatePayload.archived = archivedRequested;
+
+          await produit.update(updatePayload);
           updated++;
           console.log(`  🔄 Produit mis à jour: ${produitName}`);
         }
       }
-      
-      // Prix par point de vente
+
+      // Prix par point de vente (skip les cles reservees)
       for (const [key, value] of Object.entries(config)) {
-        if (!['prixDefault', 'alternatives', 'mode_stock', 'unite_stock'].includes(key) && typeof value === 'number') {
-          const pointVente = await PointVente.findOne({ where: { nom: key } });
-          if (pointVente) {
-            await PrixPointVente.upsert({
-              produit_id: produit.id,
-              point_vente_id: pointVente.id,
-              prix: value
-            });
-          }
+        if (INVENTAIRE_RESERVED_CONFIG_KEYS.includes(key)) continue;
+        if (typeof value !== 'number') continue;
+        const pointVente = await PointVente.findOne({ where: { nom: key } });
+        if (pointVente) {
+          await PrixPointVente.upsert({
+            produit_id: produit.id,
+            point_vente_id: pointVente.id,
+            prix: value
+          });
         }
       }
     }

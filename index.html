@@ -1090,15 +1090,10 @@
                 </div>
                 <div class="row mb-4 visualisation-charts">
                     <div class="col-12">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-header bg-white">
-                                <h6 class="card-title mb-0">
-                                    <i class="bi bi-shop me-2 text-primary"></i>Ventes par Point de Vente
-                                </h6>
-                            </div>
+                        <div class="card">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <div class="text-muted small">Répartition du chiffre d'affaires par point de vente</div>
+                                    <h5 class="card-title mb-0">Ventes par Point de Vente</h5>
                                     <div class="d-flex align-items-center gap-3">
                                         <div class="d-flex align-items-center">
                                             <label for="filterTypePointVente" class="form-label me-2 mb-0">Filtre :</label>
@@ -1148,13 +1143,9 @@
                 </div>
                 <div class="row mb-4 visualisation-charts">
                     <div class="col-12">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-header bg-white">
-                                <h6 class="card-title mb-0">
-                                    <i class="bi bi-pie-chart me-2 text-primary"></i>Ventes par Catégorie
-                                </h6>
-                            </div>
+                        <div class="card">
                             <div class="card-body">
+                                <h5 class="card-title">Ventes par Catégorie</h5>
                                 <div style="height: 400px;">
                                     <canvas id="ventesParCategorieChart"></canvas>
                                 </div>
@@ -1323,6 +1314,64 @@
                                         <div id="pagination-buttons" class="btn-group"></div>
                                     </div>
                                 </div>
+
+                                <!-- Filtres pour le tableau des ventes (port Maas) -->
+                                <div class="card mb-3 border-primary">
+                                    <div class="card-body">
+                                        <div class="row mb-2">
+                                            <div class="col-md-8">
+                                                <h6 class="mb-3"><i class="bi bi-funnel"></i> Filtres du tableau</h6>
+                                            </div>
+                                            <div class="col-md-4 text-end">
+                                                <div id="montant-filtre-info" style="display: none;">
+                                                    <span class="badge bg-success" style="font-size: 14px; padding: 8px 12px;">
+                                                        <i class="bi bi-cash-stack"></i> Total filtré: <strong id="montant-total-filtre">0 FCFA</strong>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row g-3 mb-2">
+                                            <div class="col-md-2">
+                                                <label for="filter-ventes-date" class="form-label">Date</label>
+                                                <input type="text" class="form-control form-control-sm" id="filter-ventes-date" placeholder="JJ/MM/AAAA">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label for="filter-ventes-point-vente" class="form-label">Point de Vente</label>
+                                                <select class="form-select form-select-sm" id="filter-ventes-point-vente">
+                                                    <option value="">Tous les points de vente</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label for="filter-ventes-categorie" class="form-label">Catégorie</label>
+                                                <select class="form-select form-select-sm" id="filter-ventes-categorie">
+                                                    <option value="">Toutes les catégories</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label for="filter-ventes-produit" class="form-label">Produit</label>
+                                                <select class="form-select form-select-sm" id="filter-ventes-produit">
+                                                    <option value="">Tous les produits</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label for="filter-ventes-nom-client" class="form-label">Nom Client</label>
+                                                <input type="text" class="form-control form-control-sm" id="filter-ventes-nom-client" placeholder="Rechercher...">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label for="filter-ventes-numero-client" class="form-label">Numéro Client</label>
+                                                <input type="text" class="form-control form-control-sm" id="filter-ventes-numero-client" placeholder="Rechercher...">
+                                            </div>
+                                        </div>
+                                        <div class="row g-3">
+                                            <div class="col-md-12 text-end">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" id="reset-filters-ventes">
+                                                    <i class="bi bi-arrow-clockwise"></i> Réinitialiser
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="table-responsive">
                                     <table id="tableau-ventes" class="table table-striped">
                                         <thead>
@@ -1344,6 +1393,14 @@
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
+                                        <tfoot>
+                                            <tr class="table-secondary fw-bold">
+                                                <td colspan="8" class="text-end">Total filtré :</td>
+                                                <td id="tv-tfoot-quantite">0</td>
+                                                <td id="tv-tfoot-montant">0 FCFA</td>
+                                                <td colspan="4"></td>
+                                            </tr>
+                                        </tfoot>
                                     </table>
                                 </div>
                             </div>
